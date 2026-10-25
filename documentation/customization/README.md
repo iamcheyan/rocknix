@@ -44,3 +44,9 @@
    * 启动器原生集成系统控制中心（WiFi / 蓝牙 / 音量 / 亮度 / USB 模式）
    * Type-C 直插免拔卡 MTP 磁盘传输机制
    * USB 虚拟网卡与免密 ADB 极客调试工作流
+
+8. [08. 系统控制中心交互设计与 USB ADB / MTP / 网卡落地](file:///home/tetsuya/development/rocknix/documentation/customization/08_system_control_center_menu_and_usb_adb.md)
+   * 720×480 原生控制中心 14 项完整控制菜单设计与平滑滚动视窗
+   * USB 复合 Gadget 4 大模式（MTP 磁盘、USB ADB、虚拟网卡、仅充电）
+   * 无线 Wi-Fi ADB（TCP 端口 5555）一键开启与连接
+   * 硬件级 LCD 背光切断（Walkman 随身听熄屏听歌模式）实现细节

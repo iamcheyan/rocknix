@@ -311,6 +311,46 @@ cleanup_usb_mtp() {
         ${g_mtp}
 }
 
+g_adb="/sys/kernel/config/usb_gadget/adb"
+
+prepare_usb_adb() {
+    usb_ver="0x0200" # USB 2.0
+    dev_class="0x00"
+    attr="0xC0" # Self powered
+    pwr="0xfe" # 500mA
+
+    mkdir -p ${g_adb}
+    [ -w ${g_adb}/max_speed ] && echo "high-speed" > ${g_adb}/max_speed
+    echo "${usb_ver}" > ${g_adb}/bcdUSB
+    echo "${dev_class}" > ${g_adb}/bDeviceClass
+    echo "0x18d1" > ${g_adb}/idVendor
+    echo "0x4ee7" > ${g_adb}/idProduct
+    echo "${devversion}" > ${g_adb}/bcdDevice
+    mkdir -p ${g_adb}/strings/0x409
+    echo "${OS_NAME}" > ${g_adb}/strings/0x409/manufacturer
+    echo "${PRODUCT}" > ${g_adb}/strings/0x409/product
+    echo "${SERIAL}" > ${g_adb}/strings/0x409/serialnumber
+
+    # config 1 for ADB
+    mkdir -p ${g_adb}/configs/c.1
+    echo "${attr}" > ${g_adb}/configs/c.1/bmAttributes
+    echo "${pwr}" > ${g_adb}/configs/c.1/MaxPower
+    mkdir -p ${g_adb}/configs/c.1/strings/0x409
+    echo adb > ${g_adb}/configs/c.1/strings/0x409/configuration
+
+    mkdir -p ${g_adb}/functions/ffs.adb
+    [ -L ${g_adb}/configs/c.1/ffs.adb ] || ln -s ${g_adb}/functions/ffs.adb ${g_adb}/configs/c.1
+}
+
+cleanup_usb_adb() {
+    rm -f ${g_adb}/configs/c.1/ffs.adb
+    rmdir ${g_adb}/configs/c.1/strings/0x409 2>/dev/null
+    rmdir ${g_adb}/configs/c.1 2>/dev/null
+    rmdir ${g_adb}/functions/ffs.adb 2>/dev/null
+    rmdir ${g_adb}/strings/0x409 2>/dev/null
+    rmdir ${g_adb} 2>/dev/null
+}
+
 typec_managed_role() {
 	# TCPM owns the role switch
 	for p in /sys/class/typec/port*/data_role; do
@@ -411,6 +451,17 @@ usb_start() {
 		/usr/sbin/umtprd &
 		sleep 1
 
+	elif [ "${USB_MODE}" = adb ] ; then
+		if [ ! -d "${g_adb}" ]; then
+			echo "ADB gadget not configured. Run '$0 prepare' first!" >&2
+			exit 3
+		fi
+
+		mkdir -p /dev/usb-ffs/adb
+		mountpoint -q /dev/usb-ffs/adb || mount -t functionfs adb /dev/usb-ffs/adb
+		/usr/sbin/adbd &
+		sleep 1
+
 	elif [ "${USB_MODE}" = cdc ] ; then
 		if [ ! -d "${g_cdc}" ]; then
 			echo "CDC gadget not configured. Run '$0 prepare' first!" >&2
@@ -446,6 +497,16 @@ umtp_teardown() {
 	rmdir /dev/ffs-umtp 2>/dev/null
 }
 
+adb_teardown() {
+	killall adbd 2>/dev/null
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		mountpoint -q /dev/usb-ffs/adb 2>/dev/null || break
+		umount /dev/usb-ffs/adb 2>/dev/null && break
+		sleep 0.1
+	done
+	rmdir /dev/usb-ffs/adb 2>/dev/null
+}
+
 usb_stop() {
 
 	{
@@ -457,6 +518,10 @@ usb_stop() {
 
 		if [ -d /dev/ffs-umtp ] ; then
 			umtp_teardown
+		fi
+
+		if [ -d /dev/usb-ffs/adb ] ; then
+			adb_teardown
 		fi
 	} >/dev/null 2>&1
 }
@@ -480,7 +545,7 @@ follow_id_role() {
 
 set_usb_mode() {
 	case "${1}" in
-		cdc|mtp)
+		cdc|mtp|adb)
 			usb_start "${1}"
 			;;
 		*)
@@ -497,6 +562,7 @@ usb_init_clean_state() {
 	done
 
 	[ -d /dev/ffs-umtp ] && umtp_teardown
+	[ -d /dev/usb-ffs/adb ] && adb_teardown
 	if [ -f "${UDHCPPIDFILE}" ]; then
 		cat "${UDHCPPIDFILE}" 2>/dev/null | xargs -r -n 1 kill 2>/dev/null
 		rm -f "${UDHCPPIDFILE}"
@@ -528,10 +594,12 @@ case "$1" in
 	prepare)
 		prepare_usb_network
 		prepare_usb_mtp
+		prepare_usb_adb
 		;;
 	cleanup)
 		cleanup_usb_network
 		cleanup_usb_mtp
+		cleanup_usb_adb
 		;;
 	start)
 		usb_start $2
@@ -555,18 +623,20 @@ case "$1" in
 	# API inspired by gpudriver
 	#
 	"--options")
-		echo "disabled network file_transfer"
+		echo "disabled network file_transfer adb"
 		;;
 	"--start")
 		usb_init_clean_state
 		prepare_usb_network
 		prepare_usb_mtp
+		prepare_usb_adb
 		set_usb_mode "${USB_MODE}"
 		;;
 	"")
 		case ${CURRENT_MODE} in
 			"cdc")  echo "network"; ;;
 			"mtp")  echo "file_transfer"; ;;
+			"adb")  echo "adb"; ;;
 			*)      echo "disabled"; ;;
 		esac
 		;;
@@ -579,6 +649,17 @@ case "$1" in
 	"file_transfer")
 		usb_start mtp
 		;;
+	"adb")
+		usb_start adb
+		;;
+	"adb_tcp")
+		export ADB_PORT=5555
+		pidof adbd >/dev/null 2>&1 || /usr/sbin/adbd &
+		echo "ADB network daemon listening on port 5555"
+		;;
+	"adb_tcp_stop")
+		killall adbd 2>/dev/null
+		;;
 	"address")
 		. ${GADGETNETCONF}
 		echo ${IP}
@@ -589,7 +670,9 @@ case "$1" in
 		echo "$0 --start                    Restore previously chosen mode"
 		echo "$0                            Show current mode"
 		echo "$0 disabled                   Disable USB gadget"
-		echo "$0 <network|file_transfer>    Activate specified mode"
+		echo "$0 <network|file_transfer|adb> Activate specified mode"
+		echo "$0 adb_tcp                    Start ADB over TCP (port 5555 for WiFi/USB net)"
+		echo "$0 adb_tcp_stop               Stop ADB over TCP"
 		echo "$0 address                    Show network gadget IP address"
 
 		echo "Deprecated usage: usbgadget [prepare|start|trigger|stop|restart|cleanup|address]"
