@@ -2,11 +2,15 @@
 Description=Handheld-Launcher-with-Sway
 Requires=sway.service
 After=sway.service
+Conflicts=essway.service
 
 [Service]
 Type=simple
 Environment=HOME=/storage
-EnvironmentFile=/etc/profile
+Environment=XDG_RUNTIME_DIR=/var/run/0-runtime-dir
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=SDL_VIDEODRIVER=wayland
+Environment=SDL_AUDIODRIVER=pulseaudio
 ExecStart=/usr/bin/handheld-launcher
 WorkingDirectory=/storage
 Restart=always

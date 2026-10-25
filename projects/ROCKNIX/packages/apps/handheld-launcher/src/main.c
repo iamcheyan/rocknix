@@ -2,15 +2,17 @@
  * Handheld Launcher for Anbernic RG34XX (Allwinner H700)
  * Resolution: 720x480 (3:2 Aspect Ratio)
  * Features:
- *   - XMPlayer Integration (with START + SELECT Exit protection)
- *   - Pixel-perfect Responsive Views:
- *       * Non-overlapping 5-Zone Top Status Bar
- *       * Main Menu with Context-Aware Descriptions
- *       * Control Center: Left-aligned Titles, Right-aligned Values, Marquee Scroll
- *       * Hardware & System Info: Multi-line Word-Wrapped Spec Table (No Truncation)
- *       * Power Management Modal Dialog (Reboot, Power Off, Reload UI)
- *       * Screen-Off Walkman Mode (turns off backlight bl_power=4, keeps music playing)
- *   - Global START + SELECT combo exit
+ *   - XMPlayer Integration
+ *   - Pixel-perfect Views without clutter:
+ *       * Non-overlapping 4-Zone Top Status Bar (No time display)
+ *       * Main Menu (No numbers, cleanly spaced)
+ *       * Control Center (Wi-Fi, Bluetooth, ADB default active, Volume, Brightness)
+ *       * Wi-Fi Scanner & Connection Manager (Interactive live scan & connect)
+ *       * Bluetooth Scanner & Pair Manager
+ *       * Hardware & System Info Spec Table
+ *       * Power Management Modal Dialog
+ *       * Screen-Off Walkman Mode
+ *   - Standardized Physical Handheld Buttons (A=Confirm, B=Cancel, D-PAD, START+SELECT)
  */
 
 #include <SDL2/SDL.h>
@@ -25,12 +27,15 @@
 #define SCREEN_WIDTH  720
 #define SCREEN_HEIGHT 480
 
-// RG34XX Gamepad Button Mapping (Japanese Nintendo Layout: Physical A=East, Physical B=South)
-// In standard SDL GameController:
+// RG34XX Physical Handheld Layout (Japanese / Nintendo: A=East, B=South, X=North, Y=West)
+// In SDL standard GameController mapping:
 // Physical 'A' (East)  -> SDL_CONTROLLER_BUTTON_B
 // Physical 'B' (South) -> SDL_CONTROLLER_BUTTON_A
+// Physical 'X' (North) -> SDL_CONTROLLER_BUTTON_Y
+// Physical 'Y' (West)  -> SDL_CONTROLLER_BUTTON_X
 #define BTN_CONFIRM SDL_CONTROLLER_BUTTON_B
 #define BTN_CANCEL  SDL_CONTROLLER_BUTTON_A
+#define BTN_RESCAN  SDL_CONTROLLER_BUTTON_Y
 
 // Minimal 8x8 ASCII font bitmap (ASCII 32 to 126)
 static const unsigned char font8x8_basic[95][8] = {
@@ -156,86 +161,39 @@ void draw_string(SDL_Renderer* ren, const char* str, int x, int y, int scale, SD
 }
 
 void draw_string_right(SDL_Renderer* ren, const char* str, int right_x, int y, int scale, SDL_Color color) {
-    int len = strlen(str);
-    int width = len * 8 * scale;
-    draw_string(ren, str, right_x - width, y, scale, color);
+    int len = (int)strlen(str);
+    int start_x = right_x - (len * 8 * scale);
+    draw_string(ren, str, start_x, y, scale, color);
 }
 
-// Text marquee horizontal scrolling with scissor clipping
 void draw_string_marquee(SDL_Renderer* ren, const char* str, int x, int y, int scale, SDL_Color color, int max_w, bool active, Uint32 ticks) {
-    int str_w = strlen(str) * 8 * scale;
-    if (str_w <= max_w || !active) {
-        draw_string(ren, str, x, y, scale, color);
-        return;
-    }
-
-    SDL_Rect clip = {x, y - 2, max_w, 8 * scale + 4};
-    SDL_RenderSetClipRect(ren, &clip);
-
-    int overflow = str_w - max_w + 24;
-    int scroll_period = 4000;
-    int time_in_period = ticks % scroll_period;
-    int scroll_offset = 0;
-
-    if (time_in_period > 1000 && time_in_period < 3000) {
-        scroll_offset = (int)((time_in_period - 1000) * overflow / 2000.0);
-    } else if (time_in_period >= 3000) {
-        scroll_offset = overflow;
-    }
-
-    draw_string(ren, str, x - scroll_offset, y, scale, color);
-    SDL_RenderSetClipRect(ren, NULL);
-}
-
-// Multi-line word-wrapped text rendering
-int draw_text_wrapped(SDL_Renderer* ren, const char* str, int x, int y, int scale, SDL_Color color, int max_w, int line_h) {
-    int cur_x = x;
-    int cur_y = y;
     int char_w = 8 * scale;
+    int str_len = (int)strlen(str);
+    int total_w = str_len * char_w;
 
-    const char* p = str;
-    while (*p) {
-        if (*p == '\n') {
-            cur_y += line_h;
-            cur_x = x;
-            p++;
-            continue;
-        }
+    SDL_Rect clip_rect = {x, y, max_w, 8 * scale};
+    SDL_RenderSetClipRect(ren, &clip_rect);
 
-        // Measure next token/word
-        const char* word_end = p;
-        while (*word_end && *word_end != ' ' && *word_end != '\n') {
-            word_end++;
-        }
-        int word_len = word_end - p;
-        int word_w = word_len * char_w;
-
-        // Wrap to next line if word exceeds max width
-        if (cur_x + word_w > x + max_w && cur_x > x) {
-            cur_y += line_h;
-            cur_x = x;
-        }
-
-        // Draw the word
-        for (int i = 0; i < word_len; i++) {
-            draw_char(ren, p[i], cur_x, cur_y, scale, color);
-            cur_x += char_w;
-        }
-        p = word_end;
-
-        // Handle space
-        if (*p == ' ') {
-            if (cur_x + char_w <= x + max_w) {
-                draw_char(ren, ' ', cur_x, cur_y, scale, color);
-                cur_x += char_w;
-            } else {
-                cur_y += line_h;
-                cur_x = x;
+    if (total_w <= max_w) {
+        draw_string(ren, str, x, y, scale, color);
+    } else {
+        if (!active) {
+            draw_string(ren, str, x, y, scale, color);
+        } else {
+            int overflow = total_w - max_w + (char_w * 4);
+            int speed = 40; // ms per pixel
+            int phase = (ticks / speed) % (overflow + 40);
+            int offset = 0;
+            if (phase > 20) {
+                offset = phase - 20;
+                if (offset > overflow) offset = overflow;
             }
-            p++;
+            draw_string(ren, str, x - offset, y, scale, color);
+            draw_string(ren, str, x - offset + total_w + (char_w * 4), y, scale, color);
         }
     }
-    return cur_y + line_h;
+
+    SDL_RenderSetClipRect(ren, NULL);
 }
 
 void launch_xmplayer(SDL_Window* win) {
@@ -265,40 +223,42 @@ typedef enum {
     VIEW_MAIN_MENU,
     VIEW_CONTROL_CENTER,
     VIEW_SYSTEM_INFO,
-    VIEW_POWER_DIALOG
+    VIEW_POWER_DIALOG,
+    VIEW_WIFI_MENU,
+    VIEW_BT_MENU
 } ViewState;
 
 typedef enum {
-    USB_MODE_MTP = 0,
-    USB_MODE_ADB = 1,
+    USB_MODE_ADB = 0,
+    USB_MODE_MTP = 1,
     USB_MODE_NET = 2,
     USB_MODE_OFF = 3,
     USB_MODE_COUNT = 4
 } UsbMode;
 
 static const char* g_usb_mode_names[USB_MODE_COUNT] = {
-    "MTP PC DISK",
     "USB ADB DEBUG",
+    "MTP PC DISK",
     "USB NETWORK",
     "CHARGING ONLY"
 };
 
 static const char* g_usb_short_names[USB_MODE_COUNT] = {
-    "USB: MTP",
     "USB: ADB",
+    "USB: MTP",
     "USB: NET",
     "USB: CHG"
 };
 
-// System Settings State
+// System Settings State (Default ADB Active)
 static int g_brightness = 80;
 static int g_volume = 75;
-static UsbMode g_usb_mode = USB_MODE_MTP;
+static UsbMode g_usb_mode = USB_MODE_ADB;
 static bool g_wifi_enabled = true;
 static bool g_bt_enabled = false;
-static bool g_wifi_adb_enabled = false;
+static bool g_wifi_adb_enabled = true;
 
-// Host PC Safety Guard: Prevent simulator from executing systemctl/reboot/poweroff on host PC
+// Host PC Safety Guard
 static bool is_target_device(void) {
     if (getenv("ROCKNIX_SIMULATOR") != NULL) return false;
     return (access("/etc/rocknix-release", F_OK) == 0 || access("/storage/.config", F_OK) == 0);
@@ -308,7 +268,7 @@ static void do_reboot(void) {
     if (is_target_device()) {
         (void)!system("reboot 2>/dev/null");
     } else {
-        printf("\n[SIMULATOR GUARD] Reboot requested: Simulated on PC host (host reboot prevented).\n\n");
+        printf("\n[SIMULATOR GUARD] Reboot requested: Simulated on PC host.\n\n");
     }
 }
 
@@ -316,7 +276,7 @@ static void do_poweroff(bool* running) {
     if (is_target_device()) {
         (void)!system("poweroff 2>/dev/null");
     } else {
-        printf("\n[SIMULATOR GUARD] Power off requested: Exiting simulator cleanly (host shutdown prevented).\n\n");
+        printf("\n[SIMULATOR GUARD] Power off requested: Exiting simulator cleanly.\n\n");
         if (running) *running = false;
     }
 }
@@ -406,11 +366,11 @@ void apply_usb_mode() {
         return;
     }
     switch (g_usb_mode) {
-        case USB_MODE_MTP:
-            (void)!system("usbgadget file_transfer >/dev/null 2>&1");
-            break;
         case USB_MODE_ADB:
             (void)!system("usbgadget adb >/dev/null 2>&1");
+            break;
+        case USB_MODE_MTP:
+            (void)!system("usbgadget file_transfer >/dev/null 2>&1");
             break;
         case USB_MODE_NET:
             (void)!system("usbgadget network >/dev/null 2>&1");
@@ -450,6 +410,161 @@ void enter_walkman_mode(SDL_Renderer* ren) {
         (void)!system(cmd);
     }
     printf("==> Walkman Mode Exited: LCD backlight restored.\n");
+}
+
+// Interactive Wi-Fi Scanner & Connection Management
+#define MAX_WIFI_NETWORKS 16
+typedef struct {
+    char ssid[48];
+    int signal;
+    bool in_use;
+    bool secure;
+} WifiNetwork;
+
+static WifiNetwork g_wifi_list[MAX_WIFI_NETWORKS];
+static int g_wifi_count = 0;
+static int g_wifi_selected_idx = 0;
+static char g_wifi_status_msg[64] = "Press [A] to connect";
+
+static void scan_wifi_networks(void) {
+    g_wifi_count = 0;
+    g_wifi_selected_idx = 0;
+    snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Scanning Wi-Fi...");
+
+    FILE* fp = popen("nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi list 2>/dev/null | head -n 16", "r");
+    if (!fp) {
+        snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Scan failed or no wifi device");
+        return;
+    }
+
+    char line[128];
+    while (fgets(line, sizeof(line), fp) && g_wifi_count < MAX_WIFI_NETWORKS) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (strlen(line) == 0) continue;
+
+        char* colon1 = strchr(line, ':');
+        if (!colon1) continue;
+        bool in_use = (line[0] == '*');
+
+        char* ssid_start = colon1 + 1;
+        char* colon2 = strchr(ssid_start, ':');
+        if (!colon2) continue;
+        *colon2 = 0;
+
+        char* signal_str = colon2 + 1;
+        char* colon3 = strchr(signal_str, ':');
+        int signal = 70;
+        bool secure = true;
+        if (colon3) {
+            *colon3 = 0;
+            signal = atoi(signal_str);
+            char* sec_str = colon3 + 1;
+            if (strlen(sec_str) == 0 || strcmp(sec_str, "--") == 0) secure = false;
+        } else {
+            signal = atoi(signal_str);
+        }
+
+        if (strlen(ssid_start) == 0) continue;
+
+        bool exists = false;
+        for (int i = 0; i < g_wifi_count; i++) {
+            if (strcmp(g_wifi_list[i].ssid, ssid_start) == 0) {
+                exists = true;
+                break;
+            }
+        }
+        if (exists) continue;
+
+        snprintf(g_wifi_list[g_wifi_count].ssid, sizeof(g_wifi_list[g_wifi_count].ssid), "%s", ssid_start);
+        g_wifi_list[g_wifi_count].signal = signal;
+        g_wifi_list[g_wifi_count].in_use = in_use;
+        g_wifi_list[g_wifi_count].secure = secure;
+        g_wifi_count++;
+    }
+    pclose(fp);
+
+    if (g_wifi_count == 0) {
+        snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "No Wi-Fi networks found");
+    } else {
+        snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Found %d networks. [A] Connect", g_wifi_count);
+    }
+}
+
+static void connect_selected_wifi(int idx) {
+    if (idx < 0 || idx >= g_wifi_count) return;
+    char cmd[256];
+    snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Connecting to %s...", g_wifi_list[idx].ssid);
+    snprintf(cmd, sizeof(cmd), "nmcli dev wifi connect \"%s\" >/dev/null 2>&1 || wifictl connect \"%s\" >/dev/null 2>&1",
+             g_wifi_list[idx].ssid, g_wifi_list[idx].ssid);
+    int res = system(cmd);
+    if (res == 0) {
+        snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Connected to %s!", g_wifi_list[idx].ssid);
+        g_wifi_list[idx].in_use = true;
+    } else {
+        snprintf(g_wifi_status_msg, sizeof(g_wifi_status_msg), "Connecting initiated in background");
+    }
+}
+
+// Interactive Bluetooth Scanner & Pair Management
+#define MAX_BT_DEVICES 16
+typedef struct {
+    char name[48];
+    char mac[20];
+    bool connected;
+} BtDevice;
+
+static BtDevice g_bt_list[MAX_BT_DEVICES];
+static int g_bt_count = 0;
+static int g_bt_selected_idx = 0;
+static char g_bt_status_msg[64] = "Press [A] to pair/connect";
+
+static void scan_bt_devices(void) {
+    g_bt_count = 0;
+    g_bt_selected_idx = 0;
+    snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Scanning Bluetooth devices...");
+
+    (void)!system("bluetoothctl --timeout 3 scan on >/dev/null 2>&1 &");
+    FILE* fp = popen("bluetoothctl devices 2>/dev/null | head -n 16", "r");
+    if (!fp) {
+        snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Bluetooth not available");
+        return;
+    }
+
+    char line[128];
+    while (fgets(line, sizeof(line), fp) && g_bt_count < MAX_BT_DEVICES) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (strncmp(line, "Device ", 7) != 0) continue;
+        char mac[20] = {0};
+        char name[48] = {0};
+        if (sscanf(line, "Device %19s %47[^\n]", mac, name) >= 1) {
+            if (strlen(name) == 0) snprintf(name, sizeof(name), "%s", mac);
+            snprintf(g_bt_list[g_bt_count].mac, sizeof(g_bt_list[g_bt_count].mac), "%s", mac);
+            snprintf(g_bt_list[g_bt_count].name, sizeof(g_bt_list[g_bt_count].name), "%s", name);
+            g_bt_list[g_bt_count].connected = false;
+            g_bt_count++;
+        }
+    }
+    pclose(fp);
+
+    if (g_bt_count == 0) {
+        snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "No devices found. Ensure BT is on.");
+    } else {
+        snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Found %d devices. [A] Connect", g_bt_count);
+    }
+}
+
+static void connect_selected_bt(int idx) {
+    if (idx < 0 || idx >= g_bt_count) return;
+    char cmd[128];
+    snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Pairing %s...", g_bt_list[idx].name);
+    snprintf(cmd, sizeof(cmd), "bluetoothctl connect %s >/dev/null 2>&1", g_bt_list[idx].mac);
+    int res = system(cmd);
+    if (res == 0) {
+        snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Connected to %s!", g_bt_list[idx].name);
+        g_bt_list[idx].connected = true;
+    } else {
+        snprintf(g_bt_status_msg, sizeof(g_bt_status_msg), "Connection request sent");
+    }
 }
 
 static void save_screenshot(SDL_Renderer* ren, const char* filepath) {
@@ -492,26 +607,22 @@ int main(int argc, char* argv[]) {
         controller = SDL_GameControllerOpen(0);
     }
 
+    // Default: Apply ADB Mode & Start Background ADB Daemon
+    apply_usb_mode();
+
     ViewState state = VIEW_MAIN_MENU;
     const char* main_menu_items[] = {
-        "1. Launch XMPlayer (XMB Media Suite)",
-        "2. System Settings & Control Center",
-        "3. Terminal / Developer Shell",
-        "4. Hardware & System Info (RG34XX)",
-        "5. Power Management / Reboot"
-    };
-    const char* main_menu_hints[] = {
-        "Launch PSP XMB style media player for music, video and photos",
-        "Configure Wi-Fi, Bluetooth, Audio, Brightness and USB Gadget",
-        "Open developer terminal shell or start background SSH server",
-        "Inspect RG34XX Allwinner H700 hardware architecture specifications",
-        "Reboot system, restart launcher UI, or power off handheld"
+        "Launch XMPlayer (XMB Media Suite)",
+        "System Settings & Control Center",
+        "Terminal / Developer Shell",
+        "Hardware & System Info (RG34XX)",
+        "Power Management / Reboot"
     };
     int main_menu_count = 5;
     int main_selected_idx = 0;
 
     int cp_idx = 0;
-    const int cp_count = 14;
+    const int cp_count = 15;
     int cp_scroll_offset = 0;
     const int cp_visible_count = 6;
 
@@ -519,30 +630,14 @@ int main(int argc, char* argv[]) {
     int info_scroll_offset = 0;
     const int info_count = 8;
     const int info_visible_count = 6;
-    const char* info_hints[] = {
-        "Target Device: Anbernic RG34XX handheld console",
-        "Allwinner H700: Quad-Core 64-bit Cortex-A53 CPU @ 1.5GHz",
-        "Display: 3.4\" IPS panel, 720x480 resolution, native 3:2 ratio",
-        "GPU: ARM Mali-G31 MP2 graphics with Panfrost KMS/DRM driver",
-        "RAM: 1GB high-speed LPDDR4 system memory @ 1600MHz",
-        "Storage: Dual MicroSD architecture (TF1 Linux OS + TF2 User Data)",
-        "Media Engine: XMPlayer native PSP XMB style media suite",
-        "OS Stack: ROCKNIX pure 64-bit embedded JeOS with direct KMS/DRM"
-    };
 
     int power_idx = 0;
     const int power_count = 4;
     const char* power_items[] = {
-        "1. Restart Launcher UI",
-        "2. Reboot Handheld",
-        "3. Power Off Hardware",
-        "4. Cancel / Return"
-    };
-    const char* power_hints[] = {
-        "[A] Restart Handheld Launcher UI process without rebooting",
-        "[A] Safely flush disk buffers and reboot device hardware",
-        "[A] Safely unmount storage filesystems and power down",
-        "[A / B] Cancel action and return to primary menu"
+        "Restart Launcher UI",
+        "Reboot Handheld",
+        "Power Off Hardware",
+        "Cancel / Return"
     };
 
     bool dump_mode = (argc > 1 && strcmp(argv[1], "--dump-screens") == 0);
@@ -567,9 +662,9 @@ int main(int argc, char* argv[]) {
             } else if (e.type == SDL_KEYDOWN) {
                 SDL_Keycode k = e.key.keysym.sym;
 
-                // ESC: Back or Exit
                 if (k == SDLK_ESCAPE) {
                     if (state == VIEW_MAIN_MENU) running = false;
+                    else if (state == VIEW_WIFI_MENU || state == VIEW_BT_MENU) state = VIEW_CONTROL_CENTER;
                     else state = VIEW_MAIN_MENU;
                 }
 
@@ -578,11 +673,11 @@ int main(int argc, char* argv[]) {
                         main_selected_idx = (main_selected_idx - 1 + main_menu_count) % main_menu_count;
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         main_selected_idx = (main_selected_idx + 1) % main_menu_count;
-                    } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
+                    } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
                         if (main_selected_idx == 0) launch_xmplayer(win);
                         else if (main_selected_idx == 1) state = VIEW_CONTROL_CENTER;
                         else if (main_selected_idx == 2) {
-                            (void)!system("systemctl start dropbear 2>/dev/null || systemctl start sshd 2>/dev/null");
+                            (void)!system("systemctl restart sshd 2>/dev/null || systemctl start sshd 2>/dev/null");
                         }
                         else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
                         else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
@@ -593,51 +688,81 @@ int main(int argc, char* argv[]) {
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         cp_idx = (cp_idx + 1) % cp_count;
                     } else if (k == SDLK_LEFT || k == SDLK_a) {
-                        if (cp_idx == 3) {
+                        if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode - 1 + USB_MODE_COUNT) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 5) apply_brightness(-5);
-                        else if (cp_idx == 7) apply_volume(-5);
+                        } else if (cp_idx == 7) apply_brightness(-5);
+                        else if (cp_idx == 9) apply_volume(-5);
                     } else if (k == SDLK_RIGHT || k == SDLK_d) {
-                        if (cp_idx == 3) {
+                        if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode + 1) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 5) apply_brightness(+5);
-                        else if (cp_idx == 7) apply_volume(+5);
-                    } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
+                        } else if (cp_idx == 7) apply_brightness(+5);
+                        else if (cp_idx == 9) apply_volume(+5);
+                    } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
                         if (cp_idx == 0) {
                             g_wifi_enabled = !g_wifi_enabled;
                             (void)!system(g_wifi_enabled ? "wifictl enable >/dev/null 2>&1" : "wifictl disable >/dev/null 2>&1");
-                        } else if (cp_idx == 2) {
+                        } else if (cp_idx == 1) {
+                            scan_wifi_networks();
+                            state = VIEW_WIFI_MENU;
+                        } else if (cp_idx == 3) {
                             g_bt_enabled = !g_bt_enabled;
                             (void)!system(g_bt_enabled ? "rocknix-bluetooth on >/dev/null 2>&1" : "rocknix-bluetooth off >/dev/null 2>&1");
-                        } else if (cp_idx == 3) {
+                        } else if (cp_idx == 4) {
+                            scan_bt_devices();
+                            state = VIEW_BT_MENU;
+                        } else if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode + 1) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 4) {
-                            g_wifi_adb_enabled = !g_wifi_adb_enabled;
-                            (void)!system(g_wifi_adb_enabled ? "usbgadget adb_tcp >/dev/null 2>&1" : "usbgadget adb_tcp_stop >/dev/null 2>&1");
                         } else if (cp_idx == 6) {
+                            g_wifi_adb_enabled = !g_wifi_adb_enabled;
+                            (void)!system(g_wifi_adb_enabled ? "systemctl restart adbd >/dev/null 2>&1; usbgadget adb_tcp >/dev/null 2>&1" : "systemctl stop adbd >/dev/null 2>&1; usbgadget adb_tcp_stop >/dev/null 2>&1");
+                        } else if (cp_idx == 8) {
                             enter_walkman_mode(ren);
-                        } else if (cp_idx == 10) {
-                            do_restart_launcher();
                         } else if (cp_idx == 11) {
+                            do_restart_launcher();
+                        } else if (cp_idx == 12) {
                             do_reboot();
                             state = VIEW_MAIN_MENU;
-                        } else if (cp_idx == 12) {
-                            do_poweroff(&running);
                         } else if (cp_idx == 13) {
+                            do_poweroff(&running);
+                        } else if (cp_idx == 14) {
                             state = VIEW_MAIN_MENU;
                         }
-                    } else if (k == SDLK_BACKSPACE || k == SDLK_k) {
+                    } else if (k == SDLK_BACKSPACE) {
                         state = VIEW_MAIN_MENU;
+                    }
+                } else if (state == VIEW_WIFI_MENU) {
+                    if (k == SDLK_UP || k == SDLK_w) {
+                        if (g_wifi_count > 0) g_wifi_selected_idx = (g_wifi_selected_idx - 1 + g_wifi_count) % g_wifi_count;
+                    } else if (k == SDLK_DOWN || k == SDLK_s) {
+                        if (g_wifi_count > 0) g_wifi_selected_idx = (g_wifi_selected_idx + 1) % g_wifi_count;
+                    } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
+                        connect_selected_wifi(g_wifi_selected_idx);
+                    } else if (k == SDLK_r) {
+                        scan_wifi_networks();
+                    } else if (k == SDLK_BACKSPACE) {
+                        state = VIEW_CONTROL_CENTER;
+                    }
+                } else if (state == VIEW_BT_MENU) {
+                    if (k == SDLK_UP || k == SDLK_w) {
+                        if (g_bt_count > 0) g_bt_selected_idx = (g_bt_selected_idx - 1 + g_bt_count) % g_bt_count;
+                    } else if (k == SDLK_DOWN || k == SDLK_s) {
+                        if (g_bt_count > 0) g_bt_selected_idx = (g_bt_selected_idx + 1) % g_bt_count;
+                    } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
+                        connect_selected_bt(g_bt_selected_idx);
+                    } else if (k == SDLK_r) {
+                        scan_bt_devices();
+                    } else if (k == SDLK_BACKSPACE) {
+                        state = VIEW_CONTROL_CENTER;
                     }
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (k == SDLK_UP || k == SDLK_w) {
                         info_idx = (info_idx - 1 + info_count) % info_count;
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         info_idx = (info_idx + 1) % info_count;
-                    } else if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN || k == SDLK_SPACE) {
+                    } else if (k == SDLK_BACKSPACE || k == SDLK_RETURN || k == SDLK_SPACE) {
                         state = VIEW_MAIN_MENU;
                     }
                 } else if (state == VIEW_POWER_DIALOG) {
@@ -645,7 +770,7 @@ int main(int argc, char* argv[]) {
                         power_idx = (power_idx - 1 + power_count) % power_count;
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         power_idx = (power_idx + 1) % power_count;
-                    } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
+                    } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
                         if (power_idx == 0) do_restart_launcher();
                         else if (power_idx == 1) {
                             do_reboot();
@@ -653,7 +778,7 @@ int main(int argc, char* argv[]) {
                         }
                         else if (power_idx == 2) do_poweroff(&running);
                         else if (power_idx == 3) state = VIEW_MAIN_MENU;
-                    } else if (k == SDLK_BACKSPACE || k == SDLK_k) {
+                    } else if (k == SDLK_BACKSPACE) {
                         state = VIEW_MAIN_MENU;
                     }
                 }
@@ -683,46 +808,80 @@ int main(int argc, char* argv[]) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) cp_idx = (cp_idx - 1 + cp_count) % cp_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) cp_idx = (cp_idx + 1) % cp_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
-                        if (cp_idx == 3) {
+                        if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode - 1 + USB_MODE_COUNT) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 5) apply_brightness(-5);
-                        else if (cp_idx == 7) apply_volume(-5);
+                        } else if (cp_idx == 7) apply_brightness(-5);
+                        else if (cp_idx == 9) apply_volume(-5);
                     }
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
-                        if (cp_idx == 3) {
+                        if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode + 1) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 5) apply_brightness(+5);
-                        else if (cp_idx == 7) apply_volume(+5);
+                        } else if (cp_idx == 7) apply_brightness(+5);
+                        else if (cp_idx == 9) apply_volume(+5);
                     }
                     if (btn == BTN_CONFIRM) {
                         if (cp_idx == 0) {
                             g_wifi_enabled = !g_wifi_enabled;
                             (void)!system(g_wifi_enabled ? "wifictl enable >/dev/null 2>&1" : "wifictl disable >/dev/null 2>&1");
-                        } else if (cp_idx == 2) {
+                        } else if (cp_idx == 1) {
+                            scan_wifi_networks();
+                            state = VIEW_WIFI_MENU;
+                        } else if (cp_idx == 3) {
                             g_bt_enabled = !g_bt_enabled;
                             (void)!system(g_bt_enabled ? "rocknix-bluetooth on >/dev/null 2>&1" : "rocknix-bluetooth off >/dev/null 2>&1");
-                        } else if (cp_idx == 3) {
+                        } else if (cp_idx == 4) {
+                            scan_bt_devices();
+                            state = VIEW_BT_MENU;
+                        } else if (cp_idx == 5) {
                             g_usb_mode = (g_usb_mode + 1) % USB_MODE_COUNT;
                             apply_usb_mode();
-                        } else if (cp_idx == 4) {
-                            g_wifi_adb_enabled = !g_wifi_adb_enabled;
-                            (void)!system(g_wifi_adb_enabled ? "systemctl restart sshd >/dev/null 2>&1; usbgadget adb_tcp >/dev/null 2>&1" : "systemctl stop sshd >/dev/null 2>&1; usbgadget adb_tcp_stop >/dev/null 2>&1");
                         } else if (cp_idx == 6) {
+                            g_wifi_adb_enabled = !g_wifi_adb_enabled;
+                            (void)!system(g_wifi_adb_enabled ? "systemctl restart adbd >/dev/null 2>&1; usbgadget adb_tcp >/dev/null 2>&1" : "systemctl stop adbd >/dev/null 2>&1; usbgadget adb_tcp_stop >/dev/null 2>&1");
+                        } else if (cp_idx == 8) {
                             enter_walkman_mode(ren);
-                        } else if (cp_idx == 10) {
-                            do_restart_launcher();
                         } else if (cp_idx == 11) {
+                            do_restart_launcher();
+                        } else if (cp_idx == 12) {
                             do_reboot();
                             state = VIEW_MAIN_MENU;
-                        } else if (cp_idx == 12) {
-                            do_poweroff(&running);
                         } else if (cp_idx == 13) {
+                            do_poweroff(&running);
+                        } else if (cp_idx == 14) {
                             state = VIEW_MAIN_MENU;
                         }
                     }
                     if (btn == BTN_CANCEL) state = VIEW_MAIN_MENU;
+                } else if (state == VIEW_WIFI_MENU) {
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) {
+                        if (g_wifi_count > 0) g_wifi_selected_idx = (g_wifi_selected_idx - 1 + g_wifi_count) % g_wifi_count;
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
+                        if (g_wifi_count > 0) g_wifi_selected_idx = (g_wifi_selected_idx + 1) % g_wifi_count;
+                    }
+                    if (btn == BTN_CONFIRM) {
+                        connect_selected_wifi(g_wifi_selected_idx);
+                    }
+                    if (btn == BTN_RESCAN) {
+                        scan_wifi_networks();
+                    }
+                    if (btn == BTN_CANCEL) state = VIEW_CONTROL_CENTER;
+                } else if (state == VIEW_BT_MENU) {
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) {
+                        if (g_bt_count > 0) g_bt_selected_idx = (g_bt_selected_idx - 1 + g_bt_count) % g_bt_count;
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
+                        if (g_bt_count > 0) g_bt_selected_idx = (g_bt_selected_idx + 1) % g_bt_count;
+                    }
+                    if (btn == BTN_CONFIRM) {
+                        connect_selected_bt(g_bt_selected_idx);
+                    }
+                    if (btn == BTN_RESCAN) {
+                        scan_bt_devices();
+                    }
+                    if (btn == BTN_CANCEL) state = VIEW_CONTROL_CENTER;
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) info_idx = (info_idx - 1 + info_count) % info_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) info_idx = (info_idx + 1) % info_count;
@@ -761,7 +920,7 @@ int main(int argc, char* argv[]) {
         SDL_SetRenderDrawColor(ren, c_dark.r, c_dark.g, c_dark.b, 255);
         SDL_RenderClear(ren);
 
-        // 1. Top Status Bar (Height 36px, Width 720px, strictly non-overlapping)
+        // 1. Top Status Bar (Height 36px, strictly non-overlapping, NO TIME)
         SDL_SetRenderDrawColor(ren, 14, 18, 24, 255);
         SDL_Rect top_bar = {0, 0, SCREEN_WIDTH, 36};
         SDL_RenderFillRect(ren, &top_bar);
@@ -771,46 +930,32 @@ int main(int argc, char* argv[]) {
         char bat_disp[40];
         snprintf(bat_disp, sizeof(bat_disp), "BAT: %s", bat_str);
 
-        time_t now = time(NULL);
-        struct tm* tm_now = localtime(&now);
-        char time_str[16];
-        strftime(time_str, sizeof(time_str), "%H:%M", tm_now);
-
-        // Dynamically spaced 5 zones:
-        draw_string(ren, "RG34XX DEV", 20, 10, 2, c_cyan);
-        draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 205, 10, 2, g_wifi_enabled ? c_green : c_gray);
-        draw_string(ren, g_usb_short_names[g_usb_mode], 350, 10, 2, c_accent);
-        draw_string(ren, bat_disp, 495, 10, 2, c_white);
-        draw_string(ren, time_str, 630, 10, 2, c_accent);
+        // Dynamically spaced 4 zones (Time completely removed):
+        draw_string(ren, "RG34XX DEV", 28, 10, 2, c_cyan);
+        draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 220, 10, 2, g_wifi_enabled ? c_green : c_gray);
+        draw_string(ren, g_usb_short_names[g_usb_mode], 380, 10, 2, c_accent);
+        draw_string(ren, bat_disp, 560, 10, 2, c_white);
 
         // 2. Main Content
         if (state == VIEW_MAIN_MENU) {
             draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 48, 2, c_accent);
 
             for (int i = 0; i < main_menu_count; i++) {
-                int item_y = 96 + i * 54;
+                int item_y = 96 + i * 58;
                 bool is_sel = (i == main_selected_idx);
 
-                SDL_Rect r = {45, item_y - 4, 620, 44};
+                SDL_Rect r = {45, item_y - 4, 620, 48};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 20, item_y + 9, 2, c_accent);
-                    draw_string(ren, main_menu_items[i], 60, item_y + 9, 2, c_white);
+                    draw_string(ren, ">", 20, item_y + 11, 2, c_accent);
+                    draw_string(ren, main_menu_items[i], 60, item_y + 11, 2, c_white);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, main_menu_items[i], 60, item_y + 9, 2, c_gray);
+                    draw_string(ren, main_menu_items[i], 60, item_y + 11, 2, c_gray);
                 }
             }
-
-            // Contextual hint box
-            SDL_Rect hint_box = {45, 392, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &hint_box);
-
-            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
-            draw_string_marquee(ren, main_menu_hints[main_selected_idx], 145, 400, 2, c_white, 530, true, ticks);
 
         } else if (state == VIEW_CONTROL_CENTER) {
             draw_string(ren, "=== SYSTEM CONTROL CENTER & SETTINGS ===", 55, 48, 2, c_cyan);
@@ -822,12 +967,14 @@ int main(int argc, char* argv[]) {
             char ip_str[48];
             get_ip_info(ip_str, sizeof(ip_str));
 
-            char cp_titles[14][32] = {
+            char cp_titles[15][32] = {
                 "Wi-Fi Wireless",
+                "Wi-Fi Networks",
                 "Wi-Fi IP Address",
                 "Bluetooth Radio",
+                "Bluetooth Devices",
                 "USB-C Data Role",
-                "SSH Remote Access",
+                "Wireless ADB",
                 "Screen Brightness",
                 "Walkman Mode",
                 "Audio Volume",
@@ -835,42 +982,25 @@ int main(int argc, char* argv[]) {
                 "CPU Telemetry",
                 "Restart UI",
                 "Reboot Handheld",
-                "Power Off",
-                "Back to Main"
+                "Power Off"
             };
 
-            char cp_values[14][48];
+            char cp_values[15][48];
             snprintf(cp_values[0], sizeof(cp_values[0]), "[%s]", g_wifi_enabled ? "ENABLED" : "DISABLED");
-            snprintf(cp_values[1], sizeof(cp_values[1]), "%s", ip_str);
-            snprintf(cp_values[2], sizeof(cp_values[2]), "[%s]", g_bt_enabled ? "ON" : "OFF");
-            snprintf(cp_values[3], sizeof(cp_values[3]), "< %s >", g_usb_mode_names[g_usb_mode]);
-            snprintf(cp_values[4], sizeof(cp_values[4]), "[%s:22]", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
-            snprintf(cp_values[5], sizeof(cp_values[5]), "< %d%% >", g_brightness);
-            snprintf(cp_values[6], sizeof(cp_values[6]), "[Sleep Screen]");
-            snprintf(cp_values[7], sizeof(cp_values[7]), "< %d%% >", g_volume);
-            snprintf(cp_values[8], sizeof(cp_values[8]), "%s", storage_str);
-            snprintf(cp_values[9], sizeof(cp_values[9]), "%s", temp_str);
-            snprintf(cp_values[10], sizeof(cp_values[10]), "[Reload UI]");
-            snprintf(cp_values[11], sizeof(cp_values[11]), "[Reboot System]");
-            snprintf(cp_values[12], sizeof(cp_values[12]), "[Power Off]");
-            snprintf(cp_values[13], sizeof(cp_values[13]), "[Return]");
-
-            const char* cp_hints[14] = {
-                "[A] Toggle Wi-Fi Network Connection",
-                "Assigned IP Address on Local Network",
-                "[A] Toggle Bluetooth Radio Power",
-                "[Left/Right] Cycle USB Role  [A] Apply to Host",
-                "[A] Toggle SSH Remote Server (Port 22)",
-                "[Left/Right] Adjust LCD Backlight Brightness",
-                "[A] Turn Off Backlight (bl_power=4), Keep Audio",
-                "[Left/Right] Adjust Master Sound Output Volume",
-                "MicroSD Storage Partition (/storage) Capacity",
-                "Allwinner H700 SoC Temperature & Core Freq",
-                "[A] Restart Handheld Launcher Daemon",
-                "[A] Reboot Device Hardware Safely",
-                "[A] Safely Unmount & Power Down Handheld",
-                "[A / B] Return to Primary Launch Menu"
-            };
+            snprintf(cp_values[1], sizeof(cp_values[1]), "[Scan & Connect >]");
+            snprintf(cp_values[2], sizeof(cp_values[2]), "%s", ip_str);
+            snprintf(cp_values[3], sizeof(cp_values[3]), "[%s]", g_bt_enabled ? "ON" : "OFF");
+            snprintf(cp_values[4], sizeof(cp_values[4]), "[Scan & Pair >]");
+            snprintf(cp_values[5], sizeof(cp_values[5]), "< %s >", g_usb_mode_names[g_usb_mode]);
+            snprintf(cp_values[6], sizeof(cp_values[6]), "[%s:5555]", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
+            snprintf(cp_values[7], sizeof(cp_values[7]), "< %d%% >", g_brightness);
+            snprintf(cp_values[8], sizeof(cp_values[8]), "[Sleep Screen]");
+            snprintf(cp_values[9], sizeof(cp_values[9]), "< %d%% >", g_volume);
+            snprintf(cp_values[10], sizeof(cp_values[10]), "%s", storage_str);
+            snprintf(cp_values[11], sizeof(cp_values[11]), "%s", temp_str);
+            snprintf(cp_values[12], sizeof(cp_values[12]), "[Reload UI]");
+            snprintf(cp_values[13], sizeof(cp_values[13]), "[Reboot System]");
+            snprintf(cp_values[14], sizeof(cp_values[14]), "[Power Off]");
 
             for (int i = 0; i < cp_visible_count; i++) {
                 int item_idx = cp_scroll_offset + i;
@@ -911,19 +1041,86 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
             SDL_RenderFillRect(ren, &sb_thumb);
 
-            // Contextual Hint Bar
-            SDL_Rect hint_box = {45, 392, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &hint_box);
+        } else if (state == VIEW_WIFI_MENU) {
+            draw_string(ren, "=== WI-FI NETWORKS (SCAN & CONNECT) ===", 55, 48, 2, c_cyan);
 
-            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
-            draw_string_marquee(ren, cp_hints[cp_idx], 145, 400, 2, c_white, 530, true, ticks);
+            int wifi_vis = 6;
+            int wifi_offset = 0;
+            if (g_wifi_selected_idx >= wifi_vis) wifi_offset = g_wifi_selected_idx - wifi_vis + 1;
+
+            if (g_wifi_count == 0) {
+                draw_string(ren, g_wifi_status_msg, 60, 180, 2, c_gray);
+                draw_string(ren, "Press [X] to rescan wireless networks", 60, 220, 2, c_accent);
+            } else {
+                for (int i = 0; i < wifi_vis; i++) {
+                    int idx = wifi_offset + i;
+                    if (idx >= g_wifi_count) break;
+
+                    int item_y = 88 + i * 50;
+                    bool is_sel = (idx == g_wifi_selected_idx);
+
+                    SDL_Rect r = {45, item_y - 4, 620, 42};
+                    if (is_sel) {
+                        SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
+                        SDL_RenderFillRect(ren, &r);
+                        draw_string(ren, ">", 20, item_y + 8, 2, c_accent);
+                    } else {
+                        SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
+                        SDL_RenderFillRect(ren, &r);
+                    }
+
+                    char disp_name[64];
+                    snprintf(disp_name, sizeof(disp_name), "%s %s", g_wifi_list[idx].in_use ? "*" : " ", g_wifi_list[idx].ssid);
+                    draw_string(ren, disp_name, 60, item_y + 8, 2, g_wifi_list[idx].in_use ? c_green : (is_sel ? c_white : c_gray));
+
+                    char sig_str[32];
+                    snprintf(sig_str, sizeof(sig_str), "%s [%d%%]", g_wifi_list[idx].secure ? "SEC" : "OPEN", g_wifi_list[idx].signal);
+                    draw_string_right(ren, sig_str, 645, item_y + 8, 2, is_sel ? c_accent : c_white);
+                }
+            }
+
+            draw_string(ren, g_wifi_status_msg, 55, 395, 2, c_accent);
+
+        } else if (state == VIEW_BT_MENU) {
+            draw_string(ren, "=== BLUETOOTH DEVICES (SCAN & PAIR) ===", 55, 48, 2, c_cyan);
+
+            int bt_vis = 6;
+            int bt_offset = 0;
+            if (g_bt_selected_idx >= bt_vis) bt_offset = g_bt_selected_idx - bt_vis + 1;
+
+            if (g_bt_count == 0) {
+                draw_string(ren, g_bt_status_msg, 60, 180, 2, c_gray);
+                draw_string(ren, "Press [X] to rescan nearby bluetooth devices", 60, 220, 2, c_accent);
+            } else {
+                for (int i = 0; i < bt_vis; i++) {
+                    int idx = bt_offset + i;
+                    if (idx >= g_bt_count) break;
+
+                    int item_y = 88 + i * 50;
+                    bool is_sel = (idx == g_bt_selected_idx);
+
+                    SDL_Rect r = {45, item_y - 4, 620, 42};
+                    if (is_sel) {
+                        SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
+                        SDL_RenderFillRect(ren, &r);
+                        draw_string(ren, ">", 20, item_y + 8, 2, c_accent);
+                    } else {
+                        SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
+                        SDL_RenderFillRect(ren, &r);
+                    }
+
+                    draw_string(ren, g_bt_list[idx].name, 60, item_y + 8, 2, is_sel ? c_white : c_gray);
+                    draw_string_right(ren, g_bt_list[idx].mac, 645, item_y + 8, 2, is_sel ? c_accent : c_white);
+                }
+            }
+
+            draw_string(ren, g_bt_status_msg, 55, 395, 2, c_accent);
 
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 55, 48, 2, c_cyan);
+            draw_string(ren, "=== RG34XX SYSTEM HARDWARE SPECIFICATIONS ===", 30, 48, 2, c_cyan);
 
             const char* spec_keys[] = {
-                "Device",
+                "Device Model",
                 "Processor",
                 "Display",
                 "Graphics",
@@ -969,7 +1166,7 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // Scrollbar Track (Exact same position as Control Center)
+            // Scrollbar Track
             int sb_x = 685;
             int sb_y = 88;
             int sb_h = info_visible_count * 50 - 8;
@@ -984,56 +1181,44 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
             SDL_RenderFillRect(ren, &sb_thumb);
 
-            // Contextual Hint Bar
-            SDL_Rect hint_box = {45, 392, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &hint_box);
-
-            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
-            draw_string_marquee(ren, info_hints[info_idx], 145, 400, 2, c_white, 530, true, ticks);
-
         } else if (state == VIEW_POWER_DIALOG) {
             draw_string(ren, "=== POWER & SYSTEM ACTIONS ===", 55, 48, 2, c_cyan);
 
             for (int i = 0; i < power_count; i++) {
-                int item_y = 96 + i * 58;
+                int item_y = 104 + i * 62;
                 bool is_sel = (i == power_idx);
 
-                SDL_Rect r = {45, item_y - 4, 620, 46};
+                SDL_Rect r = {45, item_y - 4, 620, 50};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 20, item_y + 10, 2, c_accent);
-                    draw_string(ren, power_items[i], 60, item_y + 10, 2, c_white);
+                    draw_string(ren, ">", 20, item_y + 12, 2, c_accent);
+                    draw_string(ren, power_items[i], 60, item_y + 12, 2, c_white);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, power_items[i], 60, item_y + 10, 2, (i == 2) ? c_red : c_gray);
+                    draw_string(ren, power_items[i], 60, item_y + 12, 2, (i == 2) ? c_red : c_gray);
                 }
             }
-
-            // Contextual Hint Bar
-            SDL_Rect hint_box = {45, 392, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &hint_box);
-
-            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
-            draw_string_marquee(ren, power_hints[power_idx], 145, 400, 2, c_white, 530, true, ticks);
-
         }
-        // 3. Bottom Navigation Bar
+
+        // 3. Bottom Navigation Bar (Handheld-native button labels only)
         SDL_SetRenderDrawColor(ren, 14, 18, 24, 255);
         SDL_Rect bot_bar = {0, SCREEN_HEIGHT - 38, SCREEN_WIDTH, 38};
         SDL_RenderFillRect(ren, &bot_bar);
 
         if (state == VIEW_MAIN_MENU) {
-            draw_string(ren, "[A] SELECT   [UP/DOWN] MOVE   [ESC] QUIT", 56, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] SELECT   [D-PAD] MOVE   [START+SEL] EXIT", 16, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_CONTROL_CENTER) {
-            draw_string(ren, "[A] APPLY   [LEFT/RIGHT] ADJ   [B] BACK", 64, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] TOGGLE   [D-PAD] ADJUST   [B] BACK", 56, SCREEN_HEIGHT - 26, 2, c_gray);
+        } else if (state == VIEW_WIFI_MENU) {
+            draw_string(ren, "[A] CONNECT   [X] RESCAN   [B] BACK", 80, SCREEN_HEIGHT - 26, 2, c_gray);
+        } else if (state == VIEW_BT_MENU) {
+            draw_string(ren, "[A] PAIR   [X] RESCAN   [B] BACK", 104, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "[UP/DOWN] SCROLL INFO         [B] BACK", 72, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[D-PAD] SCROLL                  [B] BACK", 40, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_POWER_DIALOG) {
-            draw_string(ren, "[A] CONFIRM ACTION           [B] CANCEL", 64, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] CONFIRM              [B] CANCEL", 80, SCREEN_HEIGHT - 26, 2, c_gray);
         }
 
         if (dump_mode) {
@@ -1042,14 +1227,14 @@ int main(int argc, char* argv[]) {
             save_screenshot(ren, filename);
             SDL_RenderPresent(ren);
             state++;
-            if (state > VIEW_POWER_DIALOG) {
+            if (state > VIEW_BT_MENU) {
                 running = false;
             }
             continue;
         }
 
         SDL_RenderPresent(ren);
-        SDL_Delay(16); // ~60 FPS
+        SDL_Delay(16);
     }
 
     if (controller) SDL_GameControllerClose(controller);
