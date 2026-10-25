@@ -39,3 +39,8 @@
    * 本地持久缓存机制（sources/ 源码包、.stamps/ 指纹时间戳）
    * 为什么后续编译速度会快几十倍（单包增量构建技巧）
    * 针对 RG34XX 专属开发版的 7 项核心定制改动总揽
+
+7. [07. 系统控制中心与 USB 扩展功能（MTP / ADB 调试）](file:///home/tetsuya/development/rocknix/documentation/customization/07_system_control_panel_and_usb_gadget.md)
+   * 启动器原生集成系统控制中心（WiFi / 蓝牙 / 音量 / 亮度 / USB 模式）
+   * Type-C 直插免拔卡 MTP 磁盘传输机制
+   * USB 虚拟网卡与免密 ADB 极客调试工作流
