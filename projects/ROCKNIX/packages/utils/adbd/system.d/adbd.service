@@ -1,0 +1,14 @@
+[Unit]
+Description=Android Debug Bridge Daemon (TCP 5555)
+After=network.target
+
+[Service]
+Type=simple
+Environment=ADB_PORT=5555
+Environment=HOME=/storage
+ExecStart=/usr/sbin/adbd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=rocknix.target
