@@ -6,7 +6,7 @@ PKG_VERSION="a40dace1ae0af3ebd45848549fdf396f40e3930f"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/sydarn/yabause"
 PKG_URL="${PKG_SITE}.git"
-PKG_DEPENDS_TARGET="toolchain SDL2 boost openal-soft zlib"
+PKG_DEPENDS_TARGET="toolchain SDL2 boost openal-soft zlib nlohmann-json"
 PKG_LONGDESC="Yabause is a Sega Saturn emulator and took over as Yaba Sanshiro"
 PKG_TOOLCHAIN="cmake-make"
 PKG_BUILD_FLAGS="+speed"
@@ -25,6 +25,8 @@ if [ "${VULKAN_SUPPORT}" = "yes" ]; then
   PKG_DEPENDS_TARGET+=" ${VULKAN}"
 fi
 
+TARGET_CFLAGS+=" -Wno-error=incompatible-pointer-types -Wno-error=implicit-function-declaration -Wno-error=int-conversion -D_GNU_SOURCE"
+
 PKG_CMAKE_OPTS_TARGET+=" -DCMAKE_SYSTEM_PROCESSOR=x86_64
                          -DOPENGL_INCLUDE_DIR=${SYSROOT_PREFIX}/usr/include \
                          -DOPENGL_opengl_LIBRARY=${SYSROOT_PREFIX}/usr/lib \
@@ -35,10 +37,13 @@ PKG_CMAKE_OPTS_TARGET+=" -DCMAKE_SYSTEM_PROCESSOR=x86_64
                          -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"
 
 post_unpack() {
+  # strip carriage returns and BOM
+  find ${PKG_BUILD} -type f -exec sed -i -e 's/\r$//' -e '1s/^\xef\xbb\xbf//' {} +
   # use host versions
   sed -i "s|COMMAND m68kmake|COMMAND ${PKG_BUILD}/m68kmake_host|" ${PKG_BUILD}/yabause/src/musashi/CMakeLists.txt
   sed -i "s|COMMAND ./bin2c|COMMAND ${PKG_BUILD}/bin2c_host|" ${PKG_BUILD}/yabause/src/retro_arena/nanogui-sdl/CMakeLists.txt
   find ${PKG_BUILD} -type f -name "CMakeLists.txt" -exec sed -i 's/^\s*cmake_minimum_required.*$/cmake_minimum_required(VERSION 3.5)/' {} +
+  printf '#include "EventManager.h"\n\nEventManager * EventManager::instance = nullptr;\n' > ${PKG_BUILD}/yabause/src/retro_arena/EventManager.cpp
 }
 
 configure_package() {

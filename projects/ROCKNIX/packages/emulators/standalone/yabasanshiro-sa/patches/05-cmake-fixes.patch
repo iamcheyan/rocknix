@@ -6,12 +6,59 @@
  
  add_definitions( -D__RETORO_ARENA__ )
  
-@@ -99,8 +100,12 @@
+@@ -35,7 +36,7 @@
+   URL               https://www.sqlite.org/2022/sqlite-amalgamation-3400000.zip
+ ##  URL_HASH          SHA1=cee1d63a9ae8d8f5948c12682c5d746b72363aaf
+   PATCH_COMMAND
+-    COMMAND echo cmake_minimum_required( VERSION 3.2 ) > ${sqlite3_cmake_file_path}
++    COMMAND echo cmake_minimum_required( VERSION 3.5 ) > ${sqlite3_cmake_file_path}
+     COMMAND echo project( sqlite3_project ) >> ${sqlite3_cmake_file_path}
+     COMMAND echo find_package( Threads ) >> ${sqlite3_cmake_file_path}
+     COMMAND echo add_library( sqlite3 sqlite3.c ) >> ${sqlite3_cmake_file_path}
+@@ -45,33 +46,15 @@
+                     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+                     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
++                    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+ )
+ 
+ #------------------------------------------------------------------------------
+ # nlohmann/json
+ #  * sets EXTERNAL_JSON_INCLUDE_DIR 
+ 
+-ExternalProject_Add(
+-     Json
+-     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/Json
+-     GIT_REPOSITORY https://github.com/nlohmann/json.git
+-     # For shallow git clone (without downloading whole history)
+-     #GIT_SHALLOW 1
+-     # For point at certain tag
+-     GIT_TAG v3.2.0
+-     #disables auto update on every build
+-     UPDATE_DISCONNECTED 1
+-     #disable following
+-     CONFIGURE_COMMAND "" BUILD_COMMAND "" INSTALL_DIR "" INSTALL_COMMAND ""
+-     )
+- # Update json target
+- add_custom_target(external-Json-update
+-     COMMENT "Updated Nlohmann/Json"
+-     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Json/src/Json
+-     COMMAND ${GIT_EXECUTABLE} pull
+-     DEPENDS Json)
+-# set include directory
+-set(EXTERNAL_JSON_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/Json/src/Json/single_include")
++# Use system nlohmann-json
++set(EXTERNAL_JSON_INCLUDE_DIR "")
+ 
+ set(PORT_INCLUDE_DIRS ${EXTERNAL_JSON_INCLUDE_DIR} ${SDL2_INCLUDE_DIR} ${png_INCLUDE_DIR} ${zlib_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include )
+ set(PORT_LIBRARIES ${SDL2_LIBRARY} ${OPENGLES2_LIBRARIES} ${png_STATIC_LIBRARIES} ${zlib_STATIC_LIBRARIES} )
+@@ -99,8 +82,12 @@
  ) 
  link_directories( ${link_directories} ${LIBCHDR_LIB_DIR} )
- include_directories( ${PORT_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${sqlite3_source_path} "nanogui-sdl/include" "nanogui-sdl/ext/eigen" "win/include" )
+-include_directories( ${PORT_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${sqlite3_source_path} "nanogui-sdl/include" "nanogui-sdl/ext/eigen" "win/include" )
 -set(APP_ICON_RESOURCE_WINDOWS application.rc)
 -add_executable(yabause-retro-arena WIN32 ${yabause_ra_SOURCES} ${APP_ICON_RESOURCE_WINDOWS})
++include_directories( ${PORT_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${sqlite3_source_path} "nanogui-sdl/include" "nanogui-sdl/include/nanogui" "nanogui-sdl/ext/eigen" "win/include" )
 +if(WIN32)
 +  set(APP_ICON_RESOURCE_WINDOWS application.rc)
 +  add_executable(yabause-retro-arena WIN32 ${yabause_ra_SOURCES} ${APP_ICON_RESOURCE_WINDOWS})
@@ -21,12 +68,15 @@
  
  
  # OpenSSL for https
-@@ -134,7 +139,7 @@
+@@ -133,8 +120,8 @@
+-target_link_libraries(yabause-retro-arena yabause  ${Boost_LIBRARIES} pugixml ${YABAUSE_LIBRARIES} ${PORT_LIBRARIES} nanogui ${LIBCHDR_LIBRARIES} )
++target_link_libraries(yabause-retro-arena yabause stdc++fs ${Boost_LIBRARIES} pugixml ${YABAUSE_LIBRARIES} ${PORT_LIBRARIES} nanogui ${LIBCHDR_LIBRARIES} )
  target_link_libraries( yabause-retro-arena ${LIBCHDR_LIBRARIES} )
  target_link_libraries( yabause-retro-arena ${zlib_STATIC_LIBRARIES} )
- target_link_libraries( yabause-retro-arena ${CMAKE_CURRENT_BINARY_DIR}/lib/sqlite3.lib )
+-target_link_libraries( yabause-retro-arena ${CMAKE_CURRENT_BINARY_DIR}/lib/sqlite3.lib )
 -add_dependencies(yabause-retro-arena Json png zlib libchd nanogui external_sqlite3)
-+add_dependencies(yabause-retro-arena Json zlib nanogui external_sqlite3)
++target_link_libraries( yabause-retro-arena ${CMAKE_CURRENT_BINARY_DIR}/lib/libsqlite3.a )
++add_dependencies(yabause-retro-arena zlib nanogui external_sqlite3)
  yab_port_success(yabause-retro-arena)
  set_target_properties(yabause-retro-arena PROPERTIES OUTPUT_NAME yabasanshiro)
  

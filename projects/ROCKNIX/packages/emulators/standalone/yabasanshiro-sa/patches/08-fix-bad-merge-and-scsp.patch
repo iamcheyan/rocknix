@@ -1,0 +1,349 @@
+diff -ruN a/yabause/src/retro_arena/EventManager.h b/yabause/src/retro_arena/EventManager.h
+--- a/yabause/src/retro_arena/EventManager.h	2026-10-26 03:49:43.561859998 +0900
++++ b/yabause/src/retro_arena/EventManager.h	2026-10-26 03:50:30.838981224 +0900
+@@ -13,6 +13,8 @@
+ #include <SDL.h>
+ #endif
+ 
++#include <string>
++#include <cstdint>
+ #include <map>
+ #include <functional>
+ 
+@@ -47,8 +49,8 @@
+       Event event;
+       event.type = SDL_RegisterEvents(1);
+       event.func = callback;
+-      m.insert_or_assign( ev, event);
+-      etos.insert_or_assign( event.type, ev);
++      m[ev] = event;
++      etos[event.type] = ev;
+     }
+ 
+     void procEvent(uint32_t ev, int code = 0, void * data = nullptr ) {
+diff -ruN a/yabause/src/retro_arena/GameInfo.h b/yabause/src/retro_arena/GameInfo.h
+--- a/yabause/src/retro_arena/GameInfo.h	2026-10-26 03:49:43.561859998 +0900
++++ b/yabause/src/retro_arena/GameInfo.h	2026-10-26 03:50:30.839981227 +0900
+@@ -11,6 +11,8 @@
+ 
+ #include <sqlite3.h>
+ 
++void getHomeDir( std::string & homedir );
++
+ class GameInfo {
+ public:
+   string filePath = "";
+diff -ruN a/yabause/src/retro_arena/MenuScreen.cpp b/yabause/src/retro_arena/MenuScreen.cpp
+--- a/yabause/src/retro_arena/MenuScreen.cpp	2026-10-26 03:49:43.990861107 +0900
++++ b/yabause/src/retro_arena/MenuScreen.cpp	2026-10-26 03:50:30.840981229 +0900
+@@ -19,6 +19,7 @@
+ */
+ 
+ #include "MenuScreen.h"
++#include "EventManager.h"
+ #include <nanogui/window.h>
+ #include <nanogui/layout.h>
+ #include <nanogui/label.h>
+@@ -68,7 +69,7 @@
+   bFileSearchCancled = false;
+ 
+   MessageDialog * dlg = new MessageDialog(this, MessageDialog::Type::Warning, "Searching games", "", "Cancel");
+-  evm->setEvent("updateFile", [this, dlg](int code, void * data1, void * data2) {
++  EventManager::getInstance()->setEvent("updateFile", [this, dlg](int code, void * data1, void * data2) {
+     if (!bFileSearchCancled) {
+       string msg((char*)data1);
+       Label * pl = dlg->messageLabel();
+@@ -84,7 +85,7 @@
+       listdir(base_path_array[i], indent, games);
+     }
+     if (!bFileSearchCancled) {
+-      evm->postEvent("showFileSelectDialog");
++      EventManager::getInstance()->postEvent("showFileSelectDialog");
+     }
+   });
+ 
+@@ -96,10 +97,10 @@
+     MENU_LOG("Cancel\n");
+     //void * datax = malloc(256 * sizeof(char));
+     //strcpy((char*)datax, "");
+-    //evm->postEvent("close tray", datax);
++    //EventManager::getInstance()->postEvent("close tray", datax);
+   });
+ 
+-  evm->setEvent("showFileSelectDialog", [this, dlg, t, base_path_array](int code, void * data1, void * data2) {
++  EventManager::getInstance()->setEvent("showFileSelectDialog", [this, dlg, t, base_path_array](int code, void * data1, void * data2) {
+     t->join();
+     delete t;
+     dlg->dispose();
+@@ -608,7 +609,7 @@
+ 
+       void * data = new char[dname.length()+1];
+       strcpy((char*)data, dname.c_str());
+-      evm->postEvent("updateFile", data);
++      EventManager::getInstance()->postEvent("updateFile", data);
+ 
+     }
+   }
+@@ -696,13 +697,15 @@
+     });
+     dlg->requestFocus();
+ 
+-    mFocus = dlg->getOkBottn();
+-    MENU_LOG("%s is selected\n", ((nanogui::Button*)mFocus)->caption().c_str());
+-    mFocus->mouseEnterEvent(mFocus->position(), true);
++    mFocus = dlg;
+   }
+ }
+ 
+-void MenuScreen::showFileSelectDialog( Widget * parent, Widget * toback, const std::string & base_path ){
++void MenuScreen::showFileSelectDialog( Widget * parent, Widget * toback, const std::string & base_path ) {
++  showFileSelectDialog(parent, toback, std::vector<std::string>{ base_path });
++}
++
++void MenuScreen::showFileSelectDialog( Widget * parent, Widget * toback, const std::vector<std::string> & base_paths ){
+   const int dialog_width = 512;
+   const int dialog_height = this->size()[1] - 20 ;
+     swindow = new Window(this, "Select Game");
+@@ -755,7 +758,7 @@
+       MENU_LOG("Cancel\n");
+       void * data1 = malloc(256 * sizeof(char));
+       strcpy((char*)data1, "");
+-      evm->postEvent("close tray", data1);
++      EventManager::getInstance()->postEvent("close tray", data1);
+       this->popActiveMenu();
+       swindow->dispose();
+       swindow = nullptr;
+@@ -814,7 +817,7 @@
+         MENU_LOG("CD Close: %s\n", path.c_str());
+         void * data1 = malloc((path.size() + 1) * sizeof(char));
+         strcpy((char*)data1, path.c_str());
+-        evm->postEvent("close tray", data1);
++        EventManager::getInstance()->postEvent("close tray", data1);
+ 
+         this->popActiveMenu();
+         this->swindow->dispose();
+diff -ruN a/yabause/src/retro_arena/MenuScreen.h b/yabause/src/retro_arena/MenuScreen.h
+--- a/yabause/src/retro_arena/MenuScreen.h	2026-10-26 03:49:43.563860004 +0900
++++ b/yabause/src/retro_arena/MenuScreen.h	2026-10-26 03:50:30.839981227 +0900
+@@ -27,8 +27,11 @@
+ #include <string.h>
+ #include <stack>
+ #include <vector>
++#include <memory>
+ 
+ using std::shared_ptr;
++using std::vector;
++using std::string;
+ 
+ #if defined(_MSC_VER) 
+ #undef snprintf
+@@ -157,6 +160,9 @@
+ 	uint32_t reset_ = 0;
+ 	void setResetMenuEventCode( uint32_t type ){ reset_ = type; }
+ 
++	uint32_t repeat_ = 0;
++	void setRepeatEventCode( uint32_t type ){ repeat_ = type; }
++
+ 	uint32_t pad_ = 0;
+ 	void setTogglePadModeMenuEventCode( uint32_t type ){ pad_ = type; }
+ 
+@@ -187,6 +193,8 @@
+     void showInputCheckDialog( const std::string & key );
+ 
+     void showFileSelectDialog( Widget * parent, Widget * toback, const std::string & base_path );
++    void showFileSelectDialog( Widget * parent, Widget * toback, const std::vector<std::string> & base_paths );
++    void checkGameFiles(nanogui::Widget * parent, const std::vector<std::string> & base_paths);
+ 
+     void setupPlayerPsuhButton( int user_index, PopupButton *player, const std::string & label, ComboBox **cb );
+ 
+diff -ruN a/yabause/src/retro_arena/Preference.h b/yabause/src/retro_arena/Preference.h
+--- a/yabause/src/retro_arena/Preference.h	2026-10-26 03:49:43.564860006 +0900
++++ b/yabause/src/retro_arena/Preference.h	2026-10-26 03:50:30.839981227 +0900
+@@ -18,7 +18,9 @@
+ */
+ 
+ #include <string>
++#include <vector>
+ using std::string;
++using std::vector;
+ 
+ #include <nlohmann/json.hpp>
+ using json = nlohmann::json;
+@@ -26,6 +28,27 @@
+ 
+ class Preference {
+ public:
++    string getString( const string & key, const string & defaultv ) {
++      auto it = j.find(key);
++      if (it != j.end() && it->is_string()) {
++        return it->get<string>();
++      }
++      return defaultv;
++    }
++    void setString( const string & key, const string & value ) {
++      j[key] = value;
++    }
++    vector<string> getStringArray( const string & key ) {
++      vector<string> res;
++      auto it = j.find(key);
++      if (it != j.end() && it->is_array()) {
++        for (const auto & item : *it) {
++          if (item.is_string()) res.push_back(item.get<string>());
++        }
++      }
++      return res;
++    }
++
+     Preference( const string & filename );
+     ~Preference();
+     int getInt( const string & key, int defaultv );
+diff -ruN a/yabause/src/retro_arena/main.cpp b/yabause/src/retro_arena/main.cpp
+--- a/yabause/src/retro_arena/main.cpp	2026-10-26 03:49:44.858863349 +0900
++++ b/yabause/src/retro_arena/main.cpp	2026-10-26 03:50:30.840981229 +0900
+@@ -323,6 +323,7 @@
+   return 0;
+ }
+ 
++#if defined(_WINDOWS)
+ #include <Shlobj.h>
+ 
+ void narrow(const std::wstring &src, std::string &dest) {
+@@ -331,6 +332,7 @@
+   dest = mbs;
+   delete[] mbs;
+ }
++#endif
+ 
+ void getHomeDir( std::string & homedir ) {
+ #if defined(ARCH_IS_LINUX)
+@@ -361,6 +363,7 @@
+ }
+ 
+ 
++#if defined(_WINDOWS)
+ int __stdcall BrowseCallbackProc(HWND hWnd, UINT uMsg, LPARAM lParam, LPARAM lpData) {
+   TCHAR dir[MAX_PATH];
+   ITEMIDLIST *lpid;
+@@ -421,17 +424,23 @@
+    out = path;
+    return true;
+ }
++#else
++bool selectDirectory(std::string & out) {
++  return false;
++}
++#endif
+ 
+ 
+-//#undef main
+-//int main(int argc, char** argv)
++#if defined(_WINDOWS)
+ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance, LPSTR lpCmdLine, int cmdShow)
+ {
+-
+-  inputmng = InputManager::getInstance();
+-
+   char** argv = __argv;
+   int argc = __argc;
++#else
++int main(int argc, char** argv)
++{
++#endif
++  inputmng = InputManager::getInstance();
+ 
+   //printf("\033[2J");
+ 
+@@ -798,7 +807,7 @@
+       delete p;
+     }
+     else {
+-
++#if defined(_WINDOWS)
+       SDL_SysWMinfo wmInfo;
+       SDL_VERSION(&wmInfo.version);
+       SDL_GetWindowWMInfo(wnd, &wmInfo);
+@@ -823,6 +832,7 @@
+         delete p;
+       }
+       delete fname;
++#endif
+     }
+     menu->popActiveMenu();
+     hideMenuScreen();
+diff -ruN a/yabause/src/scsp.c b/yabause/src/scsp.c
+--- a/yabause/src/scsp.c	2026-10-26 03:49:44.845863315 +0900
++++ b/yabause/src/scsp.c	2026-10-26 03:50:30.841981232 +0900
+@@ -1718,6 +1718,7 @@
+ typedef struct scsp_t
+ {
+   u32 mem4b;            // 4mbit memory
++  u32 dac18b;           // 18bit DAC
+   u32 mvol;             // master volume
+ 
+   u32 rbl;              // ring buffer lenght
+diff -ruN a/yabause/src/sh2_dynarec_devmiyax/DynarecSh2CInterface.cpp b/yabause/src/sh2_dynarec_devmiyax/DynarecSh2CInterface.cpp
+--- a/yabause/src/sh2_dynarec_devmiyax/DynarecSh2CInterface.cpp	2026-10-26 03:49:44.018861179 +0900
++++ b/yabause/src/sh2_dynarec_devmiyax/DynarecSh2CInterface.cpp	2026-10-26 03:50:30.842981234 +0900
+@@ -933,50 +933,6 @@
+ #endif
+ 
+ 
+-    // MACW
+-    if ((inst & 0xf00f) == 0x400f) {
+-      u32 addrn = DynarecSh2::CurrentContext->GetGenRegPtr()[n] - 2;
+-      u32 addrm = DynarecSh2::CurrentContext->GetGenRegPtr()[m] - 2;
+-      fprintf(dfp, "%08X: MACW R[%d]=%08X@%08X,R[%d]=%08X@%08X,MACH=%08X,MACL=%08X\n",
+-        pc,
+-        n, addrn, MappedMemoryReadWord(addrn, NULL),
+-        m, addrm, MappedMemoryReadWord(addrm, NULL),
+-        DynarecSh2::CurrentContext->GET_MACH(),
+-        DynarecSh2::CurrentContext->GET_MACL()
+-      );
+-      fflush(dfp);
+-    }
+-#if 0
+-    // SHAR
+-    if ((inst & 0xf0ff) == 0x4021) {
+-      fprintf(dfp, "%08X: shar R[%d]=%08X,SR=%08X\n",
+-        pc,
+-        n, DynarecSh2::CurrentContext->GetGenRegPtr()[n],
+-        DynarecSh2::CurrentContext->GET_SR()
+-      );
+-      fflush(dfp);
+-    }
+-#endif
+-    if ((inst & 0xf00f) == 0x200d) {
+-      fprintf(dfp, "%08X: xtract R[%d]=%08X,R[%d]=%08X\n",
+-        pc,
+-        m, DynarecSh2::CurrentContext->GetGenRegPtr()[m],
+-        n, DynarecSh2::CurrentContext->GetGenRegPtr()[n]
+-      );
+-      fflush(dfp);
+-    }
+-#if 1
+-    if (pc == 0x06021588 && 
+-      DynarecSh2::CurrentContext->GetGenRegPtr()[1] == 0x0000318C &&
+-      DynarecSh2::CurrentContext->GetGenRegPtr()[2] == 0x318C2108 ) {
+-      SH2DumpHistory(CurrentSH2);
+-      exit(0);
+-    }
+-#endif
+-  }
+-#endif
+-
+-
+ #if 0
+   #define INSTRUCTION_B(x) ((x & 0x0F00) >> 8)
+   #define INSTRUCTION_C(x) ((x & 0x00F0) >> 4)
+diff -ruN a/yabause/src/threads.h b/yabause/src/threads.h
+--- a/yabause/src/threads.h	2026-10-26 03:49:44.028861205 +0900
++++ b/yabause/src/threads.h	2026-10-26 03:50:30.842981234 +0900
+@@ -21,6 +21,8 @@
+ #ifndef THREADS_H
+ #define THREADS_H
+ 
++#include "core.h"
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif

@@ -1,7 +1,0 @@
---- /dev/null
-+++ b/yabause/src/retro_arena/EventManager.cpp
-@@ -0,0 +1,4 @@
-+#include "EventManager.h"
-+
-+EventManager * EventManager::instance = nullptr;
-+
