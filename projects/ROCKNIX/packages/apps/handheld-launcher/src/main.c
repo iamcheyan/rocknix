@@ -7,7 +7,7 @@
  *       * Non-overlapping 5-Zone Top Status Bar
  *       * Main Menu with Context-Aware Descriptions
  *       * Control Center: Left-aligned Titles, Right-aligned Values, Marquee Scroll
- *       * Hardware & System Info: Formatted Two-Column Spec Sheet (Zero Truncation)
+ *       * Hardware & System Info: Multi-line Word-Wrapped Spec Table (No Truncation)
  *       * Power Management Modal Dialog (Reboot, Power Off, Reload UI)
  *       * Screen-Off Walkman Mode (turns off backlight bl_power=4, keeps music playing)
  *   - Global START + SELECT combo exit
@@ -178,6 +178,57 @@ void draw_string_marquee(SDL_Renderer* ren, const char* str, int x, int y, int s
 
     draw_string(ren, str, x - scroll_offset, y, scale, color);
     SDL_RenderSetClipRect(ren, NULL);
+}
+
+// Multi-line word-wrapped text rendering
+int draw_text_wrapped(SDL_Renderer* ren, const char* str, int x, int y, int scale, SDL_Color color, int max_w, int line_h) {
+    int cur_x = x;
+    int cur_y = y;
+    int char_w = 8 * scale;
+
+    const char* p = str;
+    while (*p) {
+        if (*p == '\n') {
+            cur_y += line_h;
+            cur_x = x;
+            p++;
+            continue;
+        }
+
+        // Measure next token/word
+        const char* word_end = p;
+        while (*word_end && *word_end != ' ' && *word_end != '\n') {
+            word_end++;
+        }
+        int word_len = word_end - p;
+        int word_w = word_len * char_w;
+
+        // Wrap to next line if word exceeds max width
+        if (cur_x + word_w > x + max_w && cur_x > x) {
+            cur_y += line_h;
+            cur_x = x;
+        }
+
+        // Draw the word
+        for (int i = 0; i < word_len; i++) {
+            draw_char(ren, p[i], cur_x, cur_y, scale, color);
+            cur_x += char_w;
+        }
+        p = word_end;
+
+        // Handle space
+        if (*p == ' ') {
+            if (cur_x + char_w <= x + max_w) {
+                draw_char(ren, ' ', cur_x, cur_y, scale, color);
+                cur_x += char_w;
+            } else {
+                cur_y += line_h;
+                cur_x = x;
+            }
+            p++;
+        }
+    }
+    return cur_y + line_h;
 }
 
 void launch_xmplayer(SDL_Window* win) {
@@ -747,20 +798,20 @@ int main(int argc, char* argv[]) {
             draw_string_marquee(ren, cp_hints[cp_idx], 145, 400, 2, c_white, 530, true, ticks);
 
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 75, 48, 2, c_cyan);
+            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 75, 46, 2, c_cyan);
 
-            // Large, well-proportioned spec card (Width: 650px)
-            SDL_Rect card = {35, 78, 650, 335};
+            // Large, well-proportioned spec card (Width: 650px, Height: 340px)
+            SDL_Rect card = {35, 74, 650, 345};
             SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
             SDL_RenderFillRect(ren, &card);
 
             // Inner divider accent header
-            SDL_Rect card_header = {35, 78, 650, 32};
+            SDL_Rect card_header = {35, 74, 650, 30};
             SDL_SetRenderDrawColor(ren, 24, 30, 40, 255);
             SDL_RenderFillRect(ren, &card_header);
-            draw_string(ren, "DEVICE SPECIFICATION & EMBEDDED STACK", 55, 86, 2, c_accent);
+            draw_string(ren, "DEVICE SPECIFICATION & MULTI-LINE STACK", 55, 81, 2, c_accent);
 
-            // Two-column formatted specs (Key width: 140px, Value left: 220px)
+            // Formatted specs: Label (x=50..180), colon (x=195), multi-line wrapped Value (x=215, max_w=450)
             const char* spec_keys[] = {
                 "Model",
                 "Processor",
@@ -768,40 +819,38 @@ int main(int argc, char* argv[]) {
                 "Graphics",
                 "Memory",
                 "Storage",
-                "Media Engine",
-                "Control Stack",
-                "Operating OS"
+                "Media",
+                "Stack"
             };
 
             const char* spec_vals[] = {
                 "Anbernic RG34XX / SP Handheld",
-                "Allwinner H700 (4x Cortex-A53 1.5GHz)",
-                "3.4\" IPS 720x480 (3:2 Aspect Ratio)",
-                "ARM Mali-G31 MP2 (Panfrost KMS/DRM)",
-                "1GB LPDDR4 @ 1600MHz System RAM",
-                "Dual TF Card (SquashFS + Ext4 Storage)",
-                "XMPlayer (Native XMB PSP Style Suite)",
-                "Direct Gamepad Bridge + USB ADB/MTP",
-                "ROCKNIX Pure 64-bit Embedded JeOS"
+                "Allwinner H700 Quad-core\n4x ARM Cortex-A53 @ 1.5GHz",
+                "3.4\" IPS Screen 720x480\nNative 3:2 Aspect Ratio",
+                "ARM Mali-G31 MP2 GPU\nPanfrost KMS/DRM Driver",
+                "1GB LPDDR4 System RAM @ 1600MHz",
+                "Dual TF Card Architecture\nTF1 OS SquashFS + TF2 Ext4",
+                "XMPlayer Media Suite (PSP XMB UI)",
+                "ROCKNIX Pure 64-bit JeOS\nNative Gamepad Bridge & USB ADB/MTP"
             };
-            int spec_count = 9;
+            int spec_count = 8;
 
+            int cur_y = 114;
             for (int i = 0; i < spec_count; i++) {
-                int row_y = 120 + i * 31;
-
-                // Alternate row subtle shading
+                // Subtle alternate shading
                 if (i % 2 == 1) {
-                    SDL_Rect row_rect = {45, row_y - 3, 630, 27};
+                    SDL_Rect row_rect = {42, cur_y - 3, 636, (strchr(spec_vals[i], '\n') ? 40 : 22)};
                     SDL_SetRenderDrawColor(ren, 36, 44, 58, 255);
                     SDL_RenderFillRect(ren, &row_rect);
                 }
 
-                // Left Key Label
-                draw_string(ren, spec_keys[i], 55, row_y, 2, c_cyan);
-                draw_string(ren, ":", 200, row_y, 2, c_gray);
+                // Left Key Label (Cyan, max 9 chars, ends before x=195)
+                draw_string(ren, spec_keys[i], 52, cur_y, 2, c_cyan);
+                draw_string(ren, ":", 195, cur_y, 2, c_gray);
 
-                // Right Value
-                draw_string(ren, spec_vals[i], 220, row_y, 2, c_white);
+                // Right Value (Multi-line word wrapped at x=215, max_w=450, line_height=18)
+                cur_y = draw_text_wrapped(ren, spec_vals[i], 215, cur_y, 2, c_white, 450, 18);
+                cur_y += 6; // item gap
             }
 
         } else if (state == VIEW_POWER_DIALOG) {
