@@ -3,8 +3,12 @@
  * Resolution: 720x480 (3:2 Aspect Ratio)
  * Features:
  *   - XMPlayer Integration (with START + SELECT Exit protection)
- *   - Interactive System Control Center:
- *       * Wi-Fi Management (Toggle, SSID / IP display)
+ *   - Pixel-perfect System Control Center:
+ *       * Non-overlapping Status Bar (Dynamically spaced 720px width)
+ *       * Clean Left-aligned Titles & Right-aligned Values
+ *       * Marquee Horizontal Auto-Scrolling for long text
+ *       * Context-aware Bottom Action Hints
+ *       * Wi-Fi Management (Toggle, IP display)
  *       * Bluetooth Management (Toggle)
  *       * USB Data Mode Switcher (MTP PC Disk, USB ADB Debug, USB Network, Charging Only)
  *       * Wireless ADB over TCP (Port 5555)
@@ -151,6 +155,40 @@ void draw_string(SDL_Renderer* ren, const char* str, int x, int y, int scale, SD
     }
 }
 
+void draw_string_right(SDL_Renderer* ren, const char* str, int right_x, int y, int scale, SDL_Color color) {
+    int len = strlen(str);
+    int width = len * 8 * scale;
+    draw_string(ren, str, right_x - width, y, scale, color);
+}
+
+// Text marquee horizontal scrolling with scissor clipping
+void draw_string_marquee(SDL_Renderer* ren, const char* str, int x, int y, int scale, SDL_Color color, int max_w, bool active, Uint32 ticks) {
+    int str_w = strlen(str) * 8 * scale;
+    if (str_w <= max_w || !active) {
+        draw_string(ren, str, x, y, scale, color);
+        return;
+    }
+
+    SDL_Rect clip = {x, y - 2, max_w, 8 * scale + 4};
+    SDL_RenderSetClipRect(ren, &clip);
+
+    int overflow = str_w - max_w + 32;
+    int scroll_period = 4000; // 4s cycle
+    int time_in_period = ticks % scroll_period;
+    int scroll_offset = 0;
+
+    if (time_in_period > 1000 && time_in_period < 3000) {
+        // Smooth scroll forward
+        scroll_offset = (int)((time_in_period - 1000) * overflow / 2000.0);
+    } else if (time_in_period >= 3000) {
+        // Pause at end
+        scroll_offset = overflow;
+    }
+
+    draw_string(ren, str, x - scroll_offset, y, scale, color);
+    SDL_RenderSetClipRect(ren, NULL);
+}
+
 void launch_xmplayer(SDL_Window* win) {
     SDL_HideWindow(win);
     printf("==> Pausing Launcher, launching XMPlayer...\n");
@@ -189,8 +227,15 @@ typedef enum {
 static const char* g_usb_mode_names[USB_MODE_COUNT] = {
     "MTP PC DISK",
     "USB ADB DEBUG",
-    "USB NETWORK/SSH",
+    "USB NETWORK",
     "CHARGING ONLY"
+};
+
+static const char* g_usb_short_names[USB_MODE_COUNT] = {
+    "USB: MTP",
+    "USB: ADB",
+    "USB: NET",
+    "USB: CHG"
 };
 
 // System Settings State
@@ -209,9 +254,9 @@ static void get_storage_info(char* buf, size_t max_len) {
     if (statvfs(target, &st) == 0) {
         double free_gb = (double)(st.f_bavail * st.f_frsize) / (1024.0 * 1024.0 * 1024.0);
         double total_gb = (double)(st.f_blocks * st.f_frsize) / (1024.0 * 1024.0 * 1024.0);
-        snprintf(buf, max_len, "%.1f GB Free / %.1f GB", free_gb, total_gb);
+        snprintf(buf, max_len, "%.1fG / %.1fG", free_gb, total_gb);
     } else {
-        snprintf(buf, max_len, "54.2 GB Free / 64 GB");
+        snprintf(buf, max_len, "54.2G / 64G");
     }
 }
 
@@ -233,14 +278,14 @@ static void get_cpu_temp(char* buf, size_t max_len) {
         if (fscanf(f, "%d", &temp) != 1) temp = 43000;
         fclose(f);
     }
-    snprintf(buf, max_len, "%.1f C @ 1.5 GHz", (double)temp / 1000.0);
+    snprintf(buf, max_len, "%.1fC @ 1.5GHz", (double)temp / 1000.0);
 }
 
 void apply_brightness(int delta) {
     g_brightness += delta;
     if (g_brightness > 100) g_brightness = 100;
     if (g_brightness < 10) g_brightness = 10;
-    char cmd[64];
+    char cmd[128];
     snprintf(cmd, sizeof(cmd), "brightness set %d >/dev/null 2>&1", g_brightness);
     (void)!system(cmd);
 }
@@ -249,7 +294,7 @@ void apply_volume(int delta) {
     g_volume += delta;
     if (g_volume > 100) g_volume = 100;
     if (g_volume < 0) g_volume = 0;
-    char cmd[64];
+    char cmd[128];
     snprintf(cmd, sizeof(cmd), "amixer -q set Master %d%% >/dev/null 2>&1", g_volume);
     (void)!system(cmd);
 }
@@ -357,6 +402,8 @@ int main(int argc, char* argv[]) {
     SDL_Color c_panel  = {32, 38, 50, 255};
 
     while (running) {
+        Uint32 ticks = SDL_GetTicks();
+
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 running = false;
@@ -511,7 +558,7 @@ int main(int argc, char* argv[]) {
         SDL_SetRenderDrawColor(ren, c_dark.r, c_dark.g, c_dark.b, 255);
         SDL_RenderClear(ren);
 
-        // 1. Top Status Bar (Height 36px)
+        // 1. Top Status Bar (Height 36px, Width 720px, strictly non-overlapping)
         SDL_SetRenderDrawColor(ren, 14, 18, 24, 255);
         SDL_Rect top_bar = {0, 0, SCREEN_WIDTH, 36};
         SDL_RenderFillRect(ren, &top_bar);
@@ -526,11 +573,17 @@ int main(int argc, char* argv[]) {
         char time_str[16];
         strftime(time_str, sizeof(time_str), "%H:%M", tm_now);
 
-        draw_string(ren, "ROCKNIX HANDHELD", 18, 10, 2, c_cyan);
-        draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 240, 10, 2, g_wifi_enabled ? c_green : c_gray);
-        draw_string(ren, g_usb_mode_names[g_usb_mode], 390, 10, 2, c_accent);
-        draw_string(ren, bat_disp, 555, 10, 2, c_white);
-        draw_string(ren, time_str, 660, 10, 2, c_accent);
+        // Dynamically spaced zones:
+        // Zone 1: Brand (x=20..180)
+        draw_string(ren, "RG34XX DEV", 20, 10, 2, c_cyan);
+        // Zone 2: Wi-Fi status (x=205..333)
+        draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 205, 10, 2, g_wifi_enabled ? c_green : c_gray);
+        // Zone 3: USB Role (x=350..478)
+        draw_string(ren, g_usb_short_names[g_usb_mode], 350, 10, 2, c_accent);
+        // Zone 4: Battery (x=495..615)
+        draw_string(ren, bat_disp, 495, 10, 2, c_white);
+        // Zone 5: Clock (x=630..710)
+        draw_string(ren, time_str, 630, 10, 2, c_accent);
 
         // 2. Main Content
         if (state == VIEW_MAIN_MENU) {
@@ -560,16 +613,16 @@ int main(int argc, char* argv[]) {
             char temp_str[48];
             get_cpu_temp(temp_str, sizeof(temp_str));
 
-            char cp_titles[14][40] = {
+            char cp_titles[14][32] = {
                 "Wi-Fi Wireless",
-                "Wi-Fi IP Status",
+                "Wi-Fi IP Address",
                 "Bluetooth Radio",
-                "USB-C Mode",
+                "USB-C Data Role",
                 "Wireless ADB",
                 "Screen Brightness",
                 "Walkman Mode",
                 "Audio Volume",
-                "SD Storage",
+                "SD Free Space",
                 "CPU Telemetry",
                 "Restart UI",
                 "Reboot Handheld",
@@ -577,21 +630,38 @@ int main(int argc, char* argv[]) {
                 "Back to Main"
             };
 
-            char cp_values[14][64];
-            snprintf(cp_values[0], sizeof(cp_values[0]), "[%s] (Press A to toggle)", g_wifi_enabled ? "ENABLED" : "DISABLED");
-            snprintf(cp_values[1], sizeof(cp_values[1]), "%s", g_wifi_enabled ? "192.168.1.102 (Connected)" : "Disconnected");
-            snprintf(cp_values[2], sizeof(cp_values[2]), "[%s] (Press A to toggle)", g_bt_enabled ? "ON" : "OFF");
-            snprintf(cp_values[3], sizeof(cp_values[3]), "< %s > (Left/Right to switch)", g_usb_mode_names[g_usb_mode]);
-            snprintf(cp_values[4], sizeof(cp_values[4]), "[%s:5555] (Press A to toggle)", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
-            snprintf(cp_values[5], sizeof(cp_values[5]), "< %d%% > (Left/Right to adjust)", g_brightness);
-            snprintf(cp_values[6], sizeof(cp_values[6]), "[Sleep Screen / Play Music]");
-            snprintf(cp_values[7], sizeof(cp_values[7]), "< %d%% > (Left/Right to adjust)", g_volume);
+            char cp_values[14][48];
+            snprintf(cp_values[0], sizeof(cp_values[0]), "[%s]", g_wifi_enabled ? "ENABLED" : "DISABLED");
+            snprintf(cp_values[1], sizeof(cp_values[1]), "%s", g_wifi_enabled ? "192.168.1.102" : "Disconnected");
+            snprintf(cp_values[2], sizeof(cp_values[2]), "[%s]", g_bt_enabled ? "ON" : "OFF");
+            snprintf(cp_values[3], sizeof(cp_values[3]), "< %s >", g_usb_mode_names[g_usb_mode]);
+            snprintf(cp_values[4], sizeof(cp_values[4]), "[%s:5555]", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
+            snprintf(cp_values[5], sizeof(cp_values[5]), "< %d%% >", g_brightness);
+            snprintf(cp_values[6], sizeof(cp_values[6]), "[Sleep Screen]");
+            snprintf(cp_values[7], sizeof(cp_values[7]), "< %d%% >", g_volume);
             snprintf(cp_values[8], sizeof(cp_values[8]), "%s", storage_str);
             snprintf(cp_values[9], sizeof(cp_values[9]), "%s", temp_str);
-            snprintf(cp_values[10], sizeof(cp_values[10]), "[Reload Handheld Launcher]");
+            snprintf(cp_values[10], sizeof(cp_values[10]), "[Reload UI]");
             snprintf(cp_values[11], sizeof(cp_values[11]), "[Reboot System]");
-            snprintf(cp_values[12], sizeof(cp_values[12]), "[Shut Down Hardware]");
-            snprintf(cp_values[13], sizeof(cp_values[13]), "<-- Return to Main Menu");
+            snprintf(cp_values[12], sizeof(cp_values[12]), "[Power Off]");
+            snprintf(cp_values[13], sizeof(cp_values[13]), "[Return]");
+
+            const char* cp_hints[14] = {
+                "[A] Toggle Wi-Fi Network Connection",
+                "Assigned IP Address on Local Network",
+                "[A] Toggle Bluetooth Radio Power",
+                "[Left/Right] Cycle USB Role  [A] Apply to Host",
+                "[A] Toggle ADB Daemon over TCP (Port 5555)",
+                "[Left/Right] Adjust LCD Backlight Brightness",
+                "[A] Turn Off Backlight (bl_power=4), Keep Audio",
+                "[Left/Right] Adjust Master Sound Output Volume",
+                "MicroSD Storage Partition (/storage) Capacity",
+                "Allwinner H700 SoC Temperature & Core Freq",
+                "[A] Restart Handheld Launcher Daemon",
+                "[A] Reboot Device Hardware Safely",
+                "[A] Safely Unmount & Power Down Handheld",
+                "[A / B] Return to Primary Launch Menu"
+            };
 
             for (int i = 0; i < cp_visible_count; i++) {
                 int item_idx = cp_scroll_offset + i;
@@ -600,27 +670,29 @@ int main(int argc, char* argv[]) {
                 int item_y = 88 + i * 50;
                 bool is_sel = (item_idx == cp_idx);
 
-                SDL_Rect r = {45, item_y - 4, SCREEN_WIDTH - 90, 42};
+                // Card background: width 620px (45 to 665), leaving 25px before scrollbar at 690
+                SDL_Rect r = {45, item_y - 4, 620, 42};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
                     draw_string(ren, ">", 20, item_y + 8, 2, c_accent);
-                    
-                    char row_str[100];
-                    snprintf(row_str, sizeof(row_str), "%-18s: %s", cp_titles[item_idx], cp_values[item_idx]);
-                    draw_string(ren, row_str, 55, item_y + 8, 2, c_white);
+
+                    // Left-aligned title with Marquee scroll support
+                    draw_string_marquee(ren, cp_titles[item_idx], 60, item_y + 8, 2, c_white, 300, true, ticks);
+
+                    // Right-aligned value cleanly inside the card
+                    draw_string_right(ren, cp_values[item_idx], 645, item_y + 8, 2, c_accent);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
 
-                    char row_str[100];
-                    snprintf(row_str, sizeof(row_str), "%-18s: %s", cp_titles[item_idx], cp_values[item_idx]);
-                    draw_string(ren, row_str, 55, item_y + 8, 2, c_gray);
+                    draw_string_marquee(ren, cp_titles[item_idx], 60, item_y + 8, 2, c_gray, 300, false, ticks);
+                    draw_string_right(ren, cp_values[item_idx], 645, item_y + 8, 2, c_white);
                 }
             }
 
-            // Scrollbar Track
-            int sb_x = SCREEN_WIDTH - 35;
+            // Scrollbar Track (at x=685, width 6)
+            int sb_x = 685;
             int sb_y = 88;
             int sb_h = cp_visible_count * 50 - 8;
             SDL_Rect sb_track = {sb_x, sb_y, 6, sb_h};
@@ -634,8 +706,13 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
             SDL_RenderFillRect(ren, &sb_thumb);
 
-            // Status hint
-            draw_string(ren, "USB Tip: Connect Type-C to PC for Instant MTP Explorer or 'adb shell'", 45, 395, 2, c_accent);
+            // Contextual Hint Bar inside Control Center
+            SDL_Rect hint_box = {45, 392, 646, 34};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
+            SDL_RenderFillRect(ren, &hint_box);
+
+            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
+            draw_string_marquee(ren, cp_hints[cp_idx], 145, 400, 2, c_white, 530, true, ticks);
         } else if (state == VIEW_SYSTEM_INFO) {
             draw_string(ren, "=== HARDWARE & SYSTEM INFO ===", 110, 65, 2, c_cyan);
 
@@ -652,7 +729,7 @@ int main(int argc, char* argv[]) {
             draw_string(ren, "System: Custom ROCKNIX Pure 64-bit JeOS", 80, 340, 2, c_white);
         }
 
-        // 3. Bottom Bar
+        // 3. Bottom Navigation Bar
         SDL_SetRenderDrawColor(ren, 14, 18, 24, 255);
         SDL_Rect bot_bar = {0, SCREEN_HEIGHT - 38, SCREEN_WIDTH, 38};
         SDL_RenderFillRect(ren, &bot_bar);
@@ -660,7 +737,7 @@ int main(int argc, char* argv[]) {
         if (state == VIEW_MAIN_MENU) {
             draw_string(ren, "[A] SELECT    [UP/DOWN] NAVIGATE    [START+SELECT] QUIT", 60, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_CONTROL_CENTER) {
-            draw_string(ren, "[A] TOGGLE/APPLY   [LEFT/RIGHT] ADJUST   [B] BACK", 75, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] SELECT/APPLY   [LEFT/RIGHT] ADJUST   [B] BACK", 75, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_SYSTEM_INFO) {
             draw_string(ren, "[B / A] RETURN TO MAIN MENU", 210, SCREEN_HEIGHT - 26, 2, c_gray);
         }
