@@ -3,20 +3,13 @@
  * Resolution: 720x480 (3:2 Aspect Ratio)
  * Features:
  *   - XMPlayer Integration (with START + SELECT Exit protection)
- *   - Pixel-perfect System Control Center:
- *       * Non-overlapping Status Bar (Dynamically spaced 720px width)
- *       * Clean Left-aligned Titles & Right-aligned Values
- *       * Marquee Horizontal Auto-Scrolling for long text
- *       * Context-aware Bottom Action Hints
- *       * Wi-Fi Management (Toggle, IP display)
- *       * Bluetooth Management (Toggle)
- *       * USB Data Mode Switcher (MTP PC Disk, USB ADB Debug, USB Network, Charging Only)
- *       * Wireless ADB over TCP (Port 5555)
- *       * Backlight Brightness slider (10% - 100%)
+ *   - Pixel-perfect Responsive Views:
+ *       * Non-overlapping 5-Zone Top Status Bar
+ *       * Main Menu with Context-Aware Descriptions
+ *       * Control Center: Left-aligned Titles, Right-aligned Values, Marquee Scroll
+ *       * Hardware & System Info: Formatted Two-Column Spec Sheet (Zero Truncation)
+ *       * Power Management Modal Dialog (Reboot, Power Off, Reload UI)
  *       * Screen-Off Walkman Mode (turns off backlight bl_power=4, keeps music playing)
- *       * Audio Volume slider (0% - 100%)
- *       * Dynamic Hardware Telemetry (Battery %, TF Storage free, CPU Temp)
- *       * Power Management (Restart Launcher, System Reboot, Power Off)
  *   - Global START + SELECT combo exit
  */
 
@@ -172,16 +165,14 @@ void draw_string_marquee(SDL_Renderer* ren, const char* str, int x, int y, int s
     SDL_Rect clip = {x, y - 2, max_w, 8 * scale + 4};
     SDL_RenderSetClipRect(ren, &clip);
 
-    int overflow = str_w - max_w + 32;
-    int scroll_period = 4000; // 4s cycle
+    int overflow = str_w - max_w + 24;
+    int scroll_period = 4000;
     int time_in_period = ticks % scroll_period;
     int scroll_offset = 0;
 
     if (time_in_period > 1000 && time_in_period < 3000) {
-        // Smooth scroll forward
         scroll_offset = (int)((time_in_period - 1000) * overflow / 2000.0);
     } else if (time_in_period >= 3000) {
-        // Pause at end
         scroll_offset = overflow;
     }
 
@@ -213,7 +204,8 @@ void launch_xmplayer(SDL_Window* win) {
 typedef enum {
     VIEW_MAIN_MENU,
     VIEW_CONTROL_CENTER,
-    VIEW_SYSTEM_INFO
+    VIEW_SYSTEM_INFO,
+    VIEW_POWER_DIALOG
 } ViewState;
 
 typedef enum {
@@ -380,7 +372,14 @@ int main(int argc, char* argv[]) {
         "2. System Settings & Control Center",
         "3. Terminal / Developer Shell",
         "4. Hardware & System Info (RG34XX)",
-        "5. Power Off / Reboot Handheld"
+        "5. Power Management / Reboot"
+    };
+    const char* main_menu_hints[] = {
+        "Launch PSP XMB style media player for music, video and photos",
+        "Configure Wi-Fi, Bluetooth, Audio, Brightness and USB Gadget",
+        "Open developer terminal shell or start background SSH server",
+        "Inspect RG34XX Allwinner H700 hardware architecture specifications",
+        "Reboot system, restart launcher UI, or power off handheld"
     };
     int main_menu_count = 5;
     int main_selected_idx = 0;
@@ -390,6 +389,15 @@ int main(int argc, char* argv[]) {
     int cp_scroll_offset = 0;
     const int cp_visible_count = 6;
 
+    int power_idx = 0;
+    const int power_count = 4;
+    const char* power_items[] = {
+        "1. Restart Launcher UI",
+        "2. Reboot System",
+        "3. Power Off Hardware",
+        "4. Cancel / Return"
+    };
+
     bool running = true;
     SDL_Event e;
 
@@ -398,6 +406,7 @@ int main(int argc, char* argv[]) {
     SDL_Color c_gray   = {160, 160, 160, 255};
     SDL_Color c_cyan   = {0, 220, 255, 255};
     SDL_Color c_green  = {80, 240, 120, 255};
+    SDL_Color c_red    = {255, 90, 90, 255};
     SDL_Color c_dark   = {20, 24, 32, 255};
     SDL_Color c_panel  = {32, 38, 50, 255};
 
@@ -428,7 +437,7 @@ int main(int argc, char* argv[]) {
                             (void)!system("systemctl start dropbear 2>/dev/null || systemctl start sshd 2>/dev/null");
                         }
                         else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
-                        else if (main_selected_idx == 4) running = false;
+                        else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
                     }
                 } else if (state == VIEW_CONTROL_CENTER) {
                     if (k == SDLK_UP || k == SDLK_w) {
@@ -475,7 +484,20 @@ int main(int argc, char* argv[]) {
                         state = VIEW_MAIN_MENU;
                     }
                 } else if (state == VIEW_SYSTEM_INFO) {
-                    if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN) {
+                    if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN || k == SDLK_SPACE) {
+                        state = VIEW_MAIN_MENU;
+                    }
+                } else if (state == VIEW_POWER_DIALOG) {
+                    if (k == SDLK_UP || k == SDLK_w) {
+                        power_idx = (power_idx - 1 + power_count) % power_count;
+                    } else if (k == SDLK_DOWN || k == SDLK_s) {
+                        power_idx = (power_idx + 1) % power_count;
+                    } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
+                        if (power_idx == 0) (void)!system("systemctl restart handheld-launcher 2>/dev/null");
+                        else if (power_idx == 1) (void)!system("reboot 2>/dev/null");
+                        else if (power_idx == 2) (void)!system("poweroff 2>/dev/null");
+                        else if (power_idx == 3) state = VIEW_MAIN_MENU;
+                    } else if (k == SDLK_BACKSPACE || k == SDLK_k) {
                         state = VIEW_MAIN_MENU;
                     }
                 }
@@ -496,7 +518,7 @@ int main(int argc, char* argv[]) {
                         if (main_selected_idx == 0) launch_xmplayer(win);
                         else if (main_selected_idx == 1) state = VIEW_CONTROL_CENTER;
                         else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
-                        else if (main_selected_idx == 4) running = false;
+                        else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
                     }
                 } else if (state == VIEW_CONTROL_CENTER) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) cp_idx = (cp_idx - 1 + cp_count) % cp_count;
@@ -543,6 +565,16 @@ int main(int argc, char* argv[]) {
                     if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_A) state = VIEW_MAIN_MENU;
+                } else if (state == VIEW_POWER_DIALOG) {
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) power_idx = (power_idx - 1 + power_count) % power_count;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) power_idx = (power_idx + 1) % power_count;
+                    if (btn == SDL_CONTROLLER_BUTTON_A) {
+                        if (power_idx == 0) (void)!system("systemctl restart handheld-launcher 2>/dev/null");
+                        else if (power_idx == 1) (void)!system("reboot 2>/dev/null");
+                        else if (power_idx == 2) (void)!system("poweroff 2>/dev/null");
+                        else if (power_idx == 3) state = VIEW_MAIN_MENU;
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
                 }
             }
         }
@@ -573,38 +605,42 @@ int main(int argc, char* argv[]) {
         char time_str[16];
         strftime(time_str, sizeof(time_str), "%H:%M", tm_now);
 
-        // Dynamically spaced zones:
-        // Zone 1: Brand (x=20..180)
+        // Dynamically spaced 5 zones:
         draw_string(ren, "RG34XX DEV", 20, 10, 2, c_cyan);
-        // Zone 2: Wi-Fi status (x=205..333)
         draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 205, 10, 2, g_wifi_enabled ? c_green : c_gray);
-        // Zone 3: USB Role (x=350..478)
         draw_string(ren, g_usb_short_names[g_usb_mode], 350, 10, 2, c_accent);
-        // Zone 4: Battery (x=495..615)
         draw_string(ren, bat_disp, 495, 10, 2, c_white);
-        // Zone 5: Clock (x=630..710)
         draw_string(ren, time_str, 630, 10, 2, c_accent);
 
         // 2. Main Content
         if (state == VIEW_MAIN_MENU) {
-            draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 65, 2, c_accent);
+            draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 62, 2, c_accent);
 
             for (int i = 0; i < main_menu_count; i++) {
-                int item_y = 125 + i * 52;
+                int item_y = 118 + i * 50;
                 bool is_sel = (i == main_selected_idx);
 
-                SDL_Rect r = {60, item_y - 6, SCREEN_WIDTH - 120, 42};
+                SDL_Rect r = {55, item_y - 6, SCREEN_WIDTH - 110, 42};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 32, item_y + 6, 2, c_accent);
-                    draw_string(ren, main_menu_items[i], 80, item_y + 6, 2, c_white);
+                    draw_string(ren, ">", 26, item_y + 6, 2, c_accent);
+                    draw_string(ren, main_menu_items[i], 70, item_y + 6, 2, c_white);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, main_menu_items[i], 80, item_y + 6, 2, c_gray);
+                    draw_string(ren, main_menu_items[i], 70, item_y + 6, 2, c_gray);
                 }
             }
+
+            // Contextual hint box
+            SDL_Rect hint_box = {45, 386, 630, 36};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
+            SDL_RenderFillRect(ren, &hint_box);
+
+            draw_string(ren, "INFO:", 55, 396, 2, c_accent);
+            draw_string_marquee(ren, main_menu_hints[main_selected_idx], 145, 396, 2, c_white, 515, true, ticks);
+
         } else if (state == VIEW_CONTROL_CENTER) {
             draw_string(ren, "=== SYSTEM CONTROL CENTER & SETTINGS ===", 55, 48, 2, c_cyan);
 
@@ -670,17 +706,13 @@ int main(int argc, char* argv[]) {
                 int item_y = 88 + i * 50;
                 bool is_sel = (item_idx == cp_idx);
 
-                // Card background: width 620px (45 to 665), leaving 25px before scrollbar at 690
                 SDL_Rect r = {45, item_y - 4, 620, 42};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
                     draw_string(ren, ">", 20, item_y + 8, 2, c_accent);
 
-                    // Left-aligned title with Marquee scroll support
                     draw_string_marquee(ren, cp_titles[item_idx], 60, item_y + 8, 2, c_white, 300, true, ticks);
-
-                    // Right-aligned value cleanly inside the card
                     draw_string_right(ren, cp_values[item_idx], 645, item_y + 8, 2, c_accent);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
@@ -691,7 +723,7 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // Scrollbar Track (at x=685, width 6)
+            // Scrollbar Track
             int sb_x = 685;
             int sb_y = 88;
             int sb_h = cp_visible_count * 50 - 8;
@@ -706,27 +738,104 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
             SDL_RenderFillRect(ren, &sb_thumb);
 
-            // Contextual Hint Bar inside Control Center
+            // Contextual Hint Bar
             SDL_Rect hint_box = {45, 392, 646, 34};
             SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
             SDL_RenderFillRect(ren, &hint_box);
 
             draw_string(ren, "HINT:", 55, 400, 2, c_accent);
             draw_string_marquee(ren, cp_hints[cp_idx], 145, 400, 2, c_white, 530, true, ticks);
-        } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "=== HARDWARE & SYSTEM INFO ===", 110, 65, 2, c_cyan);
 
-            SDL_Rect card = {50, 110, SCREEN_WIDTH - 100, 260};
+        } else if (state == VIEW_SYSTEM_INFO) {
+            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 75, 48, 2, c_cyan);
+
+            // Large, well-proportioned spec card (Width: 650px)
+            SDL_Rect card = {35, 78, 650, 335};
             SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
             SDL_RenderFillRect(ren, &card);
 
-            draw_string(ren, "Model: Anbernic RG34XX / RG34XX SP", 80, 135, 2, c_white);
-            draw_string(ren, "SoC: Allwinner H700 (4x Cortex-A53 1.5GHz)", 80, 170, 2, c_white);
-            draw_string(ren, "Screen: 3.4 inch IPS, 720x480 Native (3:2)", 80, 205, 2, c_accent);
-            draw_string(ren, "GPU: ARM Mali-G31 MP2 (Panfrost DRM/KMS)", 80, 240, 2, c_white);
-            draw_string(ren, "Media Suite: XMPlayer (XMB PSP UI)", 80, 275, 2, c_cyan);
-            draw_string(ren, "Control: Native Gamepad Bridge + USB ADB/MTP", 80, 310, 2, c_green);
-            draw_string(ren, "System: Custom ROCKNIX Pure 64-bit JeOS", 80, 340, 2, c_white);
+            // Inner divider accent header
+            SDL_Rect card_header = {35, 78, 650, 32};
+            SDL_SetRenderDrawColor(ren, 24, 30, 40, 255);
+            SDL_RenderFillRect(ren, &card_header);
+            draw_string(ren, "DEVICE SPECIFICATION & EMBEDDED STACK", 55, 86, 2, c_accent);
+
+            // Two-column formatted specs (Key width: 140px, Value left: 220px)
+            const char* spec_keys[] = {
+                "Model",
+                "Processor",
+                "Display",
+                "Graphics",
+                "Memory",
+                "Storage",
+                "Media Engine",
+                "Control Stack",
+                "Operating OS"
+            };
+
+            const char* spec_vals[] = {
+                "Anbernic RG34XX / SP Handheld",
+                "Allwinner H700 (4x Cortex-A53 1.5GHz)",
+                "3.4\" IPS 720x480 (3:2 Aspect Ratio)",
+                "ARM Mali-G31 MP2 (Panfrost KMS/DRM)",
+                "1GB LPDDR4 @ 1600MHz System RAM",
+                "Dual TF Card (SquashFS + Ext4 Storage)",
+                "XMPlayer (Native XMB PSP Style Suite)",
+                "Direct Gamepad Bridge + USB ADB/MTP",
+                "ROCKNIX Pure 64-bit Embedded JeOS"
+            };
+            int spec_count = 9;
+
+            for (int i = 0; i < spec_count; i++) {
+                int row_y = 120 + i * 31;
+
+                // Alternate row subtle shading
+                if (i % 2 == 1) {
+                    SDL_Rect row_rect = {45, row_y - 3, 630, 27};
+                    SDL_SetRenderDrawColor(ren, 36, 44, 58, 255);
+                    SDL_RenderFillRect(ren, &row_rect);
+                }
+
+                // Left Key Label
+                draw_string(ren, spec_keys[i], 55, row_y, 2, c_cyan);
+                draw_string(ren, ":", 200, row_y, 2, c_gray);
+
+                // Right Value
+                draw_string(ren, spec_vals[i], 220, row_y, 2, c_white);
+            }
+
+        } else if (state == VIEW_POWER_DIALOG) {
+            // Dimmed semi-transparent backdrop
+            SDL_SetRenderDrawColor(ren, 10, 12, 16, 220);
+            SDL_Rect backdrop = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+            SDL_RenderFillRect(ren, &backdrop);
+
+            // Modal dialog window
+            SDL_Rect dlg = {120, 100, SCREEN_WIDTH - 240, 260};
+            SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
+            SDL_RenderFillRect(ren, &dlg);
+
+            SDL_Rect dlg_bar = {120, 100, SCREEN_WIDTH - 240, 36};
+            SDL_SetRenderDrawColor(ren, 18, 22, 30, 255);
+            SDL_RenderFillRect(ren, &dlg_bar);
+            draw_string(ren, "POWER & SYSTEM ACTIONS", 150, 110, 2, c_accent);
+
+            for (int i = 0; i < power_count; i++) {
+                int item_y = 155 + i * 46;
+                bool is_sel = (i == power_idx);
+
+                SDL_Rect r = {140, item_y - 4, SCREEN_WIDTH - 280, 38};
+                if (is_sel) {
+                    SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, ">", 150, item_y + 6, 2, c_accent);
+                    draw_string(ren, power_items[i], 180, item_y + 6, 2, c_white);
+                } else {
+                    SDL_SetRenderDrawColor(ren, 24, 28, 38, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, power_items[i], 180, item_y + 6, 2, (i == 2) ? c_red : c_gray);
+                }
+            }
         }
 
         // 3. Bottom Navigation Bar
@@ -739,7 +848,9 @@ int main(int argc, char* argv[]) {
         } else if (state == VIEW_CONTROL_CENTER) {
             draw_string(ren, "[A] SELECT/APPLY   [LEFT/RIGHT] ADJUST   [B] BACK", 75, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "[B / A] RETURN TO MAIN MENU", 210, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[B / A / ESC] RETURN TO MAIN MENU", 175, SCREEN_HEIGHT - 26, 2, c_gray);
+        } else if (state == VIEW_POWER_DIALOG) {
+            draw_string(ren, "[A] CONFIRM ACTION      [B / ESC] CANCEL", 145, SCREEN_HEIGHT - 26, 2, c_gray);
         }
 
         SDL_RenderPresent(ren);
