@@ -429,6 +429,15 @@ void enter_walkman_mode(SDL_Renderer* ren) {
     printf("==> Walkman Mode Exited: LCD backlight restored.\n");
 }
 
+static void save_screenshot(SDL_Renderer* ren, const char* filepath) {
+    SDL_Surface* sshot = SDL_CreateRGBSurfaceWithFormat(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (sshot) {
+        SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, sshot->pixels, sshot->pitch);
+        SDL_SaveBMP(sshot, filepath);
+        SDL_FreeSurface(sshot);
+    }
+}
+
 int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
@@ -483,19 +492,37 @@ int main(int argc, char* argv[]) {
     int cp_scroll_offset = 0;
     const int cp_visible_count = 6;
 
+    int info_idx = 0;
     int info_scroll_offset = 0;
     const int info_count = 8;
     const int info_visible_count = 6;
+    const char* info_hints[] = {
+        "Target Device: Anbernic RG34XX handheld console",
+        "Allwinner H700: Quad-Core 64-bit Cortex-A53 CPU @ 1.5GHz",
+        "Display: 3.4\" IPS panel, 720x480 resolution, native 3:2 ratio",
+        "GPU: ARM Mali-G31 MP2 graphics with Panfrost KMS/DRM driver",
+        "RAM: 1GB high-speed LPDDR4 system memory @ 1600MHz",
+        "Storage: Dual MicroSD architecture (TF1 Linux OS + TF2 User Data)",
+        "Media Engine: XMPlayer native PSP XMB style media suite",
+        "OS Stack: ROCKNIX pure 64-bit embedded JeOS with direct KMS/DRM"
+    };
 
     int power_idx = 0;
     const int power_count = 4;
     const char* power_items[] = {
         "1. Restart Launcher UI",
-        "2. Reboot System",
+        "2. Reboot Handheld",
         "3. Power Off Hardware",
         "4. Cancel / Return"
     };
+    const char* power_hints[] = {
+        "[A] Restart Handheld Launcher UI process without rebooting",
+        "[A] Safely flush disk buffers and reboot device hardware",
+        "[A] Safely unmount storage filesystems and power down",
+        "[A / B] Cancel action and return to primary menu"
+    };
 
+    bool dump_mode = (argc > 1 && strcmp(argv[1], "--dump-screens") == 0);
     bool running = true;
     SDL_Event e;
 
@@ -584,9 +611,9 @@ int main(int argc, char* argv[]) {
                     }
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (k == SDLK_UP || k == SDLK_w) {
-                        if (info_scroll_offset > 0) info_scroll_offset--;
+                        info_idx = (info_idx - 1 + info_count) % info_count;
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
-                        if (info_scroll_offset + info_visible_count < info_count) info_scroll_offset++;
+                        info_idx = (info_idx + 1) % info_count;
                     } else if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN || k == SDLK_SPACE) {
                         state = VIEW_MAIN_MENU;
                     }
@@ -671,8 +698,8 @@ int main(int argc, char* argv[]) {
                     }
                     if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_SYSTEM_INFO) {
-                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP && info_scroll_offset > 0) info_scroll_offset--;
-                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN && info_scroll_offset + info_visible_count < info_count) info_scroll_offset++;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) info_idx = (info_idx - 1 + info_count) % info_count;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) info_idx = (info_idx + 1) % info_count;
                     if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_A) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_POWER_DIALOG) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) power_idx = (power_idx - 1 + power_count) % power_count;
@@ -696,6 +723,12 @@ int main(int argc, char* argv[]) {
             cp_scroll_offset = cp_idx;
         } else if (cp_idx >= cp_scroll_offset + cp_visible_count) {
             cp_scroll_offset = cp_idx - cp_visible_count + 1;
+        }
+
+        if (info_idx < info_scroll_offset) {
+            info_scroll_offset = info_idx;
+        } else if (info_idx >= info_scroll_offset + info_visible_count) {
+            info_scroll_offset = info_idx - info_visible_count + 1;
         }
 
         // Render Background
@@ -726,32 +759,32 @@ int main(int argc, char* argv[]) {
 
         // 2. Main Content
         if (state == VIEW_MAIN_MENU) {
-            draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 62, 2, c_accent);
+            draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 48, 2, c_accent);
 
             for (int i = 0; i < main_menu_count; i++) {
-                int item_y = 118 + i * 50;
+                int item_y = 96 + i * 54;
                 bool is_sel = (i == main_selected_idx);
 
-                SDL_Rect r = {55, item_y - 6, SCREEN_WIDTH - 110, 42};
+                SDL_Rect r = {45, item_y - 4, 620, 44};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 26, item_y + 6, 2, c_accent);
-                    draw_string(ren, main_menu_items[i], 70, item_y + 6, 2, c_white);
+                    draw_string(ren, ">", 20, item_y + 9, 2, c_accent);
+                    draw_string(ren, main_menu_items[i], 60, item_y + 9, 2, c_white);
                 } else {
                     SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, main_menu_items[i], 70, item_y + 6, 2, c_gray);
+                    draw_string(ren, main_menu_items[i], 60, item_y + 9, 2, c_gray);
                 }
             }
 
             // Contextual hint box
-            SDL_Rect hint_box = {45, 386, 630, 36};
+            SDL_Rect hint_box = {45, 392, 646, 34};
             SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
             SDL_RenderFillRect(ren, &hint_box);
 
-            draw_string(ren, "INFO:", 55, 396, 2, c_accent);
-            draw_string_marquee(ren, main_menu_hints[main_selected_idx], 145, 396, 2, c_white, 515, true, ticks);
+            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
+            draw_string_marquee(ren, main_menu_hints[main_selected_idx], 145, 400, 2, c_white, 530, true, ticks);
 
         } else if (state == VIEW_CONTROL_CENTER) {
             draw_string(ren, "=== SYSTEM CONTROL CENTER & SETTINGS ===", 55, 48, 2, c_cyan);
@@ -861,102 +894,130 @@ int main(int argc, char* argv[]) {
         } else if (state == VIEW_SYSTEM_INFO) {
             draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 55, 48, 2, c_cyan);
 
-            SDL_Rect card = {45, 88, 646, 334};
-            SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
-            SDL_RenderFillRect(ren, &card);
-
-            SDL_Rect card_header = {45, 88, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &card_header);
-            draw_string(ren, "DEVICE SPECIFICATIONS", 60, 98, 2, c_accent);
-
             const char* spec_keys[] = {
-                "Model", "Processor", "Display", "Graphics",
-                "Memory", "Storage", "Media", "Stack"
+                "Device",
+                "Processor",
+                "Display",
+                "Graphics",
+                "Memory",
+                "Storage",
+                "Media",
+                "OS Stack"
             };
             const char* spec_vals[] = {
-                "Anbernic RG34XX / SP Handheld",
-                "Allwinner H700 Quad-core / 4x Cortex-A53 @ 1.5GHz",
-                "3.4\" IPS Screen 720x480 / Native 3:2 Aspect Ratio",
-                "ARM Mali-G31 MP2 GPU / Panfrost KMS/DRM Driver",
-                "1GB LPDDR4 System RAM @ 1600MHz",
-                "Dual TF Card Architecture / TF1 OS SquashFS + TF2 Ext4",
-                "XMPlayer Media Suite (PSP XMB UI)",
-                "ROCKNIX Pure 64-bit JeOS / Native Gamepad Bridge"
+                "Anbernic RG34XX Handheld",
+                "Allwinner H700 Quad-Core",
+                "3.4\" IPS 720x480 (3:2)",
+                "ARM Mali-G31 MP2 Panfrost",
+                "1GB LPDDR4 @ 1600MHz RAM",
+                "TF1 RootFS + TF2 Storage",
+                "XMPlayer Native PSP XMB",
+                "ROCKNIX Pure 64-bit JeOS"
             };
-            const int spec_count = 8;
-            const int row_y = 128;
-            const int row_h = 42;
 
             for (int i = 0; i < info_visible_count; i++) {
                 int item_idx = info_scroll_offset + i;
-                if (item_idx >= spec_count) break;
-                int y = row_y + i * row_h;
-                if (i % 2 == 1) {
-                    SDL_Rect row = {56, y, 624, row_h};
-                    SDL_SetRenderDrawColor(ren, 36, 44, 58, 255);
-                    SDL_RenderFillRect(ren, &row);
-                }
-                draw_string(ren, spec_keys[item_idx], 64, y + 13, 2, c_cyan);
-                draw_string(ren, ":", 200, y + 13, 2, c_gray);
-                draw_string_marquee(ren, spec_vals[item_idx], 224, y + 13, 2, c_white,
-                                    448, true, ticks + item_idx * 900);
-            }
+                if (item_idx >= info_count) break;
 
-            int info_sb_x = 685;
-            int info_sb_y = 128;
-            int info_sb_h = info_visible_count * row_h;
-            SDL_Rect info_sb_track = {info_sb_x, info_sb_y, 6, info_sb_h};
-            SDL_SetRenderDrawColor(ren, 40, 48, 64, 255);
-            SDL_RenderFillRect(ren, &info_sb_track);
+                int item_y = 88 + i * 50;
+                bool is_sel = (item_idx == info_idx);
 
-            int info_thumb_h = (info_sb_h * info_visible_count) / spec_count;
-            int info_thumb_y = info_sb_y + (info_scroll_offset * (info_sb_h - info_thumb_h)) / (spec_count - info_visible_count);
-            SDL_Rect info_sb_thumb = {info_sb_x, info_thumb_y, 6, info_thumb_h};
-            SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
-            SDL_RenderFillRect(ren, &info_sb_thumb);
-
-        } else if (state == VIEW_POWER_DIALOG) {
-            SDL_Rect panel = {45, 88, 646, 334};
-            SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
-            SDL_RenderFillRect(ren, &panel);
-
-            SDL_Rect panel_header = {45, 88, 646, 34};
-            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
-            SDL_RenderFillRect(ren, &panel_header);
-            draw_string(ren, "POWER & SYSTEM ACTIONS", 60, 98, 2, c_accent);
-
-            for (int i = 0; i < power_count; i++) {
-                int item_y = 132 + i * 54;
-                bool is_sel = (i == power_idx);
-                SDL_Rect r = {60, item_y, 616, 44};
+                SDL_Rect r = {45, item_y - 4, 620, 42};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 68, item_y + 13, 2, c_accent);
-                    draw_string(ren, power_items[i], 92, item_y + 13, 2, c_white);
+                    draw_string(ren, ">", 20, item_y + 8, 2, c_accent);
+
+                    draw_string(ren, spec_keys[item_idx], 60, item_y + 8, 2, c_white);
+                    draw_string(ren, ":", 210, item_y + 8, 2, c_gray);
+                    draw_string_marquee(ren, spec_vals[item_idx], 230, item_y + 8, 2, c_accent, 415, true, ticks);
                 } else {
-                    SDL_SetRenderDrawColor(ren, 24, 28, 38, 255);
+                    SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, power_items[i], 92, item_y + 13, 2,
-                                i == 2 ? c_red : c_gray);
+
+                    draw_string(ren, spec_keys[item_idx], 60, item_y + 8, 2, c_cyan);
+                    draw_string(ren, ":", 210, item_y + 8, 2, c_gray);
+                    draw_string(ren, spec_vals[item_idx], 230, item_y + 8, 2, c_white);
                 }
             }
-        }
 
+            // Scrollbar Track (Exact same position as Control Center)
+            int sb_x = 685;
+            int sb_y = 88;
+            int sb_h = info_visible_count * 50 - 8;
+            SDL_Rect sb_track = {sb_x, sb_y, 6, sb_h};
+            SDL_SetRenderDrawColor(ren, 40, 48, 64, 255);
+            SDL_RenderFillRect(ren, &sb_track);
+
+            // Scrollbar Thumb
+            int thumb_h = (sb_h * info_visible_count) / info_count;
+            int thumb_y = sb_y + (info_scroll_offset * (sb_h - thumb_h)) / (info_count - info_visible_count);
+            SDL_Rect sb_thumb = {sb_x, thumb_y, 6, thumb_h};
+            SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
+            SDL_RenderFillRect(ren, &sb_thumb);
+
+            // Contextual Hint Bar
+            SDL_Rect hint_box = {45, 392, 646, 34};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
+            SDL_RenderFillRect(ren, &hint_box);
+
+            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
+            draw_string_marquee(ren, info_hints[info_idx], 145, 400, 2, c_white, 530, true, ticks);
+
+        } else if (state == VIEW_POWER_DIALOG) {
+            draw_string(ren, "=== POWER & SYSTEM ACTIONS ===", 55, 48, 2, c_cyan);
+
+            for (int i = 0; i < power_count; i++) {
+                int item_y = 96 + i * 58;
+                bool is_sel = (i == power_idx);
+
+                SDL_Rect r = {45, item_y - 4, 620, 46};
+                if (is_sel) {
+                    SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, ">", 20, item_y + 10, 2, c_accent);
+                    draw_string(ren, power_items[i], 60, item_y + 10, 2, c_white);
+                } else {
+                    SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, power_items[i], 60, item_y + 10, 2, (i == 2) ? c_red : c_gray);
+                }
+            }
+
+            // Contextual Hint Bar
+            SDL_Rect hint_box = {45, 392, 646, 34};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
+            SDL_RenderFillRect(ren, &hint_box);
+
+            draw_string(ren, "HINT:", 55, 400, 2, c_accent);
+            draw_string_marquee(ren, power_hints[power_idx], 145, 400, 2, c_white, 530, true, ticks);
+
+        }
         // 3. Bottom Navigation Bar
         SDL_SetRenderDrawColor(ren, 14, 18, 24, 255);
         SDL_Rect bot_bar = {0, SCREEN_HEIGHT - 38, SCREEN_WIDTH, 38};
         SDL_RenderFillRect(ren, &bot_bar);
 
         if (state == VIEW_MAIN_MENU) {
-            draw_string(ren, "[A] SELECT    [UP/DOWN] NAVIGATE    [START+SELECT] QUIT", 60, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] SELECT   [UP/DOWN] MOVE   [ESC] QUIT", 56, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_CONTROL_CENTER) {
-            draw_string(ren, "[A] SELECT/APPLY   [LEFT/RIGHT] ADJUST   [B] BACK", 75, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] APPLY   [LEFT/RIGHT] ADJ   [B] BACK", 64, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "[B / A / ESC] RETURN TO MAIN MENU", 175, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[UP/DOWN] SCROLL INFO         [B] BACK", 72, SCREEN_HEIGHT - 26, 2, c_gray);
         } else if (state == VIEW_POWER_DIALOG) {
-            draw_string(ren, "[A] CONFIRM ACTION      [B / ESC] CANCEL", 145, SCREEN_HEIGHT - 26, 2, c_gray);
+            draw_string(ren, "[A] CONFIRM ACTION           [B] CANCEL", 64, SCREEN_HEIGHT - 26, 2, c_gray);
+        }
+
+        if (dump_mode) {
+            char filename[64];
+            snprintf(filename, sizeof(filename), "/tmp/screen_view_%d.bmp", state);
+            save_screenshot(ren, filename);
+            SDL_RenderPresent(ren);
+            state++;
+            if (state > VIEW_POWER_DIALOG) {
+                running = false;
+            }
+            continue;
         }
 
         SDL_RenderPresent(ren);
