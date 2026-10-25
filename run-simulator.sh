@@ -23,6 +23,7 @@ fi
 
 # 显示驱动环境自适应（优先 Wayland，后退 X11）
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-wayland,x11}"
+export ROCKNIX_SIMULATOR=1
 
 clear 2>/dev/null || true
 echo "=================================================================="

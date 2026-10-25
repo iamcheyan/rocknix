@@ -6,6 +6,7 @@
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$DIR/projects/ROCKNIX/packages/apps/handheld-launcher/src/handheld-launcher"
+export ROCKNIX_SIMULATOR=1
 
 if [ ! -f "$BIN" ]; then
   echo "==> Binary not found, building..."

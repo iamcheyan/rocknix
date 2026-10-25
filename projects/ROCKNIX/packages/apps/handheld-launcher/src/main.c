@@ -289,6 +289,37 @@ static bool g_wifi_enabled = true;
 static bool g_bt_enabled = false;
 static bool g_wifi_adb_enabled = false;
 
+// Host PC Safety Guard: Prevent simulator from executing systemctl/reboot/poweroff on host PC
+static bool is_target_device(void) {
+    if (getenv("ROCKNIX_SIMULATOR") != NULL) return false;
+    return (access("/etc/rocknix-release", F_OK) == 0 || access("/storage/.config", F_OK) == 0);
+}
+
+static void do_reboot(void) {
+    if (is_target_device()) {
+        (void)!system("reboot 2>/dev/null");
+    } else {
+        printf("\n[SIMULATOR GUARD] Reboot requested: Simulated on PC host (host reboot prevented).\n\n");
+    }
+}
+
+static void do_poweroff(bool* running) {
+    if (is_target_device()) {
+        (void)!system("poweroff 2>/dev/null");
+    } else {
+        printf("\n[SIMULATOR GUARD] Power off requested: Exiting simulator cleanly (host shutdown prevented).\n\n");
+        if (running) *running = false;
+    }
+}
+
+static void do_restart_launcher(void) {
+    if (is_target_device()) {
+        (void)!system("systemctl restart handheld-launcher 2>/dev/null");
+    } else {
+        printf("\n[SIMULATOR GUARD] Restart launcher requested: Simulated on PC host.\n\n");
+    }
+}
+
 // Hardware & Telemetry Helpers
 static void get_storage_info(char* buf, size_t max_len) {
     struct statvfs st;
@@ -328,21 +359,29 @@ void apply_brightness(int delta) {
     g_brightness += delta;
     if (g_brightness > 100) g_brightness = 100;
     if (g_brightness < 10) g_brightness = 10;
-    char cmd[128];
-    snprintf(cmd, sizeof(cmd), "brightness set %d >/dev/null 2>&1", g_brightness);
-    (void)!system(cmd);
+    if (is_target_device()) {
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "brightness set %d >/dev/null 2>&1", g_brightness);
+        (void)!system(cmd);
+    }
 }
 
 void apply_volume(int delta) {
     g_volume += delta;
     if (g_volume > 100) g_volume = 100;
     if (g_volume < 0) g_volume = 0;
-    char cmd[128];
-    snprintf(cmd, sizeof(cmd), "amixer -q set Master %d%% >/dev/null 2>&1", g_volume);
-    (void)!system(cmd);
+    if (is_target_device()) {
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "amixer -q set Master %d%% >/dev/null 2>&1", g_volume);
+        (void)!system(cmd);
+    }
 }
 
 void apply_usb_mode() {
+    if (!is_target_device()) {
+        printf("[SIMULATOR GUARD] USB Mode changed to: %s (simulated)\n", g_usb_mode_names[g_usb_mode]);
+        return;
+    }
     switch (g_usb_mode) {
         case USB_MODE_MTP:
             (void)!system("usbgadget file_transfer >/dev/null 2>&1");
@@ -361,8 +400,10 @@ void apply_usb_mode() {
 }
 
 void enter_walkman_mode(SDL_Renderer* ren) {
-    printf("==> Walkman Mode: Blanking LCD screen (bl_power=4). Audio continues in background.\n");
-    (void)!system("echo 4 > /sys/class/backlight/*/bl_power 2>/dev/null || brightness set 0 >/dev/null 2>&1");
+    printf("==> Walkman Mode: Blanking LCD screen. Audio continues in background.\n");
+    if (is_target_device()) {
+        (void)!system("echo 4 > /sys/class/backlight/*/bl_power 2>/dev/null || brightness set 0 >/dev/null 2>&1");
+    }
 
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
@@ -380,9 +421,11 @@ void enter_walkman_mode(SDL_Renderer* ren) {
         SDL_Delay(50);
     }
 
-    char cmd[128];
-    snprintf(cmd, sizeof(cmd), "echo 0 > /sys/class/backlight/*/bl_power 2>/dev/null; brightness set %d >/dev/null 2>&1", g_brightness);
-    (void)!system(cmd);
+    if (is_target_device()) {
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "echo 0 > /sys/class/backlight/*/bl_power 2>/dev/null; brightness set %d >/dev/null 2>&1", g_brightness);
+        (void)!system(cmd);
+    }
     printf("==> Walkman Mode Exited: LCD backlight restored.\n");
 }
 
@@ -439,6 +482,10 @@ int main(int argc, char* argv[]) {
     const int cp_count = 14;
     int cp_scroll_offset = 0;
     const int cp_visible_count = 6;
+
+    int info_scroll_offset = 0;
+    const int info_count = 8;
+    const int info_visible_count = 6;
 
     int power_idx = 0;
     const int power_count = 4;
@@ -523,11 +570,12 @@ int main(int argc, char* argv[]) {
                         } else if (cp_idx == 6) {
                             enter_walkman_mode(ren);
                         } else if (cp_idx == 10) {
-                            (void)!system("systemctl restart handheld-launcher 2>/dev/null");
+                            do_restart_launcher();
                         } else if (cp_idx == 11) {
-                            (void)!system("reboot 2>/dev/null");
+                            do_reboot();
+                            state = VIEW_MAIN_MENU;
                         } else if (cp_idx == 12) {
-                            (void)!system("poweroff 2>/dev/null");
+                            do_poweroff(&running);
                         } else if (cp_idx == 13) {
                             state = VIEW_MAIN_MENU;
                         }
@@ -535,7 +583,11 @@ int main(int argc, char* argv[]) {
                         state = VIEW_MAIN_MENU;
                     }
                 } else if (state == VIEW_SYSTEM_INFO) {
-                    if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN || k == SDLK_SPACE) {
+                    if (k == SDLK_UP || k == SDLK_w) {
+                        if (info_scroll_offset > 0) info_scroll_offset--;
+                    } else if (k == SDLK_DOWN || k == SDLK_s) {
+                        if (info_scroll_offset + info_visible_count < info_count) info_scroll_offset++;
+                    } else if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN || k == SDLK_SPACE) {
                         state = VIEW_MAIN_MENU;
                     }
                 } else if (state == VIEW_POWER_DIALOG) {
@@ -544,9 +596,12 @@ int main(int argc, char* argv[]) {
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         power_idx = (power_idx + 1) % power_count;
                     } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
-                        if (power_idx == 0) (void)!system("systemctl restart handheld-launcher 2>/dev/null");
-                        else if (power_idx == 1) (void)!system("reboot 2>/dev/null");
-                        else if (power_idx == 2) (void)!system("poweroff 2>/dev/null");
+                        if (power_idx == 0) do_restart_launcher();
+                        else if (power_idx == 1) {
+                            do_reboot();
+                            state = VIEW_MAIN_MENU;
+                        }
+                        else if (power_idx == 2) do_poweroff(&running);
                         else if (power_idx == 3) state = VIEW_MAIN_MENU;
                     } else if (k == SDLK_BACKSPACE || k == SDLK_k) {
                         state = VIEW_MAIN_MENU;
@@ -604,25 +659,31 @@ int main(int argc, char* argv[]) {
                         } else if (cp_idx == 6) {
                             enter_walkman_mode(ren);
                         } else if (cp_idx == 10) {
-                            (void)!system("systemctl restart handheld-launcher 2>/dev/null");
+                            do_restart_launcher();
                         } else if (cp_idx == 11) {
-                            (void)!system("reboot 2>/dev/null");
+                            do_reboot();
+                            state = VIEW_MAIN_MENU;
                         } else if (cp_idx == 12) {
-                            (void)!system("poweroff 2>/dev/null");
+                            do_poweroff(&running);
                         } else if (cp_idx == 13) {
                             state = VIEW_MAIN_MENU;
                         }
                     }
                     if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_SYSTEM_INFO) {
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP && info_scroll_offset > 0) info_scroll_offset--;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN && info_scroll_offset + info_visible_count < info_count) info_scroll_offset++;
                     if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_A) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_POWER_DIALOG) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) power_idx = (power_idx - 1 + power_count) % power_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) power_idx = (power_idx + 1) % power_count;
                     if (btn == SDL_CONTROLLER_BUTTON_A) {
-                        if (power_idx == 0) (void)!system("systemctl restart handheld-launcher 2>/dev/null");
-                        else if (power_idx == 1) (void)!system("reboot 2>/dev/null");
-                        else if (power_idx == 2) (void)!system("poweroff 2>/dev/null");
+                        if (power_idx == 0) do_restart_launcher();
+                        else if (power_idx == 1) {
+                            do_reboot();
+                            state = VIEW_MAIN_MENU;
+                        }
+                        else if (power_idx == 2) do_poweroff(&running);
                         else if (power_idx == 3) state = VIEW_MAIN_MENU;
                     }
                     if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
@@ -798,91 +859,87 @@ int main(int argc, char* argv[]) {
             draw_string_marquee(ren, cp_hints[cp_idx], 145, 400, 2, c_white, 530, true, ticks);
 
         } else if (state == VIEW_SYSTEM_INFO) {
-            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 75, 46, 2, c_cyan);
+            draw_string(ren, "=== HARDWARE & ARCHITECTURE INFO ===", 55, 48, 2, c_cyan);
 
-            // Large, well-proportioned spec card (Width: 650px, Height: 340px)
-            SDL_Rect card = {35, 74, 650, 345};
+            SDL_Rect card = {45, 88, 646, 334};
             SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
             SDL_RenderFillRect(ren, &card);
 
-            // Inner divider accent header
-            SDL_Rect card_header = {35, 74, 650, 30};
-            SDL_SetRenderDrawColor(ren, 24, 30, 40, 255);
+            SDL_Rect card_header = {45, 88, 646, 34};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
             SDL_RenderFillRect(ren, &card_header);
-            draw_string(ren, "DEVICE SPECIFICATION & MULTI-LINE STACK", 55, 81, 2, c_accent);
+            draw_string(ren, "DEVICE SPECIFICATIONS", 60, 98, 2, c_accent);
 
-            // Formatted specs: Label (x=50..180), colon (x=195), multi-line wrapped Value (x=215, max_w=450)
             const char* spec_keys[] = {
-                "Model",
-                "Processor",
-                "Display",
-                "Graphics",
-                "Memory",
-                "Storage",
-                "Media",
-                "Stack"
+                "Model", "Processor", "Display", "Graphics",
+                "Memory", "Storage", "Media", "Stack"
             };
-
             const char* spec_vals[] = {
                 "Anbernic RG34XX / SP Handheld",
-                "Allwinner H700 Quad-core\n4x ARM Cortex-A53 @ 1.5GHz",
-                "3.4\" IPS Screen 720x480\nNative 3:2 Aspect Ratio",
-                "ARM Mali-G31 MP2 GPU\nPanfrost KMS/DRM Driver",
+                "Allwinner H700 Quad-core / 4x Cortex-A53 @ 1.5GHz",
+                "3.4\" IPS Screen 720x480 / Native 3:2 Aspect Ratio",
+                "ARM Mali-G31 MP2 GPU / Panfrost KMS/DRM Driver",
                 "1GB LPDDR4 System RAM @ 1600MHz",
-                "Dual TF Card Architecture\nTF1 OS SquashFS + TF2 Ext4",
+                "Dual TF Card Architecture / TF1 OS SquashFS + TF2 Ext4",
                 "XMPlayer Media Suite (PSP XMB UI)",
-                "ROCKNIX Pure 64-bit JeOS\nNative Gamepad Bridge & USB ADB/MTP"
+                "ROCKNIX Pure 64-bit JeOS / Native Gamepad Bridge"
             };
-            int spec_count = 8;
+            const int spec_count = 8;
+            const int row_y = 128;
+            const int row_h = 42;
 
-            int cur_y = 114;
-            for (int i = 0; i < spec_count; i++) {
-                // Subtle alternate shading
+            for (int i = 0; i < info_visible_count; i++) {
+                int item_idx = info_scroll_offset + i;
+                if (item_idx >= spec_count) break;
+                int y = row_y + i * row_h;
                 if (i % 2 == 1) {
-                    SDL_Rect row_rect = {42, cur_y - 3, 636, (strchr(spec_vals[i], '\n') ? 40 : 22)};
+                    SDL_Rect row = {56, y, 624, row_h};
                     SDL_SetRenderDrawColor(ren, 36, 44, 58, 255);
-                    SDL_RenderFillRect(ren, &row_rect);
+                    SDL_RenderFillRect(ren, &row);
                 }
-
-                // Left Key Label (Cyan, max 9 chars, ends before x=195)
-                draw_string(ren, spec_keys[i], 52, cur_y, 2, c_cyan);
-                draw_string(ren, ":", 195, cur_y, 2, c_gray);
-
-                // Right Value (Multi-line word wrapped at x=215, max_w=450, line_height=18)
-                cur_y = draw_text_wrapped(ren, spec_vals[i], 215, cur_y, 2, c_white, 450, 18);
-                cur_y += 6; // item gap
+                draw_string(ren, spec_keys[item_idx], 64, y + 13, 2, c_cyan);
+                draw_string(ren, ":", 200, y + 13, 2, c_gray);
+                draw_string_marquee(ren, spec_vals[item_idx], 224, y + 13, 2, c_white,
+                                    448, true, ticks + item_idx * 900);
             }
 
+            int info_sb_x = 685;
+            int info_sb_y = 128;
+            int info_sb_h = info_visible_count * row_h;
+            SDL_Rect info_sb_track = {info_sb_x, info_sb_y, 6, info_sb_h};
+            SDL_SetRenderDrawColor(ren, 40, 48, 64, 255);
+            SDL_RenderFillRect(ren, &info_sb_track);
+
+            int info_thumb_h = (info_sb_h * info_visible_count) / spec_count;
+            int info_thumb_y = info_sb_y + (info_scroll_offset * (info_sb_h - info_thumb_h)) / (spec_count - info_visible_count);
+            SDL_Rect info_sb_thumb = {info_sb_x, info_thumb_y, 6, info_thumb_h};
+            SDL_SetRenderDrawColor(ren, c_accent.r, c_accent.g, c_accent.b, 255);
+            SDL_RenderFillRect(ren, &info_sb_thumb);
+
         } else if (state == VIEW_POWER_DIALOG) {
-            // Dimmed semi-transparent backdrop
-            SDL_SetRenderDrawColor(ren, 10, 12, 16, 220);
-            SDL_Rect backdrop = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-            SDL_RenderFillRect(ren, &backdrop);
-
-            // Modal dialog window
-            SDL_Rect dlg = {120, 100, SCREEN_WIDTH - 240, 260};
+            SDL_Rect panel = {45, 88, 646, 334};
             SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
-            SDL_RenderFillRect(ren, &dlg);
+            SDL_RenderFillRect(ren, &panel);
 
-            SDL_Rect dlg_bar = {120, 100, SCREEN_WIDTH - 240, 36};
-            SDL_SetRenderDrawColor(ren, 18, 22, 30, 255);
-            SDL_RenderFillRect(ren, &dlg_bar);
-            draw_string(ren, "POWER & SYSTEM ACTIONS", 150, 110, 2, c_accent);
+            SDL_Rect panel_header = {45, 88, 646, 34};
+            SDL_SetRenderDrawColor(ren, 26, 32, 42, 255);
+            SDL_RenderFillRect(ren, &panel_header);
+            draw_string(ren, "POWER & SYSTEM ACTIONS", 60, 98, 2, c_accent);
 
             for (int i = 0; i < power_count; i++) {
-                int item_y = 155 + i * 46;
+                int item_y = 132 + i * 54;
                 bool is_sel = (i == power_idx);
-
-                SDL_Rect r = {140, item_y - 4, SCREEN_WIDTH - 280, 38};
+                SDL_Rect r = {60, item_y, 616, 44};
                 if (is_sel) {
                     SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, ">", 150, item_y + 6, 2, c_accent);
-                    draw_string(ren, power_items[i], 180, item_y + 6, 2, c_white);
+                    draw_string(ren, ">", 68, item_y + 13, 2, c_accent);
+                    draw_string(ren, power_items[i], 92, item_y + 13, 2, c_white);
                 } else {
                     SDL_SetRenderDrawColor(ren, 24, 28, 38, 255);
                     SDL_RenderFillRect(ren, &r);
-                    draw_string(ren, power_items[i], 180, item_y + 6, 2, (i == 2) ? c_red : c_gray);
+                    draw_string(ren, power_items[i], 92, item_y + 13, 2,
+                                i == 2 ? c_red : c_gray);
                 }
             }
         }
