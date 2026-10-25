@@ -1,0 +1,16 @@
+[Unit]
+Description=Handheld-Launcher-with-Sway
+Requires=sway.service
+After=sway.service
+
+[Service]
+Type=simple
+Environment=HOME=/storage
+EnvironmentFile=/etc/profile
+ExecStart=/usr/bin/handheld-launcher
+WorkingDirectory=/storage
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=rocknix.target
