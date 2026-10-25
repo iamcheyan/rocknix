@@ -1,12 +1,16 @@
 /*
  * Handheld Launcher for Anbernic RG34XX (Allwinner H700)
  * Resolution: 720x480 (3:2 Aspect Ratio)
- * Launches XMPlayer (XMB Media Suite) and development tools.
+ * Includes:
+ *   - XMPlayer Integration
+ *   - Native System Control Panel (WiFi, Bluetooth, Audio, Brightness, USB MTP/ADB)
+ *   - START + SELECT Combo Exit Protection
  */
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <time.h>
@@ -161,8 +165,43 @@ void launch_xmplayer(SDL_Window* win) {
 
 typedef enum {
     VIEW_MAIN_MENU,
+    VIEW_CONTROL_PANEL,
     VIEW_SYSTEM_INFO
 } ViewState;
+
+// System Settings State
+static int g_brightness = 80;
+static int g_volume = 75;
+static int g_usb_mode = 0; // 0 = MTP Disk, 1 = ADB / Network, 2 = Disabled
+static bool g_wifi_enabled = true;
+static bool g_bt_enabled = false;
+
+void apply_brightness(int delta) {
+    g_brightness += delta;
+    if (g_brightness > 100) g_brightness = 100;
+    if (g_brightness < 10) g_brightness = 10;
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "brightness set %d >/dev/null 2>&1", g_brightness);
+    (void)!system(cmd);
+}
+
+void apply_volume(int delta) {
+    g_volume += delta;
+    if (g_volume > 100) g_volume = 100;
+    if (g_volume < 0) g_volume = 0;
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "amixer -q set Master %d%% >/dev/null 2>&1", g_volume);
+    (void)!system(cmd);
+}
+
+void toggle_usb_mode() {
+    g_usb_mode = (g_usb_mode + 1) % 2;
+    if (g_usb_mode == 0) {
+        (void)!system("usbgadget file_transfer >/dev/null 2>&1");
+    } else {
+        (void)!system("usbgadget network >/dev/null 2>&1");
+    }
+}
 
 int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0) {
@@ -195,13 +234,16 @@ int main(int argc, char* argv[]) {
     ViewState state = VIEW_MAIN_MENU;
     const char* menu_items[] = {
         "1. Launch XMPlayer (XMB Media Suite)",
-        "2. Terminal / Shell Console",
-        "3. Network & WiFi Diagnostics",
+        "2. System Settings & Control Panel",
+        "3. Terminal / Developer Shell",
         "4. Hardware & System Info (RG34XX)",
-        "5. Exit Simulator"
+        "5. Power Off / Exit"
     };
     int menu_count = 5;
     int selected_idx = 0;
+
+    int cp_idx = 0;
+    int cp_count = 6;
 
     bool running = true;
     SDL_Event e;
@@ -210,6 +252,7 @@ int main(int argc, char* argv[]) {
     SDL_Color c_accent = {255, 196, 0, 255};
     SDL_Color c_gray   = {160, 160, 160, 255};
     SDL_Color c_cyan   = {0, 220, 255, 255};
+    SDL_Color c_green  = {80, 240, 120, 255};
     SDL_Color c_dark   = {20, 24, 32, 255};
     SDL_Color c_panel  = {32, 38, 50, 255};
 
@@ -219,31 +262,61 @@ int main(int argc, char* argv[]) {
                 running = false;
             } else if (e.type == SDL_KEYDOWN) {
                 SDL_Keycode k = e.key.keysym.sym;
+
+                // Check START + SELECT keyboard fallback (Shift + Enter)
+                if (k == SDLK_ESCAPE) {
+                    if (state == VIEW_MAIN_MENU) running = false;
+                    else state = VIEW_MAIN_MENU;
+                }
+
                 if (state == VIEW_MAIN_MENU) {
                     if (k == SDLK_UP || k == SDLK_w) {
                         selected_idx = (selected_idx - 1 + menu_count) % menu_count;
                     } else if (k == SDLK_DOWN || k == SDLK_s) {
                         selected_idx = (selected_idx + 1) % menu_count;
                     } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
-                        if (selected_idx == 0) {
-                            launch_xmplayer(win);
-                        } else if (selected_idx == 3) {
-                            state = VIEW_SYSTEM_INFO;
-                        } else if (selected_idx == 4) {
-                            running = false;
+                        if (selected_idx == 0) launch_xmplayer(win);
+                        else if (selected_idx == 1) state = VIEW_CONTROL_PANEL;
+                        else if (selected_idx == 3) state = VIEW_SYSTEM_INFO;
+                        else if (selected_idx == 4) running = false;
+                    }
+                } else if (state == VIEW_CONTROL_PANEL) {
+                    if (k == SDLK_UP || k == SDLK_w) {
+                        cp_idx = (cp_idx - 1 + cp_count) % cp_count;
+                    } else if (k == SDLK_DOWN || k == SDLK_s) {
+                        cp_idx = (cp_idx + 1) % cp_count;
+                    } else if (k == SDLK_LEFT || k == SDLK_a) {
+                        if (cp_idx == 2) apply_brightness(-5);
+                        else if (cp_idx == 3) apply_volume(-5);
+                        else if (cp_idx == 4) toggle_usb_mode();
+                    } else if (k == SDLK_RIGHT || k == SDLK_d) {
+                        if (cp_idx == 2) apply_brightness(+5);
+                        else if (cp_idx == 3) apply_volume(+5);
+                        else if (cp_idx == 4) toggle_usb_mode();
+                    } else if (k == SDLK_RETURN || k == SDLK_j || k == SDLK_SPACE) {
+                        if (cp_idx == 0) {
+                            g_wifi_enabled = !g_wifi_enabled;
+                            system(g_wifi_enabled ? "wifictl enable" : "wifictl disable");
+                        } else if (cp_idx == 1) {
+                            g_bt_enabled = !g_bt_enabled;
+                            system(g_bt_enabled ? "rocknix-bluetooth on" : "rocknix-bluetooth off");
+                        } else if (cp_idx == 4) {
+                            toggle_usb_mode();
+                        } else if (cp_idx == 5) {
+                            state = VIEW_MAIN_MENU;
                         }
-                    } else if (k == SDLK_ESCAPE) {
-                        running = false;
+                    } else if (k == SDLK_BACKSPACE || k == SDLK_k) {
+                        state = VIEW_MAIN_MENU;
                     }
                 } else if (state == VIEW_SYSTEM_INFO) {
-                    if (k == SDLK_ESCAPE || k == SDLK_k || k == SDLK_BACKSPACE || k == SDLK_RETURN) {
+                    if (k == SDLK_BACKSPACE || k == SDLK_k || k == SDLK_RETURN) {
                         state = VIEW_MAIN_MENU;
                     }
                 }
             } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
                 Uint8 btn = e.cbutton.button;
 
-                // Combo: START + SELECT together to exit (prevent accidental triggers)
+                // COMBO EXIT: START + SELECT together
                 if ((btn == SDL_CONTROLLER_BUTTON_START && SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_BACK)) ||
                     (btn == SDL_CONTROLLER_BUTTON_BACK && SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_START))) {
                     running = false;
@@ -255,9 +328,37 @@ int main(int argc, char* argv[]) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) selected_idx = (selected_idx + 1) % menu_count;
                     if (btn == SDL_CONTROLLER_BUTTON_A) {
                         if (selected_idx == 0) launch_xmplayer(win);
+                        else if (selected_idx == 1) state = VIEW_CONTROL_PANEL;
                         else if (selected_idx == 3) state = VIEW_SYSTEM_INFO;
                         else if (selected_idx == 4) running = false;
                     }
+                } else if (state == VIEW_CONTROL_PANEL) {
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) cp_idx = (cp_idx - 1 + cp_count) % cp_count;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) cp_idx = (cp_idx + 1) % cp_count;
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
+                        if (cp_idx == 2) apply_brightness(-5);
+                        else if (cp_idx == 3) apply_volume(-5);
+                        else if (cp_idx == 4) toggle_usb_mode();
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
+                        if (cp_idx == 2) apply_brightness(+5);
+                        else if (cp_idx == 3) apply_volume(+5);
+                        else if (cp_idx == 4) toggle_usb_mode();
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_A) {
+                        if (cp_idx == 0) {
+                            g_wifi_enabled = !g_wifi_enabled;
+                            system(g_wifi_enabled ? "wifictl enable" : "wifictl disable");
+                        } else if (cp_idx == 1) {
+                            g_bt_enabled = !g_bt_enabled;
+                            system(g_bt_enabled ? "rocknix-bluetooth on" : "rocknix-bluetooth off");
+                        } else if (cp_idx == 4) {
+                            toggle_usb_mode();
+                        } else if (cp_idx == 5) {
+                            state = VIEW_MAIN_MENU;
+                        }
+                    }
+                    if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_A) state = VIEW_MAIN_MENU;
                 }
@@ -273,12 +374,13 @@ int main(int argc, char* argv[]) {
         SDL_Rect top_bar = {0, 0, SCREEN_WIDTH, 36};
         SDL_RenderFillRect(ren, &top_bar);
 
-        draw_string(ren, "ROCKNIX - RG34XX DEV", 18, 10, 2, c_cyan);
-        draw_string(ren, "RES: 720x480 (3:2)", 310, 10, 2, c_gray);
-        draw_string(ren, "BAT: 92%", 530, 10, 2, c_white);
-        draw_string(ren, "21:05", 630, 10, 2, c_accent);
+        draw_string(ren, "ROCKNIX DEV", 18, 10, 2, c_cyan);
+        draw_string(ren, g_wifi_enabled ? "WIFI: ON" : "WIFI: OFF", 220, 10, 2, g_wifi_enabled ? c_green : c_gray);
+        draw_string(ren, g_usb_mode == 0 ? "USB: MTP DISK" : "USB: ADB/NET", 380, 10, 2, c_accent);
+        draw_string(ren, "BAT: 92%", 570, 10, 2, c_white);
+        draw_string(ren, "21:28", 660, 10, 2, c_accent);
 
-        // 2. Main Content Area
+        // 2. Main Content
         if (state == VIEW_MAIN_MENU) {
             draw_string(ren, "=== ANBERNIC RG34XX DEV LAUNCHER ===", 75, 65, 2, c_accent);
 
@@ -298,6 +400,35 @@ int main(int argc, char* argv[]) {
                     draw_string(ren, menu_items[i], 80, item_y + 6, 2, c_gray);
                 }
             }
+        } else if (state == VIEW_CONTROL_PANEL) {
+            draw_string(ren, "=== SYSTEM SETTINGS & CONTROL PANEL ===", 65, 55, 2, c_cyan);
+
+            char cp_labels[6][80];
+            snprintf(cp_labels[0], sizeof(cp_labels[0]), "WiFi Network: [%s] (Press A to toggle / scan)", g_wifi_enabled ? "ENABLED" : "DISABLED");
+            snprintf(cp_labels[1], sizeof(cp_labels[1]), "Bluetooth:    [%s] (Press A to toggle / pair)", g_bt_enabled ? "ON" : "OFF");
+            snprintf(cp_labels[2], sizeof(cp_labels[2]), "Brightness:   [ < %d%% > ] (Left/Right to adjust)", g_brightness);
+            snprintf(cp_labels[3], sizeof(cp_labels[3]), "Audio Volume: [ < %d%% > ] (Left/Right to adjust)", g_volume);
+            snprintf(cp_labels[4], sizeof(cp_labels[4]), "USB-C Mode:   [ < %s > ] (MTP Disk / ADB Network)", g_usb_mode == 0 ? "MTP PC DISK" : "ADB & NETWORK");
+            snprintf(cp_labels[5], sizeof(cp_labels[5]), "<-- Return to Main Menu");
+
+            for (int i = 0; i < cp_count; i++) {
+                int item_y = 105 + i * 48;
+                bool is_sel = (i == cp_idx);
+
+                SDL_Rect r = {45, item_y - 6, SCREEN_WIDTH - 90, 40};
+                if (is_sel) {
+                    SDL_SetRenderDrawColor(ren, 0, 120, 215, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, ">", 20, item_y + 6, 2, c_accent);
+                    draw_string(ren, cp_labels[i], 55, item_y + 6, 2, c_white);
+                } else {
+                    SDL_SetRenderDrawColor(ren, c_panel.r, c_panel.g, c_panel.b, 255);
+                    SDL_RenderFillRect(ren, &r);
+                    draw_string(ren, cp_labels[i], 55, item_y + 6, 2, c_gray);
+                }
+            }
+
+            draw_string(ren, "Tip: Plug USB-C to PC for instant MTP storage or 'adb shell'", 45, 405, 2, c_accent);
         } else if (state == VIEW_SYSTEM_INFO) {
             draw_string(ren, "=== HARDWARE & SYSTEM INFO ===", 110, 65, 2, c_cyan);
 
@@ -309,8 +440,8 @@ int main(int argc, char* argv[]) {
             draw_string(ren, "SoC: Allwinner H700 (4x Cortex-A53 1.5GHz)", 80, 170, 2, c_white);
             draw_string(ren, "Screen: 3.4 inch IPS, 720x480 Native (3:2)", 80, 205, 2, c_accent);
             draw_string(ren, "GPU: ARM Mali-G31 MP2 (Panfrost DRM/KMS)", 80, 240, 2, c_white);
-            draw_string(ren, "Media Suite: XMPlayer (XrossMediaBar UI)", 80, 275, 2, c_cyan);
-            draw_string(ren, "System: Custom ROCKNIX JeOS + Swaywm", 80, 310, 2, c_white);
+            draw_string(ren, "Media Suite: XMPlayer (XMB PSP UI)", 80, 275, 2, c_cyan);
+            draw_string(ren, "System: Custom ROCKNIX JeOS (Pure 64-bit)", 80, 310, 2, c_white);
         }
 
         // 3. Bottom Bar
@@ -319,9 +450,11 @@ int main(int argc, char* argv[]) {
         SDL_RenderFillRect(ren, &bot_bar);
 
         if (state == VIEW_MAIN_MENU) {
-            draw_string(ren, "[UP/DOWN] Move  [A/Enter] Open  [ESC] Exit", 40, SCREEN_HEIGHT - 26, 2, c_white);
+            draw_string(ren, "[UP/DOWN] Move  [A] Open  [START+SELECT] Power Off", 40, SCREEN_HEIGHT - 26, 2, c_white);
+        } else if (state == VIEW_CONTROL_PANEL) {
+            draw_string(ren, "[UP/DOWN] Select  [LEFT/RIGHT] Adjust  [B] Back", 40, SCREEN_HEIGHT - 26, 2, c_white);
         } else {
-            draw_string(ren, "[B/Esc/Enter] Back to Main Menu", 40, SCREEN_HEIGHT - 26, 2, c_white);
+            draw_string(ren, "[B/Enter] Back to Main Menu", 40, SCREEN_HEIGHT - 26, 2, c_white);
         }
 
         SDL_RenderPresent(ren);
