@@ -202,13 +202,13 @@ void launch_xmplayer(SDL_Window* win) {
 
     const char* cmd = NULL;
     if (access("/usr/bin/xmplayer", X_OK) == 0) {
-        cmd = "/usr/bin/xmplayer >/var/log/xmplayer.log 2>&1";
+        cmd = "/usr/bin/xmplayer >/tmp/xmplayer.log 2>&1";
     } else if (access("/usr/share/xmplayer/bin/love", X_OK) == 0) {
-        cmd = "export LD_LIBRARY_PATH=/usr/share/xmplayer/libs:$LD_LIBRARY_PATH PATH=/usr/share/xmplayer/bin:$PATH HOME=/storage; cd /usr/share/xmplayer && /usr/share/xmplayer/bin/love /usr/share/xmplayer >/var/log/xmplayer.log 2>&1";
+        cmd = "export LD_LIBRARY_PATH=/usr/share/xmplayer/libs:/usr/lib/compat:$LD_LIBRARY_PATH PATH=/usr/share/xmplayer/bin:$PATH HOME=/storage; cd /usr/share/xmplayer && /usr/share/xmplayer/bin/love /usr/share/xmplayer >/tmp/xmplayer.log 2>&1";
     } else if (access("projects/ROCKNIX/packages/apps/xmplayer/app/main.lua", F_OK) == 0) {
         cmd = "nix-shell -p love --run 'love projects/ROCKNIX/packages/apps/xmplayer/app'";
     } else {
-        cmd = "love /usr/share/xmplayer >/var/log/xmplayer.log 2>&1";
+        cmd = "love /usr/share/xmplayer >/tmp/xmplayer.log 2>&1";
     }
 
     int ret = system(cmd);

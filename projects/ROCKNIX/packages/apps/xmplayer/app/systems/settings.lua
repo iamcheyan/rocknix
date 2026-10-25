@@ -1,5 +1,6 @@
 local theme = require("theme")
 local categories = require("categories")
+local utils = require("utils")
 
 local settings = {}
 
@@ -13,7 +14,7 @@ settings.soft_button_lock = "Off"
 settings.max_texture_size = 2048
 settings.slideshow_duration_seconds = 5
 settings.loop_slideshow_enabled = false
-local storage_path = love.filesystem.getSource()
+local storage_path = utils.get_storage_path()
 settings.file_path = storage_path .. "/settings.cfg"
 
 -- Current submenu depth for settings category

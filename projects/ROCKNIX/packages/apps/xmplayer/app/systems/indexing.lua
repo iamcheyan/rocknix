@@ -7,7 +7,7 @@ local INDEX_VERSION = 2
 local THUMB_VERSION = 2
 local ALBUM_THUMB_VERSION = 2
 
-local storage_path = love.filesystem.getSource()
+local storage_path = utils.get_storage_path()
 indexing.file_path = storage_path .. "/index.cfg"
 indexing.thumb_dir = storage_path .. "/thumbnails"
 indexing.data = {
@@ -691,7 +691,21 @@ function indexing.scan(photo_dir, music_dir, video_dir)
     -- 1. Scan Music
     indexing.scan_progress = "Scanning Music..."
     coroutine.yield()
-    local music_files = get_files_recursive(music_dir, music_exts)
+    local music_targets = {}
+    if music_dir and music_dir ~= "" then table.insert(music_targets, music_dir) end
+    table.insert(music_targets, "/storage/music")
+    table.insert(music_targets, "/storage/roms/music")
+    local music_files = {}
+    local seen = {}
+    for _, dir in ipairs(music_targets) do
+        local found = get_files_recursive(dir, music_exts)
+        for _, f in ipairs(found) do
+            if not seen[f] then
+                seen[f] = true
+                table.insert(music_files, f)
+            end
+        end
+    end
     coroutine.yield()
 
     process_music_files_threaded(music_files, "Indexing Music")
@@ -743,7 +757,21 @@ function indexing.scan_for_new_media(photo_dir, music_dir, video_dir)
 
     indexing.scan_progress = "Checking for new music..."
     coroutine.yield(indexing.scan_progress)
-    local music_files = get_files_recursive(music_dir, music_exts)
+    local music_targets = {}
+    if music_dir and music_dir ~= "" then table.insert(music_targets, music_dir) end
+    table.insert(music_targets, "/storage/music")
+    table.insert(music_targets, "/storage/roms/music")
+    local music_files = {}
+    local seen = {}
+    for _, dir in ipairs(music_targets) do
+        local found = get_files_recursive(dir, music_exts)
+        for _, f in ipairs(found) do
+            if not seen[f] then
+                seen[f] = true
+                table.insert(music_files, f)
+            end
+        end
+    end
     local music_added = process_music_files_threaded(music_files, "Checking Music")
     if music_added > 0 then
         new_count = new_count + music_added

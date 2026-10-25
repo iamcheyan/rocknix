@@ -1,6 +1,8 @@
+local utils = require("utils")
+
 local history = {}
 history.data = {}
-local storage_path = love.filesystem.getSource()
+local storage_path = utils.get_storage_path()
 history.file_path = storage_path .. "/history.cfg"
 
 function history.load()

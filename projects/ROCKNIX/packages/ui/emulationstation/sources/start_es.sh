@@ -11,4 +11,8 @@ prerotate_env "${WLR_CON_TRANSFORM}" "${ES_MODE%%x*}"
 
 scanout_reset_stale
 
+if [ -x /usr/bin/handheld-launcher ]; then
+  exec /usr/bin/handheld-launcher
+fi
+
 emulationstation --log-path /var/log --no-splash
