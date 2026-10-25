@@ -1,0 +1,19 @@
+guide = shift
+
+up = up
+down = down
+left = left
+right = right
+
+a = space
+b = s
+x = m
+y = shift
+
+l1 = shift
+l2 = a
+r1 = shift
+r2 = t
+
+start = w
+back = q
