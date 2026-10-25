@@ -3,11 +3,25 @@
 @@ -1,4 +1,5 @@
  project(yabause-retro-arena)
 +cmake_minimum_required(VERSION 3.5)
-
+ 
  add_definitions( -D__RETORO_ARENA__ )
-
-@@ -135,7 +136,7 @@
- target_link_libraries(yabause-retro-arena yabause  ${Boost_LIBRARIES} pugixml ${YABAUSE_LIBRARIES} ${PORT_LIBRARIES} nanogui ${LIBCHDR_LIBRARIES} )
+ 
+@@ -99,8 +100,12 @@
+ ) 
+ link_directories( ${link_directories} ${LIBCHDR_LIB_DIR} )
+ include_directories( ${PORT_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${sqlite3_source_path} "nanogui-sdl/include" "nanogui-sdl/ext/eigen" "win/include" )
+-set(APP_ICON_RESOURCE_WINDOWS application.rc)
+-add_executable(yabause-retro-arena WIN32 ${yabause_ra_SOURCES} ${APP_ICON_RESOURCE_WINDOWS})
++if(WIN32)
++  set(APP_ICON_RESOURCE_WINDOWS application.rc)
++  add_executable(yabause-retro-arena WIN32 ${yabause_ra_SOURCES} ${APP_ICON_RESOURCE_WINDOWS})
++else()
++  add_executable(yabause-retro-arena ${yabause_ra_SOURCES})
++endif()
+ 
+ 
+ # OpenSSL for https
+@@ -134,7 +139,7 @@
  target_link_libraries( yabause-retro-arena ${LIBCHDR_LIBRARIES} )
  target_link_libraries( yabause-retro-arena ${zlib_STATIC_LIBRARIES} )
  target_link_libraries( yabause-retro-arena ${CMAKE_CURRENT_BINARY_DIR}/lib/sqlite3.lib )
@@ -15,7 +29,7 @@
 +add_dependencies(yabause-retro-arena Json zlib nanogui external_sqlite3)
  yab_port_success(yabause-retro-arena)
  set_target_properties(yabause-retro-arena PROPERTIES OUTPUT_NAME yabasanshiro)
-
+ 
 --- a/yabause/CMake/Packages/external_zlib.cmake
 +++ b/yabause/CMake/Packages/external_zlib.cmake
 @@ -69,6 +69,7 @@
@@ -28,10 +42,11 @@
  
 --- a/yabause/CMake/Packages/external_libchdr.cmake
 +++ b/yabause/CMake/Packages/external_libchdr.cmake
-@@ -36,6 +36,7 @@
+@@ -36,7 +36,8 @@
                -DCMAKE_BUILD_TYPE:STRING=Release 
                -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
-               -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+-              -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
++              -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}\ -D_GNU_SOURCE\ -Wno-error=implicit-function-declaration\ -Wno-error=int-conversion
 +              -DCMAKE_POLICY_VERSION_MINIMUM=3.5
                ${ADDITIONAL_CMAKE_ARGS}
  )
