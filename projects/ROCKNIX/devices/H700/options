@@ -65,8 +65,11 @@
   # e.g. FIRMWARE=""
     FIRMWARE=""
 
+  # 32-bit legacy emulation support (box86, etc.)
+    ENABLE_32BIT="false"
+
   # Additional packages to install
-    ADDITIONAL_PACKAGES=""
+    ADDITIONAL_PACKAGES="handheld-launcher xmplayer"
 
   # Debug tty path
     DEBUG_TTY="/dev/ttyS0"
