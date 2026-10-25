@@ -27,5 +27,4 @@ makeinstall_target() {
 
 post_install() {
   enable_service handheld-launcher.service
-  disable_service essway.service
 }
