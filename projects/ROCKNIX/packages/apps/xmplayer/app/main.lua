@@ -308,8 +308,8 @@ love.keyboard.isDown = function(key)
             if key == "down" and (joy:isGamepadDown("dpdown") or joy:getGamepadAxis("lefty") > 0.5) then return true end
             if key == "left" and (joy:isGamepadDown("dpleft") or joy:getGamepadAxis("leftx") < -0.5) then return true end
             if key == "right" and (joy:isGamepadDown("dpright") or joy:getGamepadAxis("leftx") > 0.5) then return true end
-            if (key == "return" or key == "enter" or key == "a" or key == "space") and joy:isGamepadDown("a") then return true end
-            if (key == "backspace" or key == "b" or key == "escape") and joy:isGamepadDown("b") then return true end
+            if (key == "return" or key == "enter" or key == "a" or key == "space") and joy:isGamepadDown("b") then return true end
+            if (key == "backspace" or key == "b" or key == "escape") and joy:isGamepadDown("a") then return true end
             if key == "x" and joy:isGamepadDown("x") then return true end
             if key == "y" and joy:isGamepadDown("y") then return true end
             if key == "pageup" and joy:isGamepadDown("leftshoulder") then return true end
@@ -334,8 +334,8 @@ function love.gamepadpressed(joystick, button)
         dpdown = "down",
         dpleft = "left",
         dpright = "right",
-        a = "return",
-        b = "backspace",
+        b = "return",    -- Physical A (East) on Anbernic confirms/plays
+        a = "backspace", -- Physical B (South) on Anbernic goes back
         x = "x",
         y = "y",
         leftshoulder = "pageup",
@@ -355,8 +355,8 @@ function love.gamepadreleased(joystick, button)
         dpdown = "down",
         dpleft = "left",
         dpright = "right",
-        a = "return",
-        b = "backspace",
+        b = "return",    -- Physical A (East) on Anbernic confirms/plays
+        a = "backspace", -- Physical B (South) on Anbernic goes back
         x = "x",
         y = "y",
         leftshoulder = "pageup",

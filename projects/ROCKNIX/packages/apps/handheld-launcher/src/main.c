@@ -25,6 +25,13 @@
 #define SCREEN_WIDTH  720
 #define SCREEN_HEIGHT 480
 
+// RG34XX Gamepad Button Mapping (Japanese Nintendo Layout: Physical A=East, Physical B=South)
+// In standard SDL GameController:
+// Physical 'A' (East)  -> SDL_CONTROLLER_BUTTON_B
+// Physical 'B' (South) -> SDL_CONTROLLER_BUTTON_A
+#define BTN_CONFIRM SDL_CONTROLLER_BUTTON_B
+#define BTN_CANCEL  SDL_CONTROLLER_BUTTON_A
+
 // Minimal 8x8 ASCII font bitmap (ASCII 32 to 126)
 static const unsigned char font8x8_basic[95][8] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}, // 32 ' '
@@ -236,12 +243,14 @@ void launch_xmplayer(SDL_Window* win) {
     printf("==> Pausing Launcher, launching XMPlayer...\n");
 
     const char* cmd = NULL;
-    if (access("/usr/share/xmplayer/main.lua", F_OK) == 0) {
-        cmd = "love /usr/share/xmplayer";
+    if (access("/usr/bin/xmplayer", X_OK) == 0) {
+        cmd = "/usr/bin/xmplayer >/var/log/xmplayer.log 2>&1";
+    } else if (access("/usr/share/xmplayer/bin/love", X_OK) == 0) {
+        cmd = "export LD_LIBRARY_PATH=/usr/share/xmplayer/libs:$LD_LIBRARY_PATH PATH=/usr/share/xmplayer/bin:$PATH HOME=/storage; cd /usr/share/xmplayer && /usr/share/xmplayer/bin/love /usr/share/xmplayer >/var/log/xmplayer.log 2>&1";
     } else if (access("projects/ROCKNIX/packages/apps/xmplayer/app/main.lua", F_OK) == 0) {
         cmd = "nix-shell -p love --run 'love projects/ROCKNIX/packages/apps/xmplayer/app'";
     } else {
-        cmd = "nix-shell -p love --run 'love /tmp/XMPlayer/.xmplayer'";
+        cmd = "love /usr/share/xmplayer >/var/log/xmplayer.log 2>&1";
     }
 
     int ret = system(cmd);
@@ -321,6 +330,20 @@ static void do_restart_launcher(void) {
 }
 
 // Hardware & Telemetry Helpers
+static void get_ip_info(char* buf, size_t max_len) {
+    FILE* fp = popen("ip -4 addr show up | grep -E 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | cut -d/ -f1 | head -n1", "r");
+    if (fp) {
+        if (fgets(buf, max_len, fp)) {
+            buf[strcspn(buf, "\r\n")] = 0;
+            pclose(fp);
+            if (strlen(buf) > 0) return;
+        } else {
+            pclose(fp);
+        }
+    }
+    snprintf(buf, max_len, "Disconnected");
+}
+
 static void get_storage_info(char* buf, size_t max_len) {
     struct statvfs st;
     const char* target = "/storage";
@@ -647,9 +670,12 @@ int main(int argc, char* argv[]) {
                 if (state == VIEW_MAIN_MENU) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) main_selected_idx = (main_selected_idx - 1 + main_menu_count) % main_menu_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) main_selected_idx = (main_selected_idx + 1) % main_menu_count;
-                    if (btn == SDL_CONTROLLER_BUTTON_A) {
+                    if (btn == BTN_CONFIRM) {
                         if (main_selected_idx == 0) launch_xmplayer(win);
                         else if (main_selected_idx == 1) state = VIEW_CONTROL_CENTER;
+                        else if (main_selected_idx == 2) {
+                            (void)!system("systemctl restart sshd 2>/dev/null || systemctl start sshd 2>/dev/null");
+                        }
                         else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
                         else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
                     }
@@ -670,7 +696,7 @@ int main(int argc, char* argv[]) {
                         } else if (cp_idx == 5) apply_brightness(+5);
                         else if (cp_idx == 7) apply_volume(+5);
                     }
-                    if (btn == SDL_CONTROLLER_BUTTON_A) {
+                    if (btn == BTN_CONFIRM) {
                         if (cp_idx == 0) {
                             g_wifi_enabled = !g_wifi_enabled;
                             (void)!system(g_wifi_enabled ? "wifictl enable >/dev/null 2>&1" : "wifictl disable >/dev/null 2>&1");
@@ -682,7 +708,7 @@ int main(int argc, char* argv[]) {
                             apply_usb_mode();
                         } else if (cp_idx == 4) {
                             g_wifi_adb_enabled = !g_wifi_adb_enabled;
-                            (void)!system(g_wifi_adb_enabled ? "usbgadget adb_tcp >/dev/null 2>&1" : "usbgadget adb_tcp_stop >/dev/null 2>&1");
+                            (void)!system(g_wifi_adb_enabled ? "systemctl restart sshd >/dev/null 2>&1; usbgadget adb_tcp >/dev/null 2>&1" : "systemctl stop sshd >/dev/null 2>&1; usbgadget adb_tcp_stop >/dev/null 2>&1");
                         } else if (cp_idx == 6) {
                             enter_walkman_mode(ren);
                         } else if (cp_idx == 10) {
@@ -696,15 +722,15 @@ int main(int argc, char* argv[]) {
                             state = VIEW_MAIN_MENU;
                         }
                     }
-                    if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
+                    if (btn == BTN_CANCEL) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_SYSTEM_INFO) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) info_idx = (info_idx - 1 + info_count) % info_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) info_idx = (info_idx + 1) % info_count;
-                    if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_A) state = VIEW_MAIN_MENU;
+                    if (btn == BTN_CANCEL || btn == BTN_CONFIRM) state = VIEW_MAIN_MENU;
                 } else if (state == VIEW_POWER_DIALOG) {
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) power_idx = (power_idx - 1 + power_count) % power_count;
                     if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) power_idx = (power_idx + 1) % power_count;
-                    if (btn == SDL_CONTROLLER_BUTTON_A) {
+                    if (btn == BTN_CONFIRM) {
                         if (power_idx == 0) do_restart_launcher();
                         else if (power_idx == 1) {
                             do_reboot();
@@ -713,7 +739,7 @@ int main(int argc, char* argv[]) {
                         else if (power_idx == 2) do_poweroff(&running);
                         else if (power_idx == 3) state = VIEW_MAIN_MENU;
                     }
-                    if (btn == SDL_CONTROLLER_BUTTON_B) state = VIEW_MAIN_MENU;
+                    if (btn == BTN_CANCEL) state = VIEW_MAIN_MENU;
                 }
             }
         }
@@ -793,13 +819,15 @@ int main(int argc, char* argv[]) {
             get_storage_info(storage_str, sizeof(storage_str));
             char temp_str[48];
             get_cpu_temp(temp_str, sizeof(temp_str));
+            char ip_str[48];
+            get_ip_info(ip_str, sizeof(ip_str));
 
             char cp_titles[14][32] = {
                 "Wi-Fi Wireless",
                 "Wi-Fi IP Address",
                 "Bluetooth Radio",
                 "USB-C Data Role",
-                "Wireless ADB",
+                "SSH Remote Access",
                 "Screen Brightness",
                 "Walkman Mode",
                 "Audio Volume",
@@ -813,10 +841,10 @@ int main(int argc, char* argv[]) {
 
             char cp_values[14][48];
             snprintf(cp_values[0], sizeof(cp_values[0]), "[%s]", g_wifi_enabled ? "ENABLED" : "DISABLED");
-            snprintf(cp_values[1], sizeof(cp_values[1]), "%s", g_wifi_enabled ? "192.168.1.102" : "Disconnected");
+            snprintf(cp_values[1], sizeof(cp_values[1]), "%s", ip_str);
             snprintf(cp_values[2], sizeof(cp_values[2]), "[%s]", g_bt_enabled ? "ON" : "OFF");
             snprintf(cp_values[3], sizeof(cp_values[3]), "< %s >", g_usb_mode_names[g_usb_mode]);
-            snprintf(cp_values[4], sizeof(cp_values[4]), "[%s:5555]", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
+            snprintf(cp_values[4], sizeof(cp_values[4]), "[%s:22]", g_wifi_adb_enabled ? "ACTIVE" : "DISABLED");
             snprintf(cp_values[5], sizeof(cp_values[5]), "< %d%% >", g_brightness);
             snprintf(cp_values[6], sizeof(cp_values[6]), "[Sleep Screen]");
             snprintf(cp_values[7], sizeof(cp_values[7]), "< %d%% >", g_volume);
@@ -832,7 +860,7 @@ int main(int argc, char* argv[]) {
                 "Assigned IP Address on Local Network",
                 "[A] Toggle Bluetooth Radio Power",
                 "[Left/Right] Cycle USB Role  [A] Apply to Host",
-                "[A] Toggle ADB Daemon over TCP (Port 5555)",
+                "[A] Toggle SSH Remote Server (Port 22)",
                 "[Left/Right] Adjust LCD Backlight Brightness",
                 "[A] Turn Off Backlight (bl_power=4), Keep Audio",
                 "[Left/Right] Adjust Master Sound Output Volume",
