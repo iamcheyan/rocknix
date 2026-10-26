@@ -1,57 +1,18 @@
-# 05 · 模拟器审计
+# 05 · H700 模拟器裁剪决策
 
-> 基线：`next` @ `742bd52562`。证据来自 `docs/audit/ROCKNIX_ARCHITECTURE_REPORT_04_EMULATIONSTATION.md` 与报告 11。
+> ROCKNIX 上游包含 RetroArch、libretro 核心和独立模拟器。本分支的 H700 迷你镜像不包含游戏运行时，供 heya + Sonata 使用。
 
-## 保留：RetroArch
+## 实施
 
-`[事实]` RetroArch 是 libretro 前端，本身不绑定特定模拟器核心；核心以动态库形式加载。来源：`projects/ROCKNIX/packages/emulators/retroarch/package.mk`。
-
-保留理由：
-- 作为唯一模拟器前端，统一输入/视频/音频后端
-- 核心可按需安装，不在默认镜像中包含全部核心
-- 与 heya 的"应用即启动器"模型一致：RetroArch 本身就是一个 Application
-
-## 移出默认镜像
-
-| 模拟器 | 替代方案 | 证据 |
-|---|---|---|
-| PPSSPP | RetroArch SwanStation 核心 | `packages/emulators/ppsspp/` |
-| DuckStation | RetroArch DuckStation 核心 | `packages/emulators/duckstation/` |
-| melonDS | RetroArch melonDS 核心 | `packages/emulators/melonDS/` |
-| MAME | RetroArch MAME 核心 | `packages/emulators/mame/` |
-| Flycast | RetroArch Flycast 核心 | `packages/emulators/flycast/` |
-| RPCS3 残留 | 完全移除 | `packages/emulators/rpcs3/` |
-| 其它大型独立模拟器 | RetroArch 核心替代 | 报告 11 C 类 |
-
-`[事实]` 模拟器规模：139 个系统定义、125 个 libretro 核心（基础）、17 个独立模拟器（基础）。来源：报告 04。
-
-## 分类
-
-### 保留（默认镜像）
-- RetroArch
-- 基础 libretro 核心（按需选择，约 10–20 个常用核心）
-
-### 移出默认镜像
-- 所有独立模拟器（PPSSPP、DuckStation、melonDS、MAME、Flycast、RPCS3 等）
-- 非基础 libretro 核心（约 100+ 个）
-
-### 风险未知
-- 某些核心可能被系统其它组件依赖（如 `es_features.cfg` 中的配置）
-- 移除后需验证 RetroArch 仍能加载剩余核心
+- H700 设置 `EMULATION_DEVICE="no"`，不依赖 `emulators` 和 `gamesupport` 元包。
+- 迷你镜像不依赖 EmulationStation、ES 主题、ES 工具或生成器。
+- 其它设备仍沿用 ROCKNIX 原有模拟器包集合。
 
 ## 影响
 
-| 项 | 影响 |
-|---|---|
-| 镜像体积 | 大幅减少（独立模拟器通常 5–50 MB 每个） |
-| 编译时间 | 大幅减少（独立模拟器编译耗时远超核心） |
-| `es_systems.cfg` | 不再生成；RetroArch 核心列表由 RetroArch 自身管理 |
-| `es_features.cfg` | 不再生成；RetroArch 选项由 `retroarch-core-options.cfg` 管理 |
-| 用户体验 | 游戏启动需手动选择核心；不再有 ES 的自动核心选择 |
+H700 镜像不提供 ROCKNIX 的 ROM 扫描和游戏启动链。要恢复游戏功能，需要为该镜像添加模拟器、输入映射和相应的应用入口；镜像体积和构建时间收益待完整构建后测量。
 
-## 验证
+## 验证状态
 
-- `make H700` 构建成功
-- 镜像中不包含独立模拟器二进制
-- RetroArch 可正常启动并加载核心
-- `es_systems.cfg` 不存在于镜像中
+- 镜像构建与包清单检查：待执行。
+- H700 实机启动与 heya/Sonata 操作：待执行。

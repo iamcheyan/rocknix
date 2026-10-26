@@ -1,13 +1,14 @@
 local history = require("history")
 local system = require("system")
 local utils = require("utils")
+local runtime = require("runtime")
 local player = {}
 
 -- Flag to signal main.lua to do a hard refresh
 player.needs_refresh = false
 
 local function get_saved_playback_position(filepath, watch_later_dir)
-    local p = io.popen("ls " .. watch_later_dir .. " 2>/dev/null")
+    local p = io.popen("ls " .. runtime.quote(watch_later_dir) .. " 2>/dev/null")
     if not p then return nil end
 
     local position = nil
@@ -78,8 +79,7 @@ function player.play_video(filepath, resume, options)
             return false
         end
     else
-        local storage_path = love.filesystem.getSource()
-        local builtin_exe = storage_path .. "/bin/ffplay"
+        local builtin_exe = runtime.binary("ffplay")
         local f = io.open(builtin_exe, "r")
         local has_builtin = false
         if f then
@@ -98,35 +98,16 @@ function player.play_video(filepath, resume, options)
     -- Record history for the first file at least
     history.add(paths[1])
 
-    -- Resolve gptokeyb details dynamically based on CFW and environment variables
-    local cfw = system.get_cfw_name()
-    local gptokeyb_exe = nil
-    local kill_cmd = nil
-
-    if cfw == "muOS" then
-        gptokeyb_exe = "./bin/gptokeyb2"
-        kill_cmd = "killall -9 gptokeyb2 2>/dev/null"
-    else
-        gptokeyb_exe = os.getenv("GPTOKEYB") or "gptokeyb"
-        kill_cmd = "killall -9 gptokeyb gptokeyb2 2>/dev/null"
-    end
-
     if settings.video_player_mode == "mpv" then
-        local storage_path = love.filesystem.getSource()
-        local watch_later_dir = storage_path .. "/config/mpv/watch_later"
-        local mpv_config_dir = storage_path .. "/config/mpv"
-        os.execute("mkdir -p " .. watch_later_dir)
-        os.execute("mkdir -p " .. mpv_config_dir)
+        local storage_path = utils.get_storage_path()
+        local watch_later_dir = storage_path .. "/mpv/watch_later"
+        local mpv_config_dir = storage_path .. "/mpv"
+        os.execute("mkdir -p " .. runtime.quote(watch_later_dir))
+        os.execute("mkdir -p " .. runtime.quote(mpv_config_dir))
 
         local screenshot_dir = system.get_screenshot_dir()
         if screenshot_dir and screenshot_dir ~= "" then
             os.execute("mkdir -p \"" .. screenshot_dir .. "\"")
-        end
-
-        -- Switch gptokeyb to MPV controls (only on muOS)
-        if cfw == "muOS" then
-            os.execute(kill_cmd)
-            os.execute(gptokeyb_exe .. " mpv -c ./config/mpvplayer.gptk &")
         end
 
         local resume_flag = resume and "--resume-playback=yes" or "--start=0"
@@ -148,16 +129,16 @@ function player.play_video(filepath, resume, options)
                 end
                 f:close()
             end
-            target_src = " --playlist=\"" .. temp_playlist_path .. "\""
+            target_src = " --playlist=" .. runtime.quote(temp_playlist_path)
             print("Launching MPV with playlist containing " .. #paths .. " files")
         else
-            target_src = " \"" .. paths[1] .. "\""
+            target_src = " " .. runtime.quote(paths[1])
             print("Launching MPV for single file: " .. paths[1])
         end
 
         local screenshot_arg = ""
         if screenshot_dir and screenshot_dir ~= "" then
-            screenshot_arg = string.format(" --screenshot-directory=%q", screenshot_dir)
+            screenshot_arg = " --screenshot-directory=" .. runtime.quote(screenshot_dir)
         end
 
         local sub_pos_map = {
@@ -177,8 +158,8 @@ function player.play_video(filepath, resume, options)
         local sub_arg = string.format(" --sub-pos=%d --sub-scale=%.2f", sub_pos_val, sub_scale_val)
 
         local command = string.format(
-            "mpv %s %s%s%s --save-position-on-quit --watch-later-directory=%q --write-filename-in-watch-later-config=yes %s --input-conf=./config/input.conf --config-dir=./config",
-            target_src, loop_flag, screenshot_arg, sub_arg, watch_later_dir, resume_flag)
+            "%s %s %s%s%s --save-position-on-quit --watch-later-directory=%s --write-filename-in-watch-later-config=yes %s --input-conf=./config/input.conf --config-dir=./config",
+            runtime.command("mpv"), target_src, loop_flag, screenshot_arg, sub_arg, runtime.quote(watch_later_dir), resume_flag)
 
         print("Executing: " .. command)
         os.execute(command)
@@ -190,28 +171,20 @@ function player.play_video(filepath, resume, options)
 
         print("MPV exited, returning to XMPlayer")
 
-        -- Switch gptokeyb back to XMPlayer controls
-        os.execute(kill_cmd)
-        if cfw == "muOS" then
-            os.execute("./bin/gptokeyb2 love -c ./config/xmplayer.gptk &")
-        else
-            local love_gptk = os.getenv("LOVE_GPTK") or "love"
-            os.execute(gptokeyb_exe .. " " .. love_gptk .. " -c ./config/xmplayer.gptk &")
-        end
     elseif settings.video_player_mode:sub(1, 6) == "ffplay" then
         if #paths == 0 then return end
         print("Launching ffplay for " .. #paths .. " files")
 
-        local storage_path = love.filesystem.getSource()
-        local watch_later_dir = storage_path .. "/config/mpv/watch_later"
+        local storage_path = utils.get_storage_path()
+        local watch_later_dir = storage_path .. "/mpv/watch_later"
 
-        local ffplay_bin = "ffplay"
+        local ffplay_bin = runtime.command("ffplay")
         local is_builtin = false
-        local builtin_exe = storage_path .. "/bin/ffplay"
+        local builtin_exe = runtime.binary("ffplay")
         local f = io.open(builtin_exe, "r")
         if f then
             f:close()
-            ffplay_bin = "./bin/ffplay"
+            ffplay_bin = runtime.command("ffplay")
             is_builtin = true
         end
 
@@ -236,9 +209,6 @@ function player.play_video(filepath, resume, options)
 
         -- Launch FFplay sequentially
         for _, p in ipairs(paths) do
-            -- Start gptokeyb daemon mapping for this ffplay instance
-            os.execute(kill_cmd)
-            os.execute(gptokeyb_exe .. " ffplay -c ./config/ffplay.gptk &")
 
             local ss_arg = ""
             if resume then
@@ -248,22 +218,14 @@ function player.play_video(filepath, resume, options)
                 end
             end
 
-            local command = string.format('%s%s -fs -autoexit -noborder%s%s "%s"', env_prefix, ffplay_bin, vf_arg, ss_arg,
-                p)
+            local command = string.format('%s%s -fs -autoexit -noborder%s%s %s', env_prefix, ffplay_bin, vf_arg, ss_arg,
+                runtime.quote(p))
             print("Executing: " .. command)
             os.execute(command)
         end
 
         print("FFplay exited, returning to XMPlayer")
 
-        -- Switch gptokeyb back to XMPlayer controls
-        os.execute(kill_cmd)
-        if cfw == "muOS" then
-            os.execute("./bin/gptokeyb2 love -c ./config/xmplayer.gptk &")
-        else
-            local love_gptk = os.getenv("LOVE_GPTK") or "love"
-            os.execute(gptokeyb_exe .. " " .. love_gptk .. " -c ./config/xmplayer.gptk &")
-        end
     end
 
     -- Signal that we need a hard display refresh
@@ -301,9 +263,9 @@ function player.play_slideshow(filepaths)
 
     print("Launching mpv slideshow for " .. #paths .. " files")
 
-    local storage_path = love.filesystem.getSource()
-    local mpv_config_dir = storage_path .. "/config/mpv"
-    os.execute("mkdir -p " .. mpv_config_dir)
+    local storage_path = utils.get_storage_path()
+    local mpv_config_dir = storage_path .. "/mpv"
+    os.execute("mkdir -p " .. runtime.quote(mpv_config_dir))
 
     local temp_playlist_path = mpv_config_dir .. "/temp_slideshow.m3u"
     local f = io.open(temp_playlist_path, "w")
@@ -314,30 +276,12 @@ function player.play_slideshow(filepaths)
         f:close()
     end
 
-    local cfw = system.get_cfw_name()
-    local gptokeyb_exe = nil
-    local kill_cmd = nil
-
-    if cfw == "muOS" then
-        gptokeyb_exe = "./bin/gptokeyb2"
-        kill_cmd = "killall -9 gptokeyb2 2>/dev/null"
-    else
-        gptokeyb_exe = os.getenv("GPTOKEYB") or "gptokeyb"
-        kill_cmd = "killall -9 gptokeyb gptokeyb2 2>/dev/null"
-    end
-
-    -- Switch gptokeyb to MPV controls (only on muOS)
-    if cfw == "muOS" then
-        os.execute(kill_cmd)
-        os.execute(gptokeyb_exe .. " mpv -c ./config/mpvplayer.gptk &")
-    end
-
     local duration = settings.slideshow_duration_seconds or 5
     local loop_flag = settings.loop_slideshow_enabled and " --loop-playlist=inf" or ""
 
     local command = string.format(
-        'mpv --image-display-duration=%d%s --fullscreen --playlist=%q --input-conf=./config/input.conf --config-dir=./config',
-        duration, loop_flag, temp_playlist_path)
+        '%s --image-display-duration=%d%s --fullscreen --playlist=%s --input-conf=./config/input.conf --config-dir=./config',
+        runtime.command("mpv"), duration, loop_flag, runtime.quote(temp_playlist_path))
 
     print("Executing slideshow: " .. command)
     os.execute(command)
@@ -347,15 +291,6 @@ function player.play_slideshow(filepaths)
     end
 
     print("MPV slideshow exited, returning to XMPlayer")
-
-    -- Switch gptokeyb back to XMPlayer controls
-    os.execute(kill_cmd)
-    if cfw == "muOS" then
-        os.execute("./bin/gptokeyb2 love -c ./config/xmplayer.gptk &")
-    else
-        local love_gptk = os.getenv("LOVE_GPTK") or "love"
-        os.execute(gptokeyb_exe .. " " .. love_gptk .. " -c ./config/xmplayer.gptk &")
-    end
 
     player.needs_refresh = true
 end

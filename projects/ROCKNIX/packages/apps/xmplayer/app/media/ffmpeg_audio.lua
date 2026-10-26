@@ -116,15 +116,10 @@ end
 
 -- Get duration via ffmpeg
 local function getDuration(filepath)
-    local isWindows = (package.config:sub(1, 1) == "\\")
-    local ffmpeg_bin = "ffmpeg"
-    if not isWindows then
-        local source_path = love.filesystem.getSource()
-        ffmpeg_bin = '"' .. source_path .. '/bin/ffmpeg"'
-    end
+    local ffmpeg_bin = require("runtime").command("ffmpeg")
 
     -- Run ffmpeg -i and capture stderr
-    local cmd = string.format('%s -i "%s" 2>&1', ffmpeg_bin, filepath)
+    local cmd = string.format('%s -i %s 2>&1', ffmpeg_bin, require("runtime").quote(filepath))
     local pipe = io.popen(cmd, "r")
     if not pipe then
         return 0

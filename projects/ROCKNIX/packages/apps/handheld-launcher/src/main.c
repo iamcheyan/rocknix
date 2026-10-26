@@ -23,6 +23,9 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/statvfs.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #define SCREEN_WIDTH  720
 #define SCREEN_HEIGHT 480
@@ -200,23 +203,44 @@ void launch_xmplayer(SDL_Window* win) {
     SDL_HideWindow(win);
     printf("==> Pausing Launcher, launching XMPlayer...\n");
 
-    const char* cmd = NULL;
-    if (access("/usr/bin/xmplayer", X_OK) == 0) {
-        cmd = "/usr/bin/xmplayer >/tmp/xmplayer.log 2>&1";
-    } else if (access("/usr/share/xmplayer/bin/love", X_OK) == 0) {
-        cmd = "export LD_LIBRARY_PATH=/usr/share/xmplayer/libs:/usr/lib/compat:$LD_LIBRARY_PATH PATH=/usr/share/xmplayer/bin:$PATH HOME=/storage; cd /usr/share/xmplayer && /usr/share/xmplayer/bin/love /usr/share/xmplayer >/tmp/xmplayer.log 2>&1";
-    } else if (access("projects/ROCKNIX/packages/apps/xmplayer/app/main.lua", F_OK) == 0) {
-        cmd = "nix-shell -p love --run 'love projects/ROCKNIX/packages/apps/xmplayer/app'";
-    } else {
-        cmd = "love /usr/share/xmplayer >/tmp/xmplayer.log 2>&1";
+    const char* program = "/usr/bin/xmplayer";
+    char runner[4096];
+    if (getenv("ROCKNIX_SIMULATOR")) {
+        const char* root = getenv("ROCKNIX_SOURCE_DIR");
+        int size = snprintf(runner, sizeof(runner), "%s/tools/run-xmplayer-simulator.sh", root ? root : ".");
+        if (size < 0 || size >= (int)sizeof(runner)) {
+            SDL_ShowWindow(win);
+            return;
+        }
+        program = runner;
     }
 
-    int ret = system(cmd);
-    (void)ret;
+    fflush(NULL);
+    pid_t child = fork();
+    int status = -1;
+    if (child == 0) {
+        int log = open("/tmp/xmplayer.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        if (log >= 0) {
+            dup2(log, STDOUT_FILENO);
+            dup2(log, STDERR_FILENO);
+            close(log);
+        }
+        execl(program, program, (char*)NULL);
+        perror(program);
+        _exit(127);
+    } else if (child > 0) {
+        while (waitpid(child, &status, 0) < 0) {
+            if (errno != EINTR) { status = -1; break; }
+        }
+    }
 
     printf("==> XMPlayer exited, restoring Launcher...\n");
     SDL_ShowWindow(win);
     SDL_RaiseWindow(win);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "XMPlayer",
+            "XMPlayer could not start or exited with an error. See /tmp/xmplayer.log.", win);
+    }
 }
 
 typedef enum {

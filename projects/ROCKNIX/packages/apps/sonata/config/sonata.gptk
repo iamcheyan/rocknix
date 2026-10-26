@@ -1,0 +1,13 @@
+up = up
+down = down
+left = left
+right = right
+
+b = enter
+a = esc
+x = space
+y = tab
+back = x
+start = space
+l1 = pageup
+r1 = pagedown

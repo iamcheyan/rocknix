@@ -1,0 +1,18 @@
+#!/bin/sh
+
+source_root=/usr/share/heya/apps
+target_root=/storage/heya/apps
+
+[ -d "${source_root}" ] || exit 0
+
+for manifest in "${source_root}"/*/app.json; do
+  [ -f "${manifest}" ] || continue
+
+  app_dir=${manifest%/app.json}
+  app_id=${app_dir##*/}
+  target="${target_root}/${app_id}/app.json"
+
+  [ -e "${target}" ] && continue
+  mkdir -p "${target_root}/${app_id}"
+  cp "${manifest}" "${target}"
+done

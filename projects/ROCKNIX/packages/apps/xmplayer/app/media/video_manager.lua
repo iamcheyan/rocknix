@@ -3,7 +3,7 @@ local utils = require("utils")
 local video_manager = {}
 local storage_path = utils.get_storage_path()
 video_manager.watched_file = storage_path .. "/watched.cfg"
-video_manager.watch_later_dir = storage_path .. "/config/mpv/watch_later"
+video_manager.watch_later_dir = storage_path .. "/mpv/watch_later"
 video_manager.watched_data = {}
 
 function video_manager.load_watched()

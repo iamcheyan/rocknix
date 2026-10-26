@@ -68,8 +68,21 @@
   # 32-bit legacy emulation support (box86, etc.)
     ENABLE_32BIT="false"
 
+  # Build the H700 Pocket Linux image without the gaming frontend stack.
+    MINI_DISTRO="yes"
+    EMULATION_DEVICE="no"
+    NFS_SUPPORT="no"
+    SAMBA_SERVER="no"
+    SFTP_SERVER="yes"
+    SIMPLE_HTTP_SERVER="no"
+    ZEROTIER_SUPPORT="no"
+    WIREGUARD_SUPPORT="no"
+    MODULES_PKG="no"
+    DEBUG_PACKAGES="no"
+    HTOP_TOOL="no"
+
   # Additional packages to install
-    ADDITIONAL_PACKAGES="handheld-launcher xmplayer adbd"
+    ADDITIONAL_PACKAGES="heya sonata xmplayer"
 
   # Debug tty path
     DEBUG_TTY="/dev/ttyS0"

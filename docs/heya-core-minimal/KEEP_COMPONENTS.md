@@ -10,7 +10,7 @@
 | Kernel + DTB | 系统基础 | 报告 01 |
 | GPU Driver | Wayland/SDL2 需要 | H700 平台 |
 | DRM/KMS | SDL2 直连显示 | 报告 01 |
-| Wayland | 未来 heya 的 compositor | 报告 09 |
+| Wayland | heya 的 compositor | 报告 09 |
 | Sway | Wayland compositor | 报告 09 |
 | SDL2 | heya 的 UI 库 | heya `go.mod` |
 | SDL2_ttf | heya 的字体渲染 | heya `go.mod` |
@@ -20,8 +20,9 @@
 | Wi-Fi | 网络 | 报告 09 |
 | SSH | 远程管理 | 报告 09 |
 | systemd | 系统初始化 | 报告 01 |
-| RetroArch | 保留的唯一模拟器前端 | 报告 04 |
 | heya | 新启动器 | 本项目 |
+| Sonata + mpv | 音乐应用和播放 | 本项目 |
+| foot + rocknix-hotkey | Sonata 的终端 UI 和手柄输入 | 本项目 |
 
 ## 可保留（按需）
 
@@ -41,7 +42,7 @@
 | 组件 | 理由 |
 |---|---|
 | EmulationStation | 被 heya 取代 |
-| 所有独立模拟器 | 仅保留 RetroArch |
+| RetroArch、libretro 核心和独立模拟器 | H700 迷你镜像面向 heya + Sonata，不包含游戏运行时 |
 | Scraper / 成就 | 游戏元数据系统 |
 | 主题引擎 | ES 专属 |
 | 游戏集合 | ES 专属 |

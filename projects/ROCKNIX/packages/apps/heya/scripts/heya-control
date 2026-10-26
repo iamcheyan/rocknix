@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+. /etc/profile.d/001-functions
+
+control=${1:-}
+value=${2:-}
+case "$control" in
+  volume|brightness)
+    [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 0 && value <= 100 )) || exit 2
+    if [ "$control" = volume ]; then volume "$value"; else brightness set "$value"; fi
+    ;;
+  wifi|bluetooth)
+    case "$value" in on) action=enable; enabled=1 ;; off) action=disable; enabled=0 ;; *) exit 2 ;; esac
+    if [ "$control" = wifi ]; then
+      if [ "$value" = on ]; then wifictl enable; nmcli radio wifi on; else nmcli radio wifi off; wifictl disable; fi
+      set_setting wifi.enabled "$enabled"
+    else
+      rocknix-bluetooth "$action"
+    fi
+    ;;
+  *) echo "Usage: heya-control {volume|brightness|wifi|bluetooth} VALUE" >&2; exit 2 ;;
+esac

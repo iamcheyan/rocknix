@@ -1,6 +1,6 @@
 # 08 · 最小化报告
 
-> 基线：`next` @ `742bd52562`。目标：把 ROCKNIX 从游戏发行版重构为 Pocket Linux Runtime。
+> 基线：`next` @ `742bd52562`。首个目标：H700 Pocket Linux 镜像。当前改动裁剪 H700 镜像，不影响其它设备。
 
 ## 1. 当前系统结构图
 
@@ -13,17 +13,12 @@ flowchart TB
     SD["systemd"] --> A["rocknix-autostart"] --> UI["\$UI_SERVICE"]
   end
   subgraph DISPLAY["显示层"]
-    SWAY["sway.service"] --> ES["essway.service"] --> SH["start_es.sh"]
+    SWAY["sway.service"] --> HEYA["heya.service"]
   end
   subgraph FRONT["前端"]
-    SH --> E["emulationstation"] --> H["handheld-launcher"]
-  end
-  subgraph EMU["模拟器"]
-    RA["RetroArch"] --> CORES["125 libretro 核心"]
-    IND["17 独立模拟器"]
+    HEYA --> SONATA["Sonata（heya 应用）"]
   end
   BOOT --> BASE --> DISPLAY --> FRONT
-  FRONT --> EMU
 ```
 
 ## 2. 建议保留组件
@@ -33,32 +28,25 @@ flowchart TB
 | U-Boot | 唯一启动入口 |
 | Kernel + DTB | 系统基础 |
 | GPU Driver + DRM/KMS | 显示 |
-| Wayland + Sway | 未来 compositor |
+| Wayland + Sway | heya 的 compositor |
 | SDL2 + SDL2_ttf | heya UI 库 |
 | ALSA + PipeWire | 音频 |
 | BlueZ | 蓝牙 |
 | Wi-Fi (NetworkManager/iwd) | 网络 |
 | SSH (openssh) | 远程管理 |
 | systemd | 系统初始化 |
-| RetroArch | 唯一模拟器前端 |
 | heya | 新启动器 |
+| Sonata + mpv | 音乐库与播放 |
 
 ## 3. 建议删除组件
 
 | 组件 | 分类 |
 |---|---|
-| EmulationStation | A 类必删 |
-| essway.service | A 类必删 |
-| start_es.sh | A 类必删 |
-| handheld-launcher | A 类必删 |
-| es_systems.cfg | A 类必删 |
-| es_features.cfg | A 类必删 |
-| es_input.cfg | A 类必删 |
-| 主题引擎 | A 类必删 |
-| Scraper / 成就 | A 类必删 |
-| 游戏集合 | A 类必删 |
-| PPSSPP / DuckStation / melonDS / MAME / Flycast / RPCS3 | B 类可删 |
-| 非基础 libretro 核心 | B 类可删 |
+| EmulationStation 与相关服务/配置 | H700 镜像不安装 |
+| handheld-launcher | H700 镜像不安装 |
+| ES 主题、scraper、成就和游戏集合 | H700 镜像不安装 |
+| RetroArch、libretro 核心、独立模拟器 | H700 迷你镜像不打包 |
+| ES 专属 scraper、成就和主题 | H700 迷你镜像不打包 |
 | sway-touch / touchkeyboard | C 类风险未知 |
 | video.service / headphones.service | C 类风险未知 |
 | fancontrol.service | C 类风险未知 |
@@ -67,8 +55,8 @@ flowchart TB
 
 | 风险 | 等级 | 缓解 |
 |---|---|---|
-| 删除 ES 后启动链断裂 | 高 | 新建 heya.service，修改 H700 quirk |
-| RetroArch 核心依赖 | 中 | 保留基础核心，按需安装 |
+| 前端切换后启动链断裂 | 高 | H700 UI_SERVICE 启动 sway + heya |
+| Sonata 首次启动没有应用条目 | 中 | autostart 将包内默认 manifest 复制到 `/storage/heya/apps` |
 | 触摸/键盘输入 | 中 | 保留 sway-touch 或改用 heya 输入 |
 | 电源/散热 | 低 | 保留 powerstate / fancontrol |
 | 用户数据丢失 | 低 | `/storage` 不变，ES 配置可忽略 |
@@ -76,25 +64,18 @@ flowchart TB
 
 ## 5. 迁移步骤
 
-1. 创建 `heya-core-minimal` 分支（已完成）
-2. 输出 8 份分析文档（已完成）
-3. 修改 H700 quirk `090-ui_service`
-4. 新建 `heya.service`
-5. 从 `ADDITIONAL_PACKAGES` 移除游戏包
-6. 修改 `virtual/emulators` 元包
-7. 删除 ES 包目录
-8. `make H700` 构建验证
-9. 实机启动验证
+1. 创建 `heya-core-minimal` 分支并完成架构审计（已完成）
+2. H700 包集合禁用游戏镜像、ES、旧 handheld-launcher 和可选服务（已实现）
+3. 将 H700 UI_SERVICE 切换为 Sway + heya，并加入 Sonata 应用（已实现）
+4. `make H700` 构建与设备启动验证（待执行）
 
 ## 6. 预计收益
 
 | 项 | 估算 |
 |---|---|
-| 镜像体积 | 减少 30–50% |
-| 编译时间 | 减少 40–60% |
-| 内存占用 | 减少 50–100 MB |
-| 启动时间 | 基本不变 |
-| 维护复杂度 | 大幅降低 |
+| 镜像体积、构建时间 | 待完整构建后测量 |
+| 内存占用、启动时间 | 待设备测量 |
+| 维护复杂度 | 由 H700 与其它设备共享少量包集合判断 |
 
 ## 7. 未验证项
 
@@ -102,4 +83,5 @@ flowchart TB
 - `[待验证]` `setsettings.sh` 的逐项 feature→RetroArch 选项映射
 - `[待验证]` H700 默认启用的 systemd 服务全集
 - `[待验证]` 完整构建耗时与各包体积
-- `[待验证]` 实机启动后 heya.service 是否正常
+- `[待验证]` H700 镜像能否完整构建
+- `[待验证]` 实机启动后 heya.service、Sonata 和 mpv 是否正常

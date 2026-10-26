@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+player=$1
+shift
+mapper_pid=
+player_pid=
+cleanup() {
+  if [ -n "$mapper_pid" ]; then
+    kill "$mapper_pid" 2>/dev/null || true
+    wait "$mapper_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+trap '[ -z "$player_pid" ] || kill "$player_pid" 2>/dev/null; exit 143' HUP INT TERM
+
+"$player" "$@" &
+player_pid=$!
+if [ "${XMPLAYER_SIMULATOR:-0}" != 1 ] && command -v gptokeyb >/dev/null 2>&1; then
+  case ${player##*/} in
+    mpv) mapping=xmplayer ;;
+    ffplay) mapping=ffplay ;;
+    *) echo "XMPlayer: unsupported player $player" >&2; exit 1 ;;
+  esac
+  gptokeyb "${player##*/}" -c "${XMPLAYER_APP_DIR:-/usr/share/xmplayer}/config/$mapping.gptk" &
+  mapper_pid=$!
+fi
+status=0
+wait "$player_pid" || status=$?
+exit "$status"

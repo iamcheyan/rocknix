@@ -1,0 +1,13 @@
+#!/bin/sh
+
+mkdir -p /storage/music /storage/heya/data/sonata
+/usr/bin/gptokeyb foot -c /usr/config/sonata/sonata.gptk &
+keymapper_pid=$!
+
+cleanup() {
+  kill "${keymapper_pid}" 2>/dev/null || true
+  wait "${keymapper_pid}" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
+
+/usr/bin/foot --fullscreen /usr/bin/sonata "$@"

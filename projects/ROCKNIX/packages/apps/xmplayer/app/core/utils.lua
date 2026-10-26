@@ -544,8 +544,8 @@ end
 
 function utils.get_storage_path()
     local home = os.getenv("HOME") or "/storage"
-    local cfg_dir = home .. "/.config/xmplayer"
-    os.execute("mkdir -p \"" .. cfg_dir .. "/thumbnails\" 2>/dev/null")
+    local cfg_dir = os.getenv("XMPLAYER_DATA_DIR") or home .. "/.config/xmplayer"
+    os.execute("mkdir -p " .. require("runtime").quote(cfg_dir .. "/thumbnails"))
     return cfg_dir
 end
 

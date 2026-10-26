@@ -3,7 +3,7 @@
 PKG_NAME="system-utils"
 PKG_VERSION=""
 PKG_LICENSE="mix"
-PKG_DEPENDS_TARGET="toolchain sleep"
+PKG_DEPENDS_TARGET="toolchain sleep evtest"
 PKG_SITE=""
 PKG_URL=""
 PKG_LONGDESC="Hardware button support scripts."

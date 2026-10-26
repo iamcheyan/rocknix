@@ -1,0 +1,25 @@
+{
+  "manifestVersion": 1,
+  "id": "sonata",
+  "name": "Sonata",
+  "description": "Local music library and playback controller",
+  "version": "0.1.0",
+  "license": "MIT",
+  "entrypoint": "/usr/bin/sonata-launch",
+  "args": [
+    "--music",
+    "/storage/music",
+    "--data-dir",
+    "/storage/heya/data/sonata"
+  ],
+  "workingDirectory": "/storage",
+  "icon": "nf-md-music",
+  "category": "media",
+  "permissions": [
+    "audio",
+    "storage"
+  ],
+  "features": [
+    "resume-support"
+  ]
+}

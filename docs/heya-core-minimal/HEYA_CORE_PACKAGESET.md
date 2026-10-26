@@ -11,23 +11,22 @@
 | 独立模拟器（基础） | 17 |
 | 总包数（估计） | ~200+ |
 
-## 精简后
+## H700 迷你镜像
 
 | 项 | 数量 |
 |---|---|
-| 系统定义 | 0（删除 `es_systems.cfg` 生成） |
-| libretro 核心（保留） | 10–20（按需） |
+| ES 系统定义 | 不打包 |
+| RetroArch / libretro 核心 | 不打包 |
 | 独立模拟器 | 0 |
-| 总包数（估计） | ~80–100 |
+| ES 前端、主题和工具 | 不打包 |
+| 额外播放器 | 仅保留 Sonata 依赖的 mpv |
 
 ## 预计收益
 
 | 项 | 估算 |
 |---|---|
-| 镜像体积 | 减少 30–50%（独立模拟器 + 非基础核心） |
-| 编译时间 | 减少 40–60%（独立模拟器编译耗时远超核心） |
-| 启动时间 | 基本不变（ES 不是启动瓶颈） |
-| 内存占用 | 减少 50–100 MB（ES + 独立模拟器不运行时不占内存） |
+| 镜像体积、构建时间 | 待构建后测量 |
+| 启动时间、内存占用 | 待设备测量 |
 
 ## 目标包列表
 
@@ -47,8 +46,9 @@
 | `BlueZ` | 蓝牙 |
 | `NetworkManager` / `iwd` | Wi-Fi |
 | `openssh` | SSH |
-| `retroarch` | 唯一模拟器前端 |
 | `heya` | 新启动器 |
+| `sonata` + `mpv` | 音乐库和播放 |
+| `foot` + `rocknix-hotkey` | Sonata 的终端 UI 和掌机按键输入 |
 
 ### 可选保留
 
@@ -69,28 +69,23 @@
 | `emulationstation` | 被 heya 取代 |
 | `essway` | 被 heya.service 取代 |
 | `handheld-launcher` | 被 heya 取代 |
-| `ppsspp` | 由 RetroArch 核心替代 |
-| `duckstation` | 由 RetroArch 核心替代 |
-| `melonDS` | 由 RetroArch 核心替代 |
-| `mame` | 由 RetroArch 核心替代 |
-| `flycast` | 由 RetroArch 核心替代 |
-| `rpcs3` | 完全移除 |
-| 其它独立模拟器 | 由 RetroArch 核心替代 |
-| 非基础 libretro 核心 | 按需安装 |
+| EmulationStation、主题和 ES 工具 | H700 镜像不再依赖 |
+| RetroArch、libretro 核心、独立模拟器 | H700 镜像不再依赖 |
+| handheld-launcher、adbd | 不纳入迷你镜像；XMPlayer 保留为 heya 应用 |
+| NFS、Samba 服务、简单 HTTP、VPN、模块包、调试包 | H700 迷你镜像关闭 |
 
 ## 修改路径
 
-1. `distributions/ROCKNIX/config/options.conf`：从 `ADDITIONAL_PACKAGES` 中移除游戏相关包
-2. `projects/ROCKNIX/packages/virtual/emulators/package.mk`：只保留 `retroarch`
-3. `projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service`：`UI_SERVICE` 改为 `sway.service heya.service`
-4. `projects/ROCKNIX/packages/ui/emulationstation/`：整个目录删除
-5. `projects/ROCKNIX/packages/ui/emulationstation/system.d/essway.service`：删除
-6. `projects/ROCKNIX/packages/ui/emulationstation/sources/start_es.sh`：删除
-7. `projects/ROCKNIX/packages/apps/heya/`：新增 heya 包
+1. `projects/ROCKNIX/devices/H700/options`：启用迷你镜像并选择 heya、sonata
+2. `projects/ROCKNIX/packages/virtual/image/package.mk`：只为迷你镜像裁减可选包组
+3. `projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service`：启动 Sway + heya
+4. `projects/ROCKNIX/packages/apps/heya/`、`sonata/`：添加应用构建包和 Sonata manifest
 
 ## 验证
 
-- `make H700` 构建成功
-- 镜像中不包含 `emulationstation`、`essway`、独立模拟器
+- `make H700` 构建成功（待执行）
+- 镜像中不包含 `emulationstation`、`essway`、模拟器包（待镜像检查）
 - `systemctl status heya.service` 为 active
-- 不出现 `essway.service` 或 `emulationstation` 进程
+- Heya 首次启动后能发现 Sonata，Sonata 能连接 mpv（待实机验证）
+
+SSH/SFTP 保留，供真机调试及传输媒体。默认应用为 XMPlayer 与 Sonata。

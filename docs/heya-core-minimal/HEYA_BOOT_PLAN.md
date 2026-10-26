@@ -1,6 +1,6 @@
-# 07 · Heya 启动入口规划
+# 07 · Heya 与 Sonata 启动集成
 
-> 目标：不实现 UI，只规划结构。
+> H700 方案：heya 是系统前端，Sonata 作为普通 heya 媒体应用出现。
 
 ## 设计
 
@@ -24,22 +24,30 @@ heya.service
 
 ```ini
 [Unit]
-Description=Heya Pocket OS Launcher
+Description=heya launcher shell
 Requires=sway.service
 After=sway.service
+Conflicts=essway.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/heya
+Environment=HOME=/storage
+Environment=XDG_RUNTIME_DIR=/var/run/0-runtime-dir
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=SDL_VIDEODRIVER=wayland
+Environment=SDL_AUDIODRIVER=pulseaudio
+Environment=SDL_GAMECONTROLLERCONFIG_FILE=/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt
+ExecStart=/usr/bin/heya --theme /storage/heya/themes/theme.json --apps /storage/heya/apps
 Restart=always
 RestartSec=2
-Environment=HOME=/storage
+KillMode=process
+TimeoutStopSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=rocknix.target
 ```
 
-来源：`projects/ROCKNIX/packages/ui/emulationstation/system.d/essway.service`（修改）
+来源：`projects/ROCKNIX/packages/apps/heya/integrations/rocknix/heya.service`
 
 ## H700 quirk 修改
 
@@ -57,12 +65,11 @@ UI_SERVICE="sway.service heya.service"
 ```
 projects/ROCKNIX/packages/apps/heya/
 ├── package.mk          # ROCKNIX package recipe
-├── heya.service        # systemd unit
-├── start_es.sh.patch   # 前端切换 patch（可选）
-└── README.md           # 安装与验证说明
+├── integrations/rocknix/heya.service
+└── autostart/050-heya-apps # 首次启动时复制默认应用 manifest
 ```
 
-来源：`~/development/heya/integrations/rocknix/`（已有草案）
+Sonata 由 `projects/ROCKNIX/packages/apps/sonata/` 构建，依赖 mpv、foot 和 `rocknix-hotkey`。foot 为 Sonata 提供终端窗口，gptokeyb 将 H700 手柄按键映射为方向键和 Sonata 操作。包内 manifest 安装到只读 `/usr/share/heya/apps`，autostart 首次启动时复制到可写 `/storage/heya/apps`，不会覆盖用户已有配置。
 
 ## 启动链验证
 
@@ -71,14 +78,13 @@ projects/ROCKNIX/packages/apps/heya/
 systemctl status heya.service
 # 应显示 active (running)
 systemctl is-enabled heya.service
-# 应显示 enabled
+# 允许 disabled：由 H700 quirk 在配置初始化完成后启动，不提前 enable
 pgrep -af heya
-# 应显示 /usr/bin/heya 进程
+# 应显示 heya 进程
 ```
 
 ## 不实现的内容
 
 - 不实现 heya UI（V1 已在 heya 仓库完成）
-- 不实现游戏启动（RetroArch 作为独立 Application 由用户启动）
+- 不包含模拟器或 ROM 扫描
 - 不实现主题系统（heya 有自己的 JSON 主题）
-- 不实现 ROM 扫描（heya 不碰 ROM）

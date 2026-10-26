@@ -72,7 +72,7 @@ _write_brightness() {
   local raw_value="${1}"
   local percentage="${2}"
 
-  echo "${raw_value}" > "${CURRENT_DEV_PATH}"
+  echo "${raw_value}" > "${CURRENT_DEV_PATH}" || return 1
   set_setting "${CURRENT_SETTING_KEY}" "${percentage}"
 }
 
@@ -96,7 +96,7 @@ stepUp() {
     raw_value="${CURRENT_MAX}"
   fi
 
-  _write_brightness "${raw_value}" "${next_percent}"
+  _write_brightness "${raw_value}" "${next_percent}" || return 1
   getBrightnessValue
 }
 
@@ -113,7 +113,7 @@ stepDown() {
   local raw_value
   raw_value="$(_compute_raw "${next_percent}" "${CURRENT_MAX}")"
 
-  _write_brightness "${raw_value}" "${next_percent}"
+  _write_brightness "${raw_value}" "${next_percent}" || return 1
   getBrightnessValue
 }
 
@@ -149,9 +149,9 @@ _apply_all() {
     _resolve_config "${screen_num}" || continue
 
     case "$action" in
-      up)   stepUp ;;
-      down) stepDown ;;
-      set)  setBrightnessValue "$value" ;;
+      up)   stepUp || return 1 ;;
+      down) stepDown || return 1 ;;
+      set)  setBrightnessValue "$value" || return 1 ;;
     esac
   done
 }
@@ -191,10 +191,10 @@ case "${ACTION}" in
     fi
 
     if [ "${screen_num_val}" = "all" ]; then
-      _apply_all "set" "${percentage_val}"
+      _apply_all "set" "${percentage_val}" || exit 1
     else
       if ! _resolve_config "${screen_num_val}"; then exit 1; fi
-      setBrightnessValue "${percentage_val}"
+      setBrightnessValue "${percentage_val}" || exit 1
     fi
     getBrightnessValue
     ;;

@@ -39,5 +39,5 @@ then
   VOLUME=50
 fi
 
-pactl -- set-sink-volume @DEFAULT_SINK@ ${VOLUME}%
+pactl -- set-sink-volume @DEFAULT_SINK@ ${VOLUME}% || exit $?
 set_setting "audio.volume" ${VOLUME}

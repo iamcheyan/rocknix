@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "id": "xmplayer",
+  "name": "XMPlayer",
+  "description": "XMB media suite",
+  "entrypoint": "/usr/bin/xmplayer",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-music",
+  "category": "media",
+  "permissions": ["audio", "storage"]
+}

@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+export HOME=/storage
+export XMPLAYER_APP_DIR=/usr/share/xmplayer
+export XMPLAYER_DATA_DIR=/storage/.config/xmplayer
+export XMPLAYER_PLAYBACK=/usr/bin/xmplayer-playback
+export XMPLAYER_MUSIC_DIR=/storage/music
+export XMPLAYER_PHOTO_DIR=/storage/pictures
+export XMPLAYER_VIDEO_DIR=/storage/videos
+export CFW_NAME=ROCKNIX
+export LD_LIBRARY_PATH="$XMPLAYER_APP_DIR/libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$XMPLAYER_APP_DIR/bin:$PATH"
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt}"
+if [ "${1:-}" = --check ]; then
+  status=0
+  for binary in love mpv; do
+    "$binary" --version >/dev/null || status=1
+  done
+  for binary in ffmpeg ffplay; do
+    "$binary" -version >/dev/null || status=1
+  done
+  command -v gptokeyb >/dev/null || status=1
+  [ -r "$SDL_GAMECONTROLLERCONFIG_FILE" ] || status=1
+  if [ "$status" = 0 ]; then echo "XMPlayer runtime dependencies available"; fi
+  exit "$status"
+fi
+mkdir -p "$XMPLAYER_DATA_DIR/thumbnails" "$XMPLAYER_DATA_DIR/mpv/watch_later" \
+  "$XMPLAYER_MUSIC_DIR" "$XMPLAYER_PHOTO_DIR" "$XMPLAYER_VIDEO_DIR"
+cd "$XMPLAYER_APP_DIR"
+exec "$XMPLAYER_APP_DIR/bin/love" "$XMPLAYER_APP_DIR" "$@"

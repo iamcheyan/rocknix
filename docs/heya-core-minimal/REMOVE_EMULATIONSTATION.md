@@ -1,6 +1,7 @@
-# 04 · EmulationStation 剥离
+# 04 · H700 镜像禁用 EmulationStation
 
 > 基线：`next` @ `742bd52562`。
+> H700 迷你镜像不安装 EmulationStation；共享源码保留给其它设备。
 
 ## 依赖关系
 
@@ -31,30 +32,38 @@ rocknix.target
 
 | 影响 | 处理 |
 |---|---|
-| `essway.service` 消失 | 新建 `heya.service` 替代 |
-| `start_es.sh` 消失 | 整个文件删除；heya 直接由 systemd 拉起 |
-| `es_systems.cfg` 不再生成 | 构建步骤中删除 `mk_es_systems` 调用 |
-| `es_features.cfg` 不再需要 | 构建步骤中删除该文件的安装 |
-| `es_input.cfg` 不再需要 | 构建步骤中删除该文件的安装 |
+| `essway.service` 不进入 H700 镜像 | H700 `UI_SERVICE` 改为启动 `heya.service` |
+| `start_es.sh` 不进入 H700 镜像 | 保留共享源码，不构建 EmulationStation 包 |
+| `es_systems.cfg` 不生成 | EmulationStation 与模拟器元包均不进入镜像 |
+| `es_features.cfg`、`es_input.cfg` 不安装 | 它们由 EmulationStation 包提供 |
 | 主题目录 | 用户数据 `/storage/.config/emulationstation/themes/` 可保留但不使用 |
-| `handheld-launcher` | 被 heya 取代；`start_es.sh` 中的分支删除 |
+| `handheld-launcher` | 不进入 H700 迷你镜像 |
 
 ## 替代方案
 
 ```ini
 [Unit]
-Description=Heya Pocket OS Launcher
+Description=heya launcher shell
 Requires=sway.service
 After=sway.service
+Conflicts=essway.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/heya
+Environment=HOME=/storage
+Environment=XDG_RUNTIME_DIR=/var/run/0-runtime-dir
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=SDL_VIDEODRIVER=wayland
+Environment=SDL_AUDIODRIVER=pulseaudio
+EnvironmentFile=/etc/profile
+ExecStart=/usr/bin/heya --theme /storage/heya/themes/theme.json --apps /storage/heya/apps
 Restart=always
 RestartSec=2
+KillMode=process
+TimeoutStopSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=rocknix.target
 ```
 
 H700 quirk 修改：

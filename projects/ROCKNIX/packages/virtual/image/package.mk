@@ -16,7 +16,6 @@ PKG_DEPENDS_TARGET="toolchain squashfs-tools:host dosfstools:host fakeroot:host 
                     gzip six xmlstarlet pyudev dialog network mako-osd rocknix"
 
 PKG_UI="emulationstation es-themes textviewer lowerdeck"
-
 PKG_UI_TOOLS="fbgrab grim"
 
 PKG_GRAPHICS="imagemagick"
@@ -32,6 +31,17 @@ PKG_SYNC="synctools"
 PKG_TOOLS="patchelf i2c-tools evtest"
 
 PKG_DEBUG="debug"
+
+if [ "${MINI_DISTRO}" = "yes" ]; then
+  PKG_UI=""
+  PKG_UI_TOOLS=""
+  PKG_GRAPHICS=""
+  PKG_MULTIMEDIA="mpv"
+  PKG_SOUND=""
+  PKG_SYNC=""
+  PKG_TOOLS=""
+  PKG_FONTS="corefonts noto-sans-cjk"
+fi
 
 if [ "${BASE_ONLY}" = "true" ]
 then
@@ -106,8 +116,10 @@ fi
 [ "${BATTERYPLUS_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" batteryplus"
 
 # Entware support
-mkdir -p ${INSTALL}
-ln -sf /storage/.opt ${INSTALL}/opt
-PKG_DEPENDS_TARGET+=" entware"
+if [ "${MINI_DISTRO}" != "yes" ]; then
+  mkdir -p ${INSTALL}
+  ln -sf /storage/.opt ${INSTALL}/opt
+  PKG_DEPENDS_TARGET+=" entware"
+fi
 
 true

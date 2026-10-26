@@ -25,13 +25,10 @@ require("love.timer")
 require("love.thread")
 
 -- Resolve ffmpeg binary path
-local ffmpeg_bin = "ffmpeg"
-if not isWindows then
-    local source_path = love.filesystem.getSource()
-    ffmpeg_bin = '"' .. source_path .. '/bin/ffmpeg"'
-    -- Ensure the binary is executable
-    os.execute("chmod +x " .. ffmpeg_bin .. " 2>/dev/null")
-end
+require("love.filesystem")
+local source_path = love.filesystem.getSource()
+package.path = source_path .. "/core/?.lua;" .. package.path
+local ffmpeg_bin = require("runtime").command("ffmpeg")
 
 -- Detect chip/chiptune format to decide synthesis options.
 -- We use the targetSampleRate passed from the main thread; for chip formats it is 22050Hz.
@@ -62,7 +59,7 @@ local audioFilterOpt = '-af "asetnsamples=n=1024" '
 
 -- Probe track duration in worker thread asynchronously to avoid freezing main thread
 if mediaPath then
-    local durationCmd = string.format('%s -i "%s" 2>&1', ffmpeg_bin, mediaPath)
+    local durationCmd = string.format('%s -i %s 2>&1', ffmpeg_bin, require("runtime").quote(mediaPath))
     local durPipe = io.popen(durationCmd, "r")
     if durPipe then
         local output = durPipe:read("*a")
@@ -79,11 +76,11 @@ end
 
 -- FFmpeg command: decode to 16-bit PCM at targetSampleRate, stereo, no video.
 local ffmpegCmd = string.format(
-    '%s -nostdin -v error %s%s-i "%s" -vn %s-f s16le -acodec pcm_s16le -ar %d -ac 2 - 2>%s',
+    '%s -nostdin -v error %s%s-i %s -vn %s-f s16le -acodec pcm_s16le -ar %d -ac 2 - 2>%s',
     ffmpeg_bin,
     seekOpt,
     libgmeInputOpt,
-    mediaPath,
+    require("runtime").quote(mediaPath),
     audioFilterOpt,
     targetSampleRate,
     devNull

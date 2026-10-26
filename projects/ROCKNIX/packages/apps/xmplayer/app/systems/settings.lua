@@ -147,21 +147,21 @@ settings.options = {
         name = "Photo Directory",
         type = "path",
         group = "media_dirs",
-        value = ""
+        value = os.getenv("XMPLAYER_PHOTO_DIR") or ""
     },
     {
         id = "music_dir",
         name = "Music Directory",
         type = "path",
         group = "media_dirs",
-        value = ""
+        value = os.getenv("XMPLAYER_MUSIC_DIR") or ""
     },
     {
         id = "video_dir",
         name = "Video Directory",
         type = "path",
         group = "media_dirs",
-        value = ""
+        value = os.getenv("XMPLAYER_VIDEO_DIR") or ""
     },
     {
         id = "reindex_media",
