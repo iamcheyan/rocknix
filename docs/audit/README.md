@@ -24,8 +24,8 @@
 | [02-filesystem-layout.md](02-filesystem-layout.md) | 分区、挂载点、只读/可写、用户数据与 OTA 关系 | 已完成 |
 | [03-build-system.md](03-build-system.md) | 构建系统、包定义、rootfs 与镜像生成 | 已完成 |
 | [04-emulationstation.md](04-emulationstation.md) | EmulationStation 的职责边界 | 已完成 |
-| [05-game-launch.md](05-game-launch.md) | 选中游戏后 ES → runemu.sh → RetroArch/独立模拟器 | 待写 |
-| [06-input.md](06-input.md) | 按键从内核到应用的路径 | 待写 |
+| [05-game-launch.md](05-game-launch.md) | 选中游戏后 ES → runemu.sh → RetroArch/独立模拟器 | 已完成 |
+| [06-input.md](06-input.md) | 按键从内核到应用的路径 | 已完成 |
 | [07-themes.md](07-themes.md) | 主题格式、资源、布局能力 | 待写 |
 | [08-app-extension.md](08-app-extension.md) | PortMaster、脚本、原生程序如何接入 | 待写 |
 | [09-services.md](09-services.md) | 关键 systemd 服务与可裁剪性 | 待写 |
