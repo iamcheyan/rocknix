@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 PKG_NAME="sonata"
-PKG_VERSION="87d6f2f28f5d5f2e8371455402c383d75b5d6ebf"
-PKG_SHA256="8d8130297b18b692eeb4fc5cec5e91754400badf1653e27951b84d663357090a"
+PKG_VERSION="87d6f2f88ff7fd8018f616a12d7c1e86779fae30"
+PKG_SHA256="a3d6477d46ceaa6cdb2b051fec2b9b56d3ffc8ca9a589d474971bfab71e440fa"
 PKG_ARCH="aarch64"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/iamcheyan/sonata"

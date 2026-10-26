@@ -1,6 +1,6 @@
 # H700 mini：HX90 编译与上机检查
 
-本分支将 H700 前端改为 heya，默认应用为 XMPlayer 和 Sonata（Sonata `87d6f2f28f5d5f2e8371455402c383d75b5d6ebf`）。heya 的源码由
+本分支将 H700 前端改为 heya，默认应用为 XMPlayer 和 Sonata（Sonata `87d6f2f88ff7fd8018f616a12d7c1e86779fae30`）。heya 的源码由
 `projects/ROCKNIX/packages/apps/heya/package.mk` 中的 commit 和 SHA256 锁定；
 HX90 不会读取 NAS 上另一个工作目录里的未提交代码。
 当前 heya 源码版本：`0aaaf541905b5d1e6d322beff1544d6560b2e9da`。
