@@ -82,7 +82,7 @@ flowchart TD
 | 服务 | 作用 | 证据 |
 |---|---|---|
 | `powerstate.service` | 根据 AC/电池切换性能策略 | `.../sysutils/powerstate/system.d/powerstate.service` |
-| `batteryplus.service` | 基于电压的电量估算（H700 `BATTERYPLUS_SUPPORT=yes`） | `.../system-utils/system.d/batteryplus.service`、`H700/options:41` |
+| `batteryplus.service` | 基于电压的电量估算（H700 `BATTERYPLUS_SUPPORT=yes`） | `.../system-utils/system.d/batteryplus.service`、`H700/options:49` |
 | `batteryledstatus.service` | 电池 LED | `.../system-utils/system.d/batteryledstatus.service` |
 | `led-poweroff.service` | 关机 LED 状态 | `.../rocknix/system.d/led-poweroff.service` |
 | `fancontrol.service` | 风扇曲线 | `.../system-utils/system.d/fancontrol.service` |
@@ -98,7 +98,7 @@ flowchart TD
 | `avahi-daemon` | mDNS（`.local` 发现） | `distributions/ROCKNIX/options:75` |
 | `sshd.service` | SSH 远程登录 | `packages/network/openssh/system.d/sshd.service` |
 | `tailscale` | 组网（包，非默认服务） | `virtual/network/package.mk:10` |
-| `pipewire` / `wireplumber` | 音频服务（`PIPEWIRE_SUPPORT=yes`） | `distributions/ROCKNIX/options:40`、`enable_service` 列表 |
+| `pipewire` / `wireplumber` | 音频服务（`PIPEWIRE_SUPPORT=yes`） | `distributions/ROCKNIX/options:41`、`enable_service` 列表 |
 | `pulseaudio` | 备选音频（Weston/旧路径） | `packages/audio/pulseaudio/system.d/pulseaudio.service` |
 
 ### 2.6 存储、性能与维护
@@ -132,7 +132,7 @@ flowchart TD
 | 组件 | 可替代为 | 依据 |
 |---|---|---|
 | EmulationStation | 任意实现 `es_systems` + `runemu.sh` 契约的前端 | 04 文档 |
-| Sway | Weston（仓库已有 `emustation.service` + weston 路径） | `H700/options:47`、`emustation.service` |
+| Sway | Weston（仓库已有 `emustation.service` + weston 路径） | `H700/options:55`、`emustation.service` |
 | NetworkManager | connman（仓库保留 connman 单元） | `packages/network/connman/system.d/` |
 | pipewire | pulseaudio | 两套单元都在仓库 |
 | `input_sense` | 自写 evdev 守护进程 | 其行为是读 evdev + 执行动作 |

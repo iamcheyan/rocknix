@@ -33,7 +33,7 @@ flowchart TD
 
 | 项 | 事实 | 证据 |
 |---|---|---|
-| Bootloader 类型 | U-Boot（mainline sunxi） | `projects/ROCKNIX/devices/H700/options:33` `BOOTLOADER="u-boot"` |
+| Bootloader 类型 | U-Boot（mainline sunxi） | `projects/ROCKNIX/devices/H700/options:34` `BOOTLOADER="u-boot"` |
 | 固件组成 | U-Boot + ARM Trusted Firmware（bl31） | 同上 `UBOOT_FIRMWARE+=" atf"`、`ATF_PLATFORM="sun50i_h616"` |
 | 写入位置 | 磁盘偏移 8 KiB（`seek=8`，1K 块） | `projects/Allwinner/bootloader/mkimage:6-7`；`projects/ROCKNIX/devices/H700/bootloader/update.sh:44-45` |
 | DDR 变体 | DDR3 / DDR4 两份 U-Boot，按 `vdd-dram` 电压选择 | `projects/ROCKNIX/devices/H700/bootloader/update.sh:34-52` |
@@ -47,10 +47,10 @@ flowchart TD
 
 | 项 | 事实 | 证据 |
 |---|---|---|
-| 内核镜像名 | `KERNEL`（`KERNEL_TARGET="Image"`） | `projects/ROCKNIX/devices/H700/options:27`；`scripts/mkimage:234` |
+| 内核镜像名 | `KERNEL`（`KERNEL_TARGET="Image"`） | `projects/ROCKNIX/devices/H700/options:25`；`scripts/mkimage:234` |
 | 设备树 | `/flash/dtb.img` + `/flash/device_trees/*.dtb` + `overlays/` | `projects/ROCKNIX/devices/H700/bootloader/update.sh:24-32` |
 | cmdline 关键参数 | `boot=LABEL=<BOOTLABEL> disk=LABEL=<DISKLABEL>` | `scripts/mkimage:153`（syslinux 分支）；Allwinner 由 U-Boot 传入同类参数 |
-| 调试参数 | `quiet console=ttyS0,115200 console=tty0 systemd.debug_shell=ttyS0` | `projects/ROCKNIX/devices/H700/options:30` |
+| 调试参数 | `quiet console=ttyS0,115200 console=tty0 systemd.debug_shell=ttyS0` | `projects/ROCKNIX/devices/H700/options:31` |
 | 内核补丁 | H700 设备树、显示、电源、手柄等大量补丁 | `projects/ROCKNIX/devices/H700/patches/linux/` |
 
 `[事实]` 内核模块与固件不是直接铺在 rootfs，而是通过 `kernel-overlays` 机制：`/usr/lib/modules` 与 `/usr/lib/firmware` 都是指向 `/run/kernel-overlays/...` 的软链（`scripts/image:220-223`）。

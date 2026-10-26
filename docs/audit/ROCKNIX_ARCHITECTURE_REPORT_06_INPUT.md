@@ -85,7 +85,7 @@ flowchart TD
 
 ## 5. libinput / Wayland 的位置
 
-`[事实]` H700 的 `WINDOWMANAGER="swaywm-env"`（`projects/ROCKNIX/devices/H700/options:47`），Sway 通过 `seatd` + libinput 管理**指针/触摸**输入（`packages/wayland/lib/seatd/system.d/seatd.service`）。
+`[事实]` H700 的 `WINDOWMANAGER="swaywm-env"`（`projects/ROCKNIX/devices/H700/options:55`），Sway 通过 `seatd` + libinput 管理**指针/触摸**输入（`packages/wayland/lib/seatd/system.d/seatd.service`）。
 
 `[推断]` 手柄不经过 libinput：SDL2 与 RetroArch 都直接读 `/dev/input/event*`；libinput 只影响触摸屏、鼠标、触控板。这意味着“手柄按键无反应”应查 evdev/驱动，而不是 libinput 配置。
 

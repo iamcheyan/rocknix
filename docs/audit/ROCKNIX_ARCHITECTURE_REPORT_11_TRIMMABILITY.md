@@ -36,7 +36,7 @@
 | 组件 | 现有实现 | 可替换为 | 契约/证据 |
 |---|---|---|---|
 | 前端 | EmulationStation | 任意实现 `es_systems` + `runemu.sh` 的前端 | 04 · §7、05 · §2 |
-| 合成器 | Sway | Weston（仓库保留 `emustation.service` 路径） | `H700/options:47`、`emustation.service` |
+| 合成器 | Sway | Weston（仓库保留 `emustation.service` 路径） | `H700/options:55`、`emustation.service` |
 | 网络管理 | NetworkManager | connman（仓库保留单元） | `packages/network/connman/system.d/` |
 | 音频 | pipewire | pulseaudio | 09 · §2.5 |
 | 系统按键守护 | `input_sense` | 自写 evdev 守护 | 06 · §4.4 |
