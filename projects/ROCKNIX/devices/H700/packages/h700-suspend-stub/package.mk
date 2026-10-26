@@ -14,12 +14,11 @@ PKG_TOOLCHAIN="manual"
 # The DRAM sources are U-Boot's own, taken from the bootloader package's
 # unpacked tree. Source only: a target dependency here would close the loop
 # u-boot -> atf -> suspend-stub -> u-boot.
-PKG_DEPENDS_UNPACK="u-boot-DDR4 u-boot-DDR3 atf"
-PKG_NEED_UNPACK="$(get_pkg_directory u-boot-DDR4) $(get_pkg_directory u-boot-DDR3) $(get_pkg_directory atf)"
+PKG_DEPENDS_UNPACK="u-boot-DDR4 atf"
+PKG_NEED_UNPACK="$(get_pkg_directory u-boot-DDR4) $(get_pkg_directory atf)"
 
 # One stub per memory type; BL31 picks the match at boot. <bootloader package>:<output>
-PKG_STUB_VARIANTS="u-boot-DDR4:suspend_stub_lpddr4.bin \
-                   u-boot-DDR3:suspend_stub_lpddr3.bin"
+PKG_STUB_VARIANTS="u-boot-DDR4:suspend_stub_lpddr4.bin"
 
 make_target() {
   local variant uboot out dir defconfig key

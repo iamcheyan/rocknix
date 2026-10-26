@@ -40,7 +40,6 @@ make_target() {
   if [ "${DEVICE}" = "H700" ]; then
     STUB_DIR="${SYSROOT_PREFIX}/usr/share/h700-suspend-stub"
     ATF_SUSPEND="SUNXI_SYSTEM_SUSPEND=1 SUNXI_SUSPEND_STUB=${STUB_DIR}/suspend_stub_lpddr4.bin"
-    ATF_SUSPEND+=" SUNXI_SUSPEND_STUB2=${STUB_DIR}/suspend_stub_lpddr3.bin"
   fi
 
   CROSS_COMPILE="${TARGET_KERNEL_PREFIX}" LDFLAGS="" CFLAGS="" make PLAT=${ATF_PLATFORM} ${ATF_SUSPEND} bl31
