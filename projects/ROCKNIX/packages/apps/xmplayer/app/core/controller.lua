@@ -1,7 +1,7 @@
 local controller = {}
 local buttons = {
     dpup = "up", dpdown = "down", dpleft = "left", dpright = "right",
-    b = "return", a = "backspace", x = "x", y = "y",
+    a = "return", b = "backspace", x = "x", y = "y",
     leftshoulder = "pageup", rightshoulder = "pagedown",
     start = "return", back = "tab",
 }

@@ -82,7 +82,7 @@
     HTOP_TOOL="no"
 
   # Additional packages to install
-    ADDITIONAL_PACKAGES="heya sonata xmplayer"
+    ADDITIONAL_PACKAGES="heya sonata xmplayer umtprd adbd"
 
   # Debug tty path
     DEBUG_TTY="/dev/ttyS0"

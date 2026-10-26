@@ -36,3 +36,12 @@
 ## 2. Mandatory LLM Pre-Flight Checklist
 
 Before outputting code or finalizing a PR description, you **MUST** run your output through this self-review checklist for at least **2 iterative passes**.
+
+## 3. HX90 / RG34XX Build and Flash Notes
+
+* `hx90` is the remote build host. Build and flash artifacts are under `~/development/rocknix/target/`.
+* The handheld for this project is an Anbernic RG34XX and its known-good memory variant is DDR4. Prefer the matching `ROCKNIX-H700.*-DDR4.img.gz` artifact. Do not infer the RAM type from a stale card's device-tree overlay alone: an older card showed a DDR3 overlay, while `~/Downloads/ROCKNIX-H700.aarch64-20261001-DDR4.img.gz` records the known DDR4 variant.
+* The RG34XX boot device tree is `sun50i-h700-anbernic-rg34xx.dtb`. In `projects/ROCKNIX/config.xml`, the DDR4 image uses that FDT without the DDR3-only `sun50i-h700-anbernic-rg35xx-2024-ddr3.dtbo` overlay. Keep device-tree selection and RAM/U-Boot variant as separate checks.
+* Before flashing, identify the TF card by `lsblk` (removable flag, capacity, model, and current partitions), ensure it is not mounted, and confirm it is not a host disk. Write the decompressed image to the whole card device (for example `/dev/sdX`, not a partition), wait for `conv=fsync` to finish, then read back and compare the image bytes before ejecting.
+* If the kernel reports `Data phase error` or block I/O errors during a flash, treat the card as unverified even if `dd` copied all bytes into cache. Wait for the write process to exit; then retry with a different reader/USB port or card and require a clean read-back comparison.
+* A device-tree or boot-file override may be required for a particular board revision. Find and verify the exact file from the known-good card/backup or project records before flashing; do not guess or substitute a similarly named overlay. Record the override and its source here once identified.

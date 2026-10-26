@@ -89,6 +89,11 @@ EOF
     sed -i "s#system.loglevel=none#system.loglevel=verbose#g" ${INSTALL}/usr/config/system/configs/system.cfg
   fi
 
+  if [ "${DEVICE}" = "H700" ]
+  then
+    sed -i "s#ssh.enabled=0#ssh.enabled=1#g" ${INSTALL}/usr/config/system/configs/system.cfg
+  fi
+
   ### Disable automount on AMD64
   if [ "${DEVICE}" = "AMD64" ]
   then

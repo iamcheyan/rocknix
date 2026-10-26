@@ -3,11 +3,11 @@ down = down
 left = left
 right = right
 
-b = enter
-a = esc
+a = enter
+b = esc
 x = space
 y = tab
-back = x
+back = tab
 start = space
 l1 = pageup
 r1 = pagedown
