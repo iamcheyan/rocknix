@@ -20,17 +20,19 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [01-boot-chain.md](01-boot-chain.md) | 上电 → Bootloader → Kernel → initramfs → systemd → UI 的完整链路 | 已完成 |
-| [02-filesystem-layout.md](02-filesystem-layout.md) | 分区、挂载点、只读/可写、用户数据与 OTA 关系 | 已完成 |
-| [03-build-system.md](03-build-system.md) | 构建系统、包定义、rootfs 与镜像生成 | 已完成 |
-| [04-emulationstation.md](04-emulationstation.md) | EmulationStation 的职责边界 | 已完成 |
-| [05-game-launch.md](05-game-launch.md) | 选中游戏后 ES → runemu.sh → RetroArch/独立模拟器 | 已完成 |
-| [06-input.md](06-input.md) | 按键从内核到应用的路径 | 已完成 |
-| [07-themes.md](07-themes.md) | 主题格式、资源、布局能力 | 已完成 |
-| [08-app-extension.md](08-app-extension.md) | PortMaster、脚本、原生程序如何接入 | 已完成 |
-| [09-services.md](09-services.md) | 关键 systemd 服务与可裁剪性 | 已完成 |
-| [10-ota.md](10-ota.md) | 更新服务器、包格式、应用与回滚 | 待写 |
-| [11-trimmability.md](11-trimmability.md) | A/B/C 三类组件分类 | 待写 |
+| [ROCKNIX_ARCHITECTURE_REPORT_01_BOOT_CHAIN.md](ROCKNIX_ARCHITECTURE_REPORT_01_BOOT_CHAIN.md) | 上电 → Bootloader → Kernel → initramfs → systemd → UI 的完整链路 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_02_FILESYSTEM_LAYOUT.md](ROCKNIX_ARCHITECTURE_REPORT_02_FILESYSTEM_LAYOUT.md) | 分区、挂载点、只读/可写、用户数据与 OTA 关系 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_03_BUILD_SYSTEM.md](ROCKNIX_ARCHITECTURE_REPORT_03_BUILD_SYSTEM.md) | 构建系统、包定义、rootfs 与镜像生成 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_04_EMULATIONSTATION.md](ROCKNIX_ARCHITECTURE_REPORT_04_EMULATIONSTATION.md) | EmulationStation 的职责边界 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_05_GAME_LAUNCH.md](ROCKNIX_ARCHITECTURE_REPORT_05_GAME_LAUNCH.md) | 选中游戏后 ES → runemu.sh → RetroArch/独立模拟器 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_06_INPUT.md](ROCKNIX_ARCHITECTURE_REPORT_06_INPUT.md) | 按键从内核到应用的路径 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_07_THEMES.md](ROCKNIX_ARCHITECTURE_REPORT_07_THEMES.md) | 主题格式、资源、布局能力 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_08_APP_EXTENSION.md](ROCKNIX_ARCHITECTURE_REPORT_08_APP_EXTENSION.md) | PortMaster、脚本、原生程序如何接入 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_09_SERVICES.md](ROCKNIX_ARCHITECTURE_REPORT_09_SERVICES.md) | 关键 systemd 服务与可裁剪性 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_10_OTA.md](ROCKNIX_ARCHITECTURE_REPORT_10_OTA.md) | 更新服务器、包格式、应用与回滚 | 已完成 |
+| [ROCKNIX_ARCHITECTURE_REPORT_11_TRIMMABILITY.md](ROCKNIX_ARCHITECTURE_REPORT_11_TRIMMABILITY.md) | A/B/C 三类组件分类与最终结论 | 已完成 |
+
+共 11 份文档、11 个 Mermaid 图。
 
 ## 调查方法
 
