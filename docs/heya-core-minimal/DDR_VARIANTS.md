@@ -186,6 +186,12 @@ esac
 
 ## 5. 修复方案
 
+> **已实施**（`heya-core-minimal` 分支）：
+> - `b999540765` build(H700): emit only the DDR4 image — 删除 `config.xml` 的 DDR3 子设备、`h700-suspend-stub` 单变体、`atf` 去掉 `SUNXI_SUSPEND_STUB2`
+> - 后续提交：删除 `projects/ROCKNIX/devices/H700/packages/u-boot-DDR3/` 整个包目录，并把 `bootloader/update.sh` 收敛为"只在 DDR4 硬件（vdd-dram = 1.1 V）上更新 u-boot"，DDR3 机器保持原引导不变
+> - 结果：`SUBDEVICES` 只剩 `DDR4`，一次构建只产出一张镜像
+
+
 ### 方案 A（推荐）：删掉 DDR3 子设备，只保留 DDR4
 
 适用于"只支持 DDR4 机型（RG34XX 等）"的场景，也是我们现在的目标。

@@ -31,21 +31,18 @@ if [ -f "$UPDATE_DTB_SOURCE" ]; then
   cp -f "$UPDATE_DTB_SOURCE" "$BOOT_ROOT/dtb.img"
 fi
 
-# detect DDR3/DDR4
+# This image ships the DDR4 bootloader only. Detect the DRAM type and update
+# u-boot only on DDR4 hardware (1.1 V vdd-dram); on DDR3 hardware leave the
+# existing bootloader untouched rather than writing a mismatched one.
 for r in /sys/class/regulator/regulator.*/; do
   [[ "$(cat "$r/name" 2>/dev/null)" == "vdd-dram" ]] && VDD_REG_PATH=$r
 done
 
 if [ -n "${VDD_REG_PATH:-}" ]; then
   DCDC3_MICROVOLTS=$(cat "$VDD_REG_PATH/microvolts")
-  case "$DCDC3_MICROVOLTS" in
-    1200000)
-      UBOOT_BIN="H700_DDR3_u-boot-sunxi-with-spl.bin"
-      ;;
-    1100000)
-      UBOOT_BIN="H700_DDR4_u-boot-sunxi-with-spl.bin"
-      ;;
-  esac
+  if [ "$DCDC3_MICROVOLTS" = "1100000" ]; then
+    UBOOT_BIN="H700_DDR4_u-boot-sunxi-with-spl.bin"
+  fi
 fi
 
 # update bootloader
