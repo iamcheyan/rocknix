@@ -41,6 +41,17 @@ The launcher already has Wi-Fi enable/scan/connect and IP display; Bluetooth ena
 5. Gate controls by detected H700 capabilities and executable availability. Unsupported controls are omitted or marked unavailable; do not guess commands from another device family.
 6. Keep desktop simulator guards for reboot/poweroff and add simulation-only command handling for the new actions.
 
+## Implementation status
+
+Implemented in this branch:
+
+- New **System Tools & Support** page: ZRAM status via `rocknix-memory-manager --status`, diagnostic file via `rocknix-info`, configuration backup/restore via `backuptool`, audio service restart.
+- Every tool action asks for confirmation before running; restore states that it overwrites configuration and reboots.
+- **Hardware & System Info** replaced with live reads: kernel, architecture, uptime, battery state/level, hostname, CPU temperature, memory, storage. Missing sources show `Unavailable` instead of invented values.
+- Simulator keeps the confirmation flow but only prints the simulated action; no host reboot/poweroff/service changes.
+
+Not yet wired (needs H700 capability checks first): Wi-Fi/BT parity refinements, curated service toggles, ZRAM size/algorithm editing, time zone/language/keyboard layout, cooling profile, scaling/sharpness, update channel.
+
 ## Acceptance checks
 
 - Build the launcher through the H700 package in the current fork; do not validate against the upstream checkout.

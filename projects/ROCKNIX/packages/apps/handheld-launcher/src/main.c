@@ -264,6 +264,9 @@ static bool is_target_device(void) {
     return (access("/etc/rocknix-release", F_OK) == 0 || access("/storage/.config", F_OK) == 0);
 }
 
+#include "system_tools.c"
+
+
 static void do_reboot(void) {
     if (is_target_device()) {
         (void)!system("reboot 2>/dev/null");
@@ -614,8 +617,8 @@ int main(int argc, char* argv[]) {
     const char* main_menu_items[] = {
         "Launch XMPlayer (XMB Media Suite)",
         "System Settings & Control Center",
-        "Terminal / Developer Shell",
-        "Hardware & System Info (RG34XX)",
+        "System Tools & Support",
+        "Hardware & System Info (Live)",
         "Power Management / Reboot"
     };
     int main_menu_count = 5;
@@ -676,10 +679,8 @@ int main(int argc, char* argv[]) {
                     } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
                         if (main_selected_idx == 0) launch_xmplayer(win);
                         else if (main_selected_idx == 1) state = VIEW_CONTROL_CENTER;
-                        else if (main_selected_idx == 2) {
-                            (void)!system("systemctl restart sshd 2>/dev/null || systemctl start sshd 2>/dev/null");
-                        }
-                        else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
+                        else if (main_selected_idx == 2) launcher_open_settings(ren);
+                        else if (main_selected_idx == 3) launcher_open_system_info(ren);
                         else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
                     }
                 } else if (state == VIEW_CONTROL_CENTER) {
@@ -798,10 +799,8 @@ int main(int argc, char* argv[]) {
                     if (btn == BTN_CONFIRM) {
                         if (main_selected_idx == 0) launch_xmplayer(win);
                         else if (main_selected_idx == 1) state = VIEW_CONTROL_CENTER;
-                        else if (main_selected_idx == 2) {
-                            (void)!system("systemctl restart sshd 2>/dev/null || systemctl start sshd 2>/dev/null");
-                        }
-                        else if (main_selected_idx == 3) state = VIEW_SYSTEM_INFO;
+                        else if (main_selected_idx == 2) launcher_open_settings(ren);
+                        else if (main_selected_idx == 3) launcher_open_system_info(ren);
                         else if (main_selected_idx == 4) state = VIEW_POWER_DIALOG;
                     }
                 } else if (state == VIEW_CONTROL_CENTER) {
