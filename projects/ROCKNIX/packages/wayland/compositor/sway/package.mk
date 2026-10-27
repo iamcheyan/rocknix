@@ -66,5 +66,6 @@ post_makeinstall_target() {
 }
 
 post_install() {
+  enable_service sway.service
   enable_service sway-touch.service
 }

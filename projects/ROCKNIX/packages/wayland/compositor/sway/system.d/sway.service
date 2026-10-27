@@ -9,6 +9,7 @@ MemoryLow=96M
 OOMScoreAdjust=-500
 Environment=HOME=/storage
 Environment=XDG_RUNTIME_DIR=/var/run/0-runtime-dir
+Environment=WAYLAND_DISPLAY=wayland-1
 Environment=WLR_BACKENDS=drm,libinput
 EnvironmentFile=-/storage/.config/profile.d/095-sway
 EnvironmentFile=/usr/share/sway/sway-daemon.conf

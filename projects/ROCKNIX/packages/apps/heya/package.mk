@@ -93,3 +93,7 @@ makeinstall_target() {
   install -m 0755 "${PKG_DIR}/autostart/050-heya-apps" \
     "${INSTALL}/usr/lib/autostart/common/050-heya-apps"
 }
+
+post_install() {
+  enable_service heya.service
+}

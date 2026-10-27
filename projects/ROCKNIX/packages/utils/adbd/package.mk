@@ -21,3 +21,7 @@ makeinstall_target() {
   cp -d ${PKG_DIR}/lib/* ${INSTALL}/usr/lib/
   chmod +x ${INSTALL}/usr/sbin/adbd
 }
+
+post_install() {
+  enable_service adbd.service
+}

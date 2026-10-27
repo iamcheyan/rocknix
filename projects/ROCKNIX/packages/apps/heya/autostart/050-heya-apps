@@ -32,4 +32,10 @@ for manifest in "${source_root}"/*/app.json; do
   mkdir -p "${target_root}/${app_id}"
   cp "${manifest}" "${target}"
 done
+
+if [ -f /usr/share/heya/themes/default/theme.json ] && [ ! -f /storage/heya/themes/theme.json ]; then
+  mkdir -p /storage/heya/themes
+  cp /usr/share/heya/themes/default/theme.json /storage/heya/themes/theme.json
+fi
+
 exit 0
