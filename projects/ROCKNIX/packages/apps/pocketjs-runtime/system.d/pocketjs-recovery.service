@@ -10,6 +10,6 @@ StandardInput=tty
 TTYReset=yes
 TTYVHangup=yes
 ExecStartPre=/usr/bin/chvt 7
-ExecStart=/sbin/agetty --noclear tty7 linux
+ExecStart=/usr/sbin/agetty --noclear tty7 linux
 Restart=always
 RestartSec=3

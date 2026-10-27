@@ -29,8 +29,10 @@ fi
 
 if [ "${DISPLAYSERVER}" = "x11" ]; then
   PKG_MESON_OPTS_TARGET+=" -Dx11=enabled"
+  PKG_STAMP+=" x11"
 else
   PKG_MESON_OPTS_TARGET+=" -Dx11=disabled"
+  PKG_STAMP+=" no-x11"
 fi
 
 PKG_MESON_OPTS_TARGET+=" -Dsdl2-audio=enabled -Dsdl2-video=enabled -Dsdl2-gamepad=enabled"

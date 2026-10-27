@@ -58,8 +58,8 @@ def check(root, frontend=None):
                      '/usr/share/pocketjs/apps/boot.pocket']:
             if not resolve(root, path).is_file():
                 errors.append(f'missing PocketJS runtime file: {path}')
-        if not os.access(resolve(root, '/sbin/agetty'), os.X_OK):
-            errors.append('missing recovery console executable: /sbin/agetty')
+        if not os.access(resolve(root, '/usr/sbin/agetty'), os.X_OK):
+            errors.append('missing recovery console executable: /usr/sbin/agetty')
         quirk = resolve(root, '/usr/lib/autostart/quirks/platforms/H700/090-ui_service')
         if not quirk.is_file() or 'UI_SERVICE="pocketjs-kms.service"' not in quirk.read_text():
             errors.append('H700 does not select the PocketJS startup service')
