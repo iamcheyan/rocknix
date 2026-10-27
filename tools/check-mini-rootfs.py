@@ -33,7 +33,7 @@ def check(root, frontend=None):
         'xmplayer-playback', 'mpv', 'gptokeyb', 'nmcli', 'evtest',
         'disk-browser', 'mc', 'rocknix-services',
     ]
-    commands += ['pocket', 'pocket-session-run', 'commander', 'chvt'] if frontend == 'pocketjs' else ['foot']
+    commands += ['pocket', 'pocket-session-run', 'commander', 'chvt', 'flock', 'systemd-run', 'systemctl'] if frontend == 'pocketjs' else ['foot']
     errors = []
     for command in commands:
         if not os.access(resolve(root, '/usr/bin/' + command), os.X_OK):

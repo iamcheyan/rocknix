@@ -3,7 +3,7 @@
 Branch: `feat/h700-pocketjs-kms`, based on `main` at `44529c238f`.
 The canonical checkout has another active writer; this task uses a dedicated worktree.
 
-Status: implementation and build verification in progress.
+Status: target package implemented and cross-built; complete image verification in progress.
 
 ## Scope
 
@@ -65,3 +65,24 @@ handoff helper, not arbitrary concurrent native windows.
   recorded separately from host/headless checks.
 
 No hardware verification or completed image build is claimed by this record.
+
+## Verification results
+
+- Resolved H700 image plan: 281 steps, with PocketJS host/target stages and no
+  Wayland/Sway dependency. RK3566 retains its Wayland/Sway plan (693 steps).
+- Existing plus new Python tests: 14 passed. Lifecycle cases include rejected
+  package fallback, failed native apps, argument/exit-status preservation,
+  interruption, exclusive display ownership, and recovery-console restoration.
+- Real pinned source: profile export, TypeScript check and `.pocket` compilation
+  passed. No compiler style warning remains in the boot app.
+- Native host runtime: package admission and five 720x480 headless ticks passed.
+- ROCKNIX toolchain: AArch64 release runtime compiled with generated bindings and
+  target sysroot headers. Its actual ELF plus ROCKNIX loader/libraries passed
+  package admission and five 720x480 headless ticks under `qemu-aarch64`.
+- Independent read-only review found no remaining concrete code defect after
+  the binding fix. Full image/rootfs checks and physical hardware remain pending.
+
+The remote canonical checkout has unrelated uncommitted work and a separate image
+build. This task uses a remote Git worktree and its own copy of the build cache,
+mounted at the original `/work` toolchain prefix. Sources are reused read-only in
+meaning; outputs go to this task's worktree, not the canonical `target/`.
