@@ -1,0 +1,30 @@
+{
+  "$schema": "https://pocketjs.dev/schema/pocket-2.json",
+  "pocket": 2,
+  "id": "org.rocknix.hello-pocketjs",
+  "name": "hello-pocketjs",
+  "title": "Hello PocketJS",
+  "version": "0.1.0",
+  "engine": {
+    "capabilities": {
+      "requires": [
+        "text.glyphs.baked",
+        "input.buttons"
+      ]
+    }
+  },
+  "app": {
+    "entry": "main.tsx",
+    "output": "hello-pocketjs",
+    "framework": "solid",
+    "viewport": {
+      "fixed": {
+        "logical": [
+          800,
+          600
+        ],
+        "presentation": "native"
+      }
+    }
+  }
+}

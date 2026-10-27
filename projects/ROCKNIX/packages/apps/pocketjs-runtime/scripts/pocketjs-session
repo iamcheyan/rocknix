@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+/usr/bin/systemctl stop heya.service
+/usr/bin/systemctl stop sway.service
+/usr/libexec/pocket-linux-kms --package "${POCKETJS_APP:-/storage/pocketjs/apps/hello.pocket}"
