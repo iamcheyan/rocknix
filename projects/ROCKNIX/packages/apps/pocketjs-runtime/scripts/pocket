@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+/usr/bin/mkdir -p /storage/pocketjs/apps /storage/pocketjs/data /storage/pocketjs/cache /storage/pocketjs/logs
+if [ "$#" -gt 0 ]; then
+  app=$1
+  shift
+else
+  app=/storage/pocketjs/apps/hello.pocket
+fi
+exec /usr/libexec/pocket-linux-kms --package "$app" "$@"

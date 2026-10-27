@@ -1,0 +1,17 @@
+[Unit]
+Description=PocketJS Linux KMS foreground UI
+After=local-fs.target systemd-user-sessions.service
+Conflicts=sway.service
+Before=graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/libexec/pocketjs-session
+ExecStartPost=/usr/bin/systemctl start sway.service
+ExecStopPost=/usr/bin/systemctl start sway.service
+TimeoutStartSec=0
+KillMode=control-group
+
+[Install]
+WantedBy=rocknix.target
