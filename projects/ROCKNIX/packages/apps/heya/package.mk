@@ -2,8 +2,8 @@
 # heya — JSON-driven launcher shell
 
 PKG_NAME="heya"
-PKG_VERSION="e0ab046399ba64e42a03cf8fc8a7861be4910e7c"
-PKG_SHA256="d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+PKG_VERSION="e0ab046ccdcf4d989ad0e2714f84acbb01047c70"
+PKG_SHA256="e8d795c733f5af7e6d5ee59a2ae1224db7b13c0145b63493b373949c64dbf6cb"
 PKG_ARCH="any"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/iamcheyan/heya"
