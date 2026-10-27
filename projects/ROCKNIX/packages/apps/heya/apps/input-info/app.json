@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "input-info",
+  "name": "Input Devices",
+  "description": "Input devices recognized by libinput",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-gamepad",
+  "category": "tools",
+  "args": [
+    "input-info"
+  ]
+}

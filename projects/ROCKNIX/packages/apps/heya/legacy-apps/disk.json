@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "id": "disk",
+  "name": "Disk",
+  "description": "Browse built-in and SD card storage",
+  "entrypoint": "/usr/bin/disk-browser",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-harddisk",
+  "category": "system",
+  "permissions": ["storage"]
+}

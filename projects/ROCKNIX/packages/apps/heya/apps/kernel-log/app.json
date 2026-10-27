@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "kernel-log",
+  "name": "Kernel Logs",
+  "description": "Kernel and driver messages",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-console",
+  "category": "tools",
+  "args": [
+    "kernel-log"
+  ]
+}

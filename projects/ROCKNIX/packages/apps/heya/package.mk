@@ -2,13 +2,13 @@
 # heya — JSON-driven launcher shell
 
 PKG_NAME="heya"
-PKG_VERSION="e0ab046ccdcf4d989ad0e2714f84acbb01047c70"
-PKG_SHA256="e8d795c733f5af7e6d5ee59a2ae1224db7b13c0145b63493b373949c64dbf6cb"
+PKG_VERSION="b865a5b106368d27be76cb36777ee62828555139"
+PKG_SHA256="d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
 PKG_ARCH="any"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/iamcheyan/heya"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb"
+PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb commander foot rocknix-hotkey"
 PKG_LONGDESC="Lightweight JSON-driven launcher shell for Linux handhelds"
 PKG_TOOLCHAIN="manual"
 
@@ -50,16 +50,17 @@ makeinstall_target() {
   install -m 0755 "${PKG_BUILD}/heya" "${INSTALL}/usr/bin/heya"
   install -m 0755 "${PKG_DIR}/scripts/heya-control" "${INSTALL}/usr/bin/heya-control"
   install -m 0755 "${PKG_DIR}/scripts/disk-browser" "${INSTALL}/usr/bin/disk-browser"
+  install -m 0755 "${PKG_DIR}/scripts/heya-terminal" "${INSTALL}/usr/bin/heya-terminal"
+  install -m 0755 "${PKG_DIR}/scripts/heya-tool" "${INSTALL}/usr/bin/heya-tool"
 
-  mkdir -p "${INSTALL}/usr/share/heya/apps/disk"
-  install -m 0644 "${PKG_DIR}/apps/disk/app.json" \
-    "${INSTALL}/usr/share/heya/apps/disk/app.json"
-  mkdir -p "${INSTALL}/usr/share/heya/apps/terminal"
-  install -m 0644 "${PKG_DIR}/apps/terminal/app.json" \
-    "${INSTALL}/usr/share/heya/apps/terminal/app.json"
+  mkdir -p "${INSTALL}/usr/share/heya/apps" "${INSTALL}/usr/share/heya/legacy-apps"
+  cp -a "${PKG_DIR}/apps/." "${INSTALL}/usr/share/heya/apps/"
+  cp -a "${PKG_DIR}/legacy-apps/." "${INSTALL}/usr/share/heya/legacy-apps/"
   mkdir -p "${INSTALL}/usr/share/heya/settings"
   install -m 0644 "${PKG_DIR}/settings/services.conf" \
     "${INSTALL}/usr/share/heya/settings/services.conf"
+  install -m 0644 "${PKG_DIR}/settings/tools.gptk" \
+    "${INSTALL}/usr/share/heya/settings/tools.gptk"
 
   # Apps an earlier image shipped and this one no longer does. The seeder
   # removes these on boot; anything absent here is treated as user data.

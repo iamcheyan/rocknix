@@ -1,0 +1,54 @@
+#!/bin/bash
+set -eu
+
+tool=${1:-}
+terminal=${HEYA_TERMINAL:-/usr/bin/heya-terminal}
+if [ "${2:-}" != --inside ]; then
+  case "$tool" in
+    terminal) exec "$terminal" "Terminal | SELECT: return" /bin/bash ;;
+    file-manager) exec /usr/bin/disk-browser ;;
+    gamepad) exec /bin/bash '/usr/config/modules/Test Gamepad.sh' ;;
+    *) exec "$terminal" "ROCKNIX tools | SELECT: return" "$0" "$tool" --inside ;;
+  esac
+fi
+
+export LESSCHARSET=utf-8
+export LESS='-R'
+printf 'SELECT: return to launcher | A: Enter | B: Escape | Y: q | START: F10\n\n'
+confirm() {
+  dialog --title "$1" --defaultno --yesno "$2" 10 60
+}
+pager() {
+  { printf 'SELECT: Return | Y: Quit | D-Pad: Scroll | L/R: Page\n\n'; cat; } | less -R
+}
+report() {
+  "$@" 2>&1 | pager
+}
+case "$tool" in
+  file-manager-text) exec mc --nomouse /storage ;;
+  monitor) exec btop ;;
+  processes) exec htop ;;
+  audio-mixer) exec alsamixer ;;
+  system-info) report rocknix-info ;;
+  storage-info) { df -h; printf '\nMounts\n'; cat /proc/mounts; } | pager ;;
+  network-info) { nmcli device status; nmcli connection show --active; printf '\nAddresses\n'; nmcli -f GENERAL.DEVICE,IP4.ADDRESS,IP4.GATEWAY device show; } | pager ;;
+  usb-info) report lsusb ;;
+  input-info) report libinput list-devices ;;
+  system-log) report journalctl -b -n 250 --no-pager ;;
+  kernel-log) report dmesg ;;
+  notes) exec nano /storage/.config/heya/notes.txt ;;
+  cloud-backup)
+    confirm 'Cloud backup' 'Run ROCKNIX cloud backup using your existing rclone configuration?' || exit 0
+    /usr/bin/cloud_backup || printf '\nCloud backup failed. Check the message above.\n'
+    read -r -p 'Press A to return.' ;;
+  cloud-restore)
+    confirm 'Cloud restore' 'Restore files from your configured cloud remote? Existing files may be overwritten.' || exit 0
+    /usr/bin/cloud_restore || printf '\nCloud restore failed. Check the message above.\n'
+    read -r -p 'Press A to return.' ;;
+  clean-mac-files)
+    confirm 'Remove macOS metadata' 'Delete only ._* metadata files beneath /storage/roms?' || exit 0
+    /bin/bash '/usr/config/modules/Remove ._ Files.sh'
+    printf 'Finished.\n'
+    read -r -p 'Press A to return.' ;;
+  *) printf 'Unknown tool: %s\n' "$tool" >&2; exit 2 ;;
+esac

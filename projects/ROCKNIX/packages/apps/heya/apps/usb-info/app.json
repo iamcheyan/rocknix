@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "usb-info",
+  "name": "USB Devices",
+  "description": "Connected USB devices",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-usb",
+  "category": "tools",
+  "args": [
+    "usb-info"
+  ]
+}

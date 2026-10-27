@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "audio-mixer",
+  "name": "Audio Mixer",
+  "description": "ALSA device and volume controls",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-volume",
+  "category": "tools",
+  "args": [
+    "audio-mixer"
+  ]
+}

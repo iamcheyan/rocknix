@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "clean-mac-files",
+  "name": "Clean macOS Metadata",
+  "description": "Remove ._* files from the ROM directory",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-broom",
+  "category": "tools",
+  "args": [
+    "clean-mac-files"
+  ]
+}

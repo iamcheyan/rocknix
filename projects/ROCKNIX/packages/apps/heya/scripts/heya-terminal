@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+title=${1:-Terminal}
+[ "$#" -eq 0 ] || shift
+export HOME=/storage
+export XDG_CONFIG_HOME=/storage/.config
+export XDG_CACHE_HOME=/storage/.cache
+export XDG_DATA_HOME=/storage/.local/share
+export LOCPATH=/storage/.cache/locpath
+export TERM=xterm-256color
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt}"
+mkdir -p "$LOCPATH" /storage/.cache/heya /storage/.config/heya
+if [ ! -f "$LOCPATH/en_US.UTF-8/LC_CTYPE" ]; then
+  LC_ALL=C LANG=C localedef --no-archive -i en_US -f UTF-8 "$LOCPATH/en_US.UTF-8"
+fi
+cd /storage
+
+mapper_pid=
+terminal_pid=
+cleanup() {
+  for child in "$mapper_pid" "$terminal_pid"; do
+    [ -z "$child" ] || kill "$child" 2>/dev/null || true
+  done
+  for child in "$mapper_pid" "$terminal_pid"; do
+    [ -z "$child" ] || wait "$child" 2>/dev/null || true
+  done
+}
+trap cleanup EXIT
+trap 'exit 143' HUP INT TERM
+
+[ "$#" -gt 0 ] || set -- /bin/bash
+env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 foot --app-id=heya-tool --title="$title" --fullscreen \
+  --config=/usr/share/foot/foot.ini \
+  --override=font=monospace:size=10 \
+  --override=key-bindings.quit=F12 "$@" &
+terminal_pid=$!
+mapping=${HEYA_TOOL_MAPPING:-/usr/share/heya/settings/tools.gptk}
+if command -v gptokeyb >/dev/null 2>&1 && [ -r "$mapping" ]; then
+  gptokeyb foot -c "$mapping" > /storage/.cache/heya/tools-input.log 2>&1 &
+  mapper_pid=$!
+fi
+wait "$terminal_pid"

@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "notes",
+  "name": "Text Editor",
+  "description": "Edit a persistent notes file with nano",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-file-document",
+  "category": "tools",
+  "args": [
+    "notes"
+  ]
+}

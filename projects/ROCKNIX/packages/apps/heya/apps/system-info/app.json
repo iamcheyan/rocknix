@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "system-info",
+  "name": "System Information",
+  "description": "ROCKNIX hardware and software information",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-information",
+  "category": "tools",
+  "args": [
+    "system-info"
+  ]
+}

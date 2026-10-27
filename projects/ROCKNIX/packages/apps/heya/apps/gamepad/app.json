@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "gamepad",
+  "name": "Gamepad Test",
+  "description": "Test buttons and directional controls",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-gamepad",
+  "category": "tools",
+  "args": [
+    "gamepad"
+  ]
+}

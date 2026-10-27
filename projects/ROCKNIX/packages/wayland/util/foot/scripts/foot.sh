@@ -13,8 +13,14 @@ elif grep -qE '^(\[colors\]|dpi-aware=auto|color=)' ${FOOT_CONFIG_DIR}/foot.ini;
   sed -i -e 's/^\[colors\]/[colors-dark]/' -e 's/^dpi-aware=auto/dpi-aware=no/' -e '/^\[cursor\]/,/^\[/{/^color=/d}' ${FOOT_CONFIG_DIR}/foot.ini
 fi
 
-if [ -z "${LOCPATH}" ]; then
+if [ -z "${LOCPATH:-}" ]; then
   export LOCPATH="/storage/.cache/locpath"
+fi
+if [ -z "${LANG:-}" ] || [ "${LANG}" = "C" ]; then
+  export LANG="en_US.UTF-8"
+fi
+if [ -z "${LC_ALL:-}" ]; then
+  export LC_ALL="en_US.UTF-8"
 fi
 
 /usr/bin/foot > ${FOOT_LOG_FILE} 2>&1

@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "storage-info",
+  "name": "Storage Information",
+  "description": "Filesystem usage and mounted volumes",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-harddisk",
+  "category": "tools",
+  "args": [
+    "storage-info"
+  ]
+}

@@ -1,16 +1,14 @@
 #!/bin/sh
 # Seed heya's writable app directory from the read-only image copies.
 #
-# Images only add apps. Removing one needs an explicit entry in removed-apps,
-# because that is the only list that can tell an image leftover apart from an
-# app the user added by hand.
-
-source_root=/usr/share/heya/apps
-target_root=/storage/heya/apps
-removed=/usr/share/heya/removed-apps
+source_root=${HEYA_SYSTEM_APPS:-/usr/share/heya/apps}
+target_root=${HEYA_USER_APPS:-/storage/heya/apps}
+state_root=${HEYA_APP_STATE:-/storage/heya/.system-apps}
+legacy_root=${HEYA_LEGACY_APPS:-/usr/share/heya/legacy-apps}
+removed=${HEYA_REMOVED_APPS:-/usr/share/heya/removed-apps}
 
 [ -d "${source_root}" ] || exit 0
-mkdir -p "${target_root}"
+mkdir -p "${target_root}" "${state_root}"
 
 if [ -f "${removed}" ]; then
   while read -r app_id; do
@@ -27,10 +25,31 @@ for manifest in "${source_root}"/*/app.json; do
   app_dir=${manifest%/app.json}
   app_id=${app_dir##*/}
   target="${target_root}/${app_id}/app.json"
-
-  [ -e "${target}" ] && continue
-  mkdir -p "${target_root}/${app_id}"
-  cp "${manifest}" "${target}"
+  previous="${state_root}/${app_id}.json"
+  legacy="${legacy_root}/${app_id}.json"
+  available=yes
+  if [ -f "${app_dir}/requires" ]; then
+    while IFS= read -r program; do
+      [ -n "${program}" ] || continue
+      if ! command -v "${program}" >/dev/null 2>&1; then
+        available=no
+        break
+      fi
+    done < "${app_dir}/requires"
+  fi
+  if [ "${available}" = no ]; then
+    if [ -f "${previous}" ] && cmp -s "${previous}" "${target}"; then
+      rm -f "${target}"
+    fi
+    continue
+  fi
+  if [ ! -e "${target}" ] || cmp -s "${previous}" "${target}" || cmp -s "${legacy}" "${target}"; then
+    mkdir -p "${target_root}/${app_id}"
+    cp "${manifest}" "${target}.new"
+    mv "${target}.new" "${target}"
+  fi
+  cp "${manifest}" "${previous}.new"
+  mv "${previous}.new" "${previous}"
 done
 
 if [ -f /usr/share/heya/themes/default/theme.json ] && [ ! -f /storage/heya/themes/theme.json ]; then

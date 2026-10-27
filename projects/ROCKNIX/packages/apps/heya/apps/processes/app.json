@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "processes",
+  "name": "Process Manager",
+  "description": "Process list and resource usage",
+  "entrypoint": "/usr/bin/heya-tool",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-memory",
+  "category": "tools",
+  "args": [
+    "processes"
+  ]
+}

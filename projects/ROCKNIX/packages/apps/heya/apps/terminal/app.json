@@ -2,9 +2,12 @@
   "manifestVersion": 1,
   "id": "terminal",
   "name": "Terminal",
-  "description": "Open the ROCKNIX terminal",
-  "entrypoint": "/usr/bin/foot",
+  "description": "Command shell",
+  "entrypoint": "/usr/bin/heya-tool",
   "workingDirectory": "/storage",
   "icon": "nf-md-console",
-  "category": "system"
+  "category": "system",
+  "args": [
+    "terminal"
+  ]
 }
