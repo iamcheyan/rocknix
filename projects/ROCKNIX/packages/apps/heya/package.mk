@@ -25,7 +25,7 @@ make_target() {
   export CGO_CFLAGS="${CFLAGS}"
   export CGO_LDFLAGS="${LDFLAGS} -lSDL2 -lSDL2_ttf"
   export GOCACHE="${PKG_BUILD}/.gocache"
-  export GOPATH="${PKG_BUILD}/.gopath"
+  export GOPATH="${BUILD}/.gopath-heya"
   export GOFLAGS="-mod=readonly"
   export GOTOOLCHAIN=local
 
