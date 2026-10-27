@@ -51,10 +51,11 @@
 
 ## 统一工作入口
 
-- 分支：integration/2026-10-27
-- worktree：~/development/rocknix-integrated
-- 本次仅本地整合；未 push、未创建 PR、未删除或清理原分支/worktree。
-- 已逐一核对原有 11 个 worktree 的 Git 状态与盘点时一致。
+- 整合完成时的分支：integration/2026-10-27；随后按用户要求改名为 main。
+- 后续开发目录：~/development/rocknix，已切换到 main；rocknix-integrated 保留为 detached HEAD 的整合检查点。
+- 按用户要求以整合结果替换 origin/main，并将 GitHub 默认分支设为 main；执行结果以远端读回校验为准。未创建 PR。
+- 原主目录的 64 个改动已逐文件确认与快照一致，切换前额外保存为 Git stash；均已包含在 main 中，不应再次 apply。其他 worktree 未改动。
+- 远端旧 main（37be0eb79bb60dc1fd32dbea18fe4d9b6b6e41f3）保存为 backup/20261027/remote-main-before-integration，并已纳入 before-main-replacement.bundle。
 
 ## 备份与恢复
 

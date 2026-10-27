@@ -61,3 +61,8 @@ Before outputting code or finalizing a PR description, you **MUST** run your out
 * Boot order: `098-devservices` starts what is enabled, then the existing `099-networkservices` stops the rest.
 * heya reaches the same switches with `heya-control service KEY on|off|toggle|status`; labels come from `/usr/share/heya/settings/services.conf`.
 * `/storage/.config/system/configs` is excluded from the upgrade sync, so `sources/post-update` copies only the `*.enabled` keys a card is missing; a saved choice is never overwritten.
+
+## 6. Development Mainline
+
+* `main` is the consolidated development branch. Continue work in `~/development/rocknix` on `main`.
+* The 2026-10-27 integration record is `docs/heya-core-minimal/INTEGRATION_2026-10-27.md`. Old worktrees and backup branches are historical references; do not reapply their saved changes blindly.
