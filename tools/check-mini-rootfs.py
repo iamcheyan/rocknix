@@ -33,7 +33,7 @@ def check(root, frontend=None):
         'xmplayer-playback', 'mpv', 'gptokeyb', 'nmcli', 'evtest',
         'disk-browser', 'mc', 'rocknix-services',
     ]
-    commands += ['pocket', 'pocket-session-run', 'commander'] if frontend == 'pocketjs' else ['foot']
+    commands += ['pocket', 'pocket-session-run', 'commander', 'chvt'] if frontend == 'pocketjs' else ['foot']
     errors = []
     for command in commands:
         if not os.access(resolve(root, '/usr/bin/' + command), os.X_OK):
@@ -54,9 +54,15 @@ def check(root, frontend=None):
     if frontend == 'pocketjs':
         for path in ['/usr/libexec/pocket-linux-kms', '/usr/libexec/pocketjs-session',
                      '/usr/lib/systemd/system/pocketjs-kms.service',
+                     '/usr/lib/systemd/system/pocketjs-recovery.service',
                      '/usr/share/pocketjs/apps/boot.pocket']:
             if not resolve(root, path).is_file():
                 errors.append(f'missing PocketJS runtime file: {path}')
+        if not os.access(resolve(root, '/sbin/agetty'), os.X_OK):
+            errors.append('missing recovery console executable: /sbin/agetty')
+        quirk = resolve(root, '/usr/lib/autostart/quirks/platforms/H700/090-ui_service')
+        if not quirk.is_file() or 'UI_SERVICE="pocketjs-kms.service"' not in quirk.read_text():
+            errors.append('H700 does not select the PocketJS startup service')
         for pattern in ['usr/bin/sway*', 'usr/bin/foot', 'usr/bin/weston*', 'usr/bin/Xwayland',
                         'usr/bin/mako*', 'usr/lib/libwayland*', 'usr/lib/libwlroots*',
                         'usr/lib/systemd/system/sway.service', 'usr/lib/systemd/system/heya.service']:

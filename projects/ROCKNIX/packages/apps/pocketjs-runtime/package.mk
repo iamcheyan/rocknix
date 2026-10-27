@@ -34,6 +34,7 @@ makeinstall_host() {
 
 make_target() {
   export RUSTC="${TOOLCHAIN}/bin/rustc"
+  python3 "${PKG_DIR}/scripts/prepare-workspace.py" "${PKG_BUILD}" "${TOOLCHAIN}/bin/cargo"
   POCKETJS_PROFILE_RS="${TOOLCHAIN}/share/pocketjs/h700/pocket_profile.rs" \
     "${TOOLCHAIN}/bin/cargo" build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
       --package pocket-linux-kms --target "${TARGET_NAME}"

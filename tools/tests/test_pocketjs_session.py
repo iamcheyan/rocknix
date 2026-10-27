@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,12 +66,15 @@ import json, os, sys
 with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps(['systemctl', *sys.argv[1:]]) + '\\n')
 if sys.argv[1] == 'is-active':
-    sys.exit(0 if os.environ.get('ACTIVE') == '1' else 3)
+    key = 'RECOVERY' if sys.argv[-1] == 'pocketjs-recovery.service' else 'ACTIVE'
+    sys.exit(0 if os.environ.get(key) == '1' else 3)
 ''')
         self.executable('systemd-run', '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps(['systemd-run', *sys.argv[1:]]) + '\\n')
+if os.environ.get('WAIT') == '1':
+    time.sleep(60)
 sys.exit(int(os.environ.get('APP_STATUS', '0')))
 ''')
         source = (SCRIPTS / 'pocket-session-run').read_text()
@@ -98,6 +102,36 @@ sys.exit(int(os.environ.get('APP_STATUS', '0')))
         result = subprocess.run([str(self.native())], env=self.env, capture_output=True)
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.log.exists())
+
+    def test_recovery_console_is_restored_if_it_owned_the_display(self):
+        self.env.update(ACTIVE='0', RECOVERY='1')
+        result = subprocess.run([str(self.native()), '/bin/true'], env=self.env, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls()[-1], ['systemctl', 'start', 'pocketjs-recovery.service'])
+
+    def test_interrupt_stops_foreground_service_and_releases_display_lock(self):
+        self.env.update(ACTIVE='1', WAIT='1')
+        script = self.native()
+        process = subprocess.Popen([str(script), '/bin/true'], env=self.env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: process.poll() is None and process.kill())
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if self.log.exists() and any(call[0] == 'systemd-run' for call in self.calls()):
+                break
+            time.sleep(0.02)
+        else:
+            self.fail('foreground service was not launched')
+        blocked = subprocess.run([str(script), '/bin/true'], env=self.env, capture_output=True)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn(b'owns the display', blocked.stderr)
+        process.terminate()
+        _, stderr = process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 143, stderr)
+        self.assertEqual(self.calls()[-1], ['systemctl', 'start', 'pocketjs-kms.service'])
+        self.env['WAIT'] = '0'
+        result = subprocess.run([str(script), '/bin/true'], env=self.env, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':

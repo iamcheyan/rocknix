@@ -25,6 +25,11 @@ interfaces that the upstream KMS program does not currently compose.
   with `--frozen-lockfile --ignore-scripts`.
 - The host build exports the device profile and compiles the default `.pocket`
   app. The target build uses ROCKNIX's Rust/C cross toolchain and that export.
+- The build directory selects only `programs/linux-kms` and its local Cargo
+  dependencies. Lockfile pruning follows the mechanism in upstream
+  `tools/packaging/esp-idf/vendor.ts`; every external dependency/version/checksum
+  must remain a member of the original locked set before `cargo build --locked`.
+  This avoids fetching the unrelated PSP/PocketBook SDK submodules.
 - The immutable boot app is `/usr/share/pocketjs/apps/boot.pocket`. An optional
   `POCKETJS_APP` in `/storage/.config/pocketjs/runtime.conf` selects a user app;
   package admission failure returns to the immutable boot app.

@@ -12,12 +12,21 @@ flock -n 9 || { echo "Another foreground application owns the display" >&2; exit
 
 resume=0
 systemctl is-active --quiet pocketjs-kms.service && resume=1
+recovery=0
+systemctl is-active --quiet pocketjs-recovery.service && recovery=1
+runner_pid=
 cleanup() {
   status=$?
   trap - EXIT
   systemctl stop pocketjs-foreground.service || true
+  if [ -n "$runner_pid" ]; then
+    kill "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" 2>/dev/null || true
+  fi
   if [ "$resume" = 1 ]; then
     systemctl start pocketjs-kms.service || true
+  elif [ "$recovery" = 1 ]; then
+    systemctl start pocketjs-recovery.service || true
   fi
   exit "$status"
 }
@@ -35,4 +44,9 @@ systemd-run --unit=pocketjs-foreground --wait --collect --service-type=exec \
   --setenv=LOVE_GRAPHICS_USE_OPENGLES=1 \
   --setenv=XDG_RUNTIME_DIR=/run/0-runtime-dir \
   --setenv=SDL_GAMECONTROLLERCONFIG_FILE=/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt \
-  -- "$@"
+  -- "$@" &
+runner_pid=$!
+status=0
+wait "$runner_pid" || status=$?
+runner_pid=
+exit "$status"
