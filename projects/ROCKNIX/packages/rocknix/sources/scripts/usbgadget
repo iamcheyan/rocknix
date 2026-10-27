@@ -267,12 +267,13 @@ cleanup_usb_network() {
 g_mtp="/sys/kernel/config/usb_gadget/mtp"
 
 prepare_usb_mtp() {
+    [ -d "${g_mtp}" ] && cleanup_usb_mtp
     usb_ver="0x0200" # USB 2.0
     dev_class="0" # Per interface, umtprd declares Still Imaging
     attr="0xC0" # Self powered
     pwr="0xfe" #
 
-    mkdir ${g_mtp}
+    mkdir -p ${g_mtp}
     # umtprd is built without CONFIG_USB_SS_SUPPORT, so functionfs only hands the
     # kernel full and high speed descriptors. On a SuperSpeed capable UDC the
     # composite layer then finds no configuration valid for the negotiated speed
@@ -283,37 +284,35 @@ prepare_usb_mtp() {
     echo "0x1d6b" > ${g_mtp}/idVendor
     echo "0x0100" > ${g_mtp}/idProduct
     echo "${devversion}" > ${g_mtp}/bcdDevice
-    mkdir ${g_mtp}/strings/0x409
+    mkdir -p ${g_mtp}/strings/0x409
     echo "${OS_NAME}" > ${g_mtp}/strings/0x409/manufacturer
     echo "${PRODUCT}" > ${g_mtp}/strings/0x409/product
     echo "${SERIAL}" > ${g_mtp}/strings/0x409/serialnumber
 
     # config 1 for MTP
-    mkdir ${g_mtp}/configs/c.1
+    mkdir -p ${g_mtp}/configs/c.1
     echo "${attr}" > ${g_mtp}/configs/c.1/bmAttributes
     echo "${pwr}" > ${g_mtp}/configs/c.1/MaxPower
-    mkdir ${g_mtp}/configs/c.1/strings/0x409
+    mkdir -p ${g_mtp}/configs/c.1/strings/0x409
     echo mtp > ${g_mtp}/configs/c.1/strings/0x409/configuration
 
-    mkdir ${g_mtp}/functions/ffs.mtp
-    ln -s ${g_mtp}/functions/ffs.mtp ${g_mtp}/configs/c.1
+    mkdir -p ${g_mtp}/functions/ffs.mtp
+    [ -L ${g_mtp}/configs/c.1/ffs.mtp ] || ln -s ${g_mtp}/functions/ffs.mtp ${g_mtp}/configs/c.1
 }
 
 cleanup_usb_mtp() {
-    rm -f \
-        ${g_mtp}/configs/c.1/ffs.mtp
-
-    rmdir \
-        ${g_mtp}/configs/c.1/strings/0x409 \
-        ${g_mtp}/configs/c.1 \
-        ${g_mtp}/functions/ffs.mtp \
-        ${g_mtp}/strings/0x409 \
-        ${g_mtp}
+    rm -f ${g_mtp}/configs/c.1/ffs.mtp
+    rmdir ${g_mtp}/configs/c.1/strings/0x409 2>/dev/null
+    rmdir ${g_mtp}/configs/c.1 2>/dev/null
+    rmdir ${g_mtp}/functions/ffs.mtp 2>/dev/null
+    rmdir ${g_mtp}/strings/0x409 2>/dev/null
+    rmdir ${g_mtp} 2>/dev/null
 }
 
 g_adb="/sys/kernel/config/usb_gadget/adb"
 
 prepare_usb_adb() {
+    [ -d "${g_adb}" ] && cleanup_usb_adb
     usb_ver="0x0200" # USB 2.0
     dev_class="0x00"
     attr="0xC0" # Self powered
