@@ -1,0 +1,14 @@
+[Unit]
+Description=Early USB Gadget and ADB Network Setup
+DefaultDependencies=no
+After=systemd-modules-load.service sys-kernel-config.mount
+Before=basic.target sysinit.target network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/usbgadget --start
+TimeoutSec=10
+
+[Install]
+WantedBy=basic.target

@@ -77,6 +77,7 @@ EOF
 
   ### Fix and migrate to autostart package
   enable_service rocknix-autostart.service
+  enable_service rocknix-usbgadget.service
 
   ### ZRAM/Swap and Memory Manager Service
   enable_service rocknix-memory-manager.service
