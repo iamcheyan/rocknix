@@ -31,7 +31,7 @@ Changed files in the PocketJS worktree:
 - `apps/rocknix-hello/main.tsx`
 - `tests/rocknix-hello.test.ts` (regression coverage for aliases and button constant)
 
-Inspect the full patch with `git diff` in the isolated PocketJS worktree, or after delivery with `git show <PocketJS-fix-commit>`. The clean source baseline remains available as commit `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`.
+- The reproducible app-only patch is `CPR77_HELLO_POCKET_UNBLOCK.patch` beside this report. It applies with `patch -p1` from the PocketJS repository root and was dry-run against the preserved CPR78 input copy. Inspect it with `git diff` in the isolated PocketJS worktree. The clean source baseline remains commit `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`.
 
 ## Build evidence
 
