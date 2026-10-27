@@ -2,6 +2,9 @@
 # setup device defaults
 ################################################################################
 
+    DEVELOPER_MODE="${DEVELOPER_MODE:-false}"
+    PROJECT_DEVELOPER_MODE="${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE}}"
+
   # The TARGET_CPU variable controls which processor should be targeted for
   # generated code.
     case ${TARGET_ARCH} in

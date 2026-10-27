@@ -6,8 +6,14 @@ ROCKNIX downloads a pinned heya source archive and builds it with its ARM64 Go/S
 toolchain. The local desktop preview builds the sibling heya checkout instead.
 
 The boot sequence is rocknix-autostart → H700 quirks → app seeder → sway + heya.
-Do not enable heya independently before the user configuration has been seeded.
-The unit here mirrors the package unit; no global start_es.sh patch is needed.
+
+When `DEVELOPER_MODE=true` (or `PROJECT_DEVELOPER_MODE=true`) is set for the
+ROCKNIX build, the package builds and installs `/usr/bin/devexec` and rewrites
+`heya.service` to execute `/usr/bin/devexec /usr/bin/heya ...`. The helper checks
+only `/storage/dev/usr/bin/heya`; with no override it execs the immutable SYSTEM
+binary. The package and unit keep their normal direct-exec form when the option is
+unset or false. Set the option before building; changing it requires rebuilding the
+`heya` package/image configuration.
 
 Applications live in /storage/heya/apps/<id>/app.json. The active JSON theme is
 /storage/heya/themes/theme.json. Existing user manifests and themes are preserved.

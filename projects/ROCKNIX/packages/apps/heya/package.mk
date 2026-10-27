@@ -31,12 +31,23 @@ make_target() {
     -ldflags "-s -w" \
     -o "${PKG_BUILD}/heya" \
     ./cmd/heya
+
+  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+    "${TOOLCHAIN}/lib/golang/bin/go" build \
+      -trimpath \
+      -ldflags "-s -w" \
+      -o "${PKG_BUILD}/devexec" \
+      "${PKG_DIR}/scripts/devexec.go"
+  fi
 }
 
 makeinstall_target() {
   mkdir -p "${INSTALL}/usr/bin"
   install -m 0755 "${PKG_BUILD}/heya" "${INSTALL}/usr/bin/heya"
   install -m 0755 "${PKG_DIR}/scripts/heya-control" "${INSTALL}/usr/bin/heya-control"
+  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+    install -m 0755 "${PKG_BUILD}/devexec" "${INSTALL}/usr/bin/devexec"
+  fi
 
   mkdir -p "${INSTALL}/usr/share/heya/assets" "${INSTALL}/usr/share/heya/themes/default"
   install -m 0644 "${PKG_BUILD}/assets/icons.json" "${INSTALL}/usr/share/heya/assets/icons.json"
@@ -48,8 +59,14 @@ makeinstall_target() {
     "${INSTALL}/usr/share/heya/themes/default/theme.json"
 
   mkdir -p "${INSTALL}/usr/lib/systemd/system"
-  install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
-    "${INSTALL}/usr/lib/systemd/system/heya.service"
+  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+    sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
+      "${PKG_DIR}/integrations/rocknix/heya.service" \
+      > "${INSTALL}/usr/lib/systemd/system/heya.service"
+  else
+    install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
+      "${INSTALL}/usr/lib/systemd/system/heya.service"
+  fi
 
   mkdir -p "${INSTALL}/usr/lib/autostart/common"
   install -m 0755 "${PKG_DIR}/autostart/050-heya-apps" \

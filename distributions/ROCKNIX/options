@@ -1,3 +1,7 @@
+  # Enable only for explicitly requested developer images.
+  DEVELOPER_MODE="${DEVELOPER_MODE:-false}"
+  PROJECT_DEVELOPER_MODE="${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE}}"
+
 # LTO (Link Time Optimization) support
   LTO_SUPPORT="yes"
 
