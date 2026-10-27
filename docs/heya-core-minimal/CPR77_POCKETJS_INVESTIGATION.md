@@ -1,6 +1,6 @@
 # CPR #77：PocketJS Runtime 调查
 
-调查日期：2026-10-27。范围：只读调查，没有改动任何产品代码。ROCKNIX 依据 `origin/heya-core-minimal`（调查时 SHA `f686afd47991c4403c480c33e37c6fce48dc751b`）；本报告所在工作分支以含已推送 CPR75/69 历史的 `68e0166446c7ebbb21f7062ffa8fa49a79b11723` 为基础。PocketJS 精确源码依据 GitHub `main` HEAD `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`（2026-10-26），并检查 v0.15.0 tag `96e5f4084c2da45d72997c443fd478bcffb92dc7`。网站 `https://pocketjs.dev/` 实际跳转/展示 PocketJS 官方站；源码 README 的规范站点是 `https://pocketjs.pocket.nexus/`。
+调查日期：2026-10-27。范围：只读调查，没有改动任何产品代码。ROCKNIX 依据 `origin/heya-core-minimal`（调查时 SHA `f686afd47991c4403c480c33e37c6fce48dc751b`）；本报告所在工作分支以含已推送 CPR75/69 历史的 `68e0166446c7ebbb21f7062ffa8fa49a79b11723` 为基础。PocketJS 精确源码依据 GitHub `main` HEAD `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`（2026-10-26），并检查 v0.15.0 tag `96e5f4084c2da45d72997c443fd478bcffb92dc7`。v0.15.0 tag 尚无 `programs/linux-kms/`、Linux Cargo program 或 `tools/packaging/buildroot/`；这些 Linux KMS/fbdev 与 Buildroot adapter 只存在于随后 main HEAD，尚不能据此声称官方发行版可直接构建。网站 `https://pocketjs.dev/` 实际跳转/展示 PocketJS 官方站；源码 README 的规范站点是 `https://pocketjs.pocket.nexus/`。
 
 ## PocketJS Runtime 与平台
 
@@ -38,4 +38,4 @@ ROCKNIX pin `projects/ROCKNIX/packages/apps/heya/package.mk` 当前固定 heya c
 
 ## 阶段一结论
 
-源码证实 PocketJS 已有 Linux ARM64 native runtime 和 KMS/fbdev/evdev backend，原则上可作为内置 UI runtime；当前最主要适配风险是它提供独占 KMS/fbdev 的前台程序，而 H700 基线运行 Wayland/Sway。这不是已证明可工作的当前 ROCKNIX UI host。上游 README 提供 Buildroot release preparation recipe，具体解决了 Cargo offline vendoring 和 profile ABI pinning 的方法，但 ROCKNIX recipe 移植仍需构建验证。所有 H700 的 binary size、runtime RSS、启动时间、屏幕显示、手柄与 heya 生命周期结论均未测。调查尚未改变 ROCKNIX 产品代码。
+源码证实 PocketJS 已有 Linux ARM64 native runtime 和 KMS/fbdev/evdev backend，原则上可作为内置 UI runtime；但这些 backend 当前仅见于 main HEAD，最新检查的 v0.15.0 tag 并未包含，正式 release source 与 SHA 尚待上游发布/确认。当前 Linux KMS host 提供独占 DRM/KMS/fbdev 前台程序，而 H700 基线运行 Wayland/Sway，因此还没有已证明可工作的当前 ROCKNIX UI host。上游 main 的 Buildroot adapter 给出 release preparation、Cargo vendoring 与 profile ABI pinning 的可行设计，但它不是 ROCKNIX recipe，且不能替代稳定 release artifact。所有 H700 的 binary size、runtime RSS、启动时间、屏幕显示、手柄与 heya 生命周期结论均未测。调查阶段未改变 ROCKNIX 产品代码。

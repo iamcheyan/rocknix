@@ -91,6 +91,6 @@ ssh root@<device> pocket install /storage/pocketjs/incoming/hello-pocketjs.tar
 5. **UI 逐步迁移**：先开发独立 Settings/tools app，再视验证结果迁移 heya UI 层。映射可复用 Theme tokens、app ID/catalog model、抽象 Input Actions、服务/持久化 Platform services；SDL rendering/input event loop 与 Go UI widgets 不作为 PocketJS runtime 资产直接复用。
 6. **默认开发路径评估**：多 app、升级/回滚、ABI 兼容、恢复与内存预算稳定后，才评估将 PocketJS app 作为新 UI 默认路径，并决定 heya 保留为 launcher、变为 host 或逐渐退场。
 
-## 尚未验证
+## 阶段三阻塞与未验证
 
-没有 H700 实机验收或本分支 rootfs 集成结果。完整 H700 image、KMS/fbdev 首帧、Hello World 像素显示、手柄映射、退出返回 heya、启动时延、RSS、最终 image 增量和 host→device 开发闭环都必须留待实际运行测量。构建 package 不等于产品体验已验收。
+目前没有精确上游 release artifact 可用于可复现的 H700 构建。上游 v0.15.0 tag 不包含 Linux KMS program；虽可从精确 main commit `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f` 手工构建，但这将依赖非 release 源快照及 Cargo git/dependency vendoring 处置，不能替代正式 release index/source archive。已检查上游 Buildroot `prepare.py` 设计：它明确要求同一 release 提供的 source archive 与 `pocket-release.json`、匹配 size/SHA、再由 Buildroot `cargo-post-process` vendor；不能凭空生成缺失 release identity，也不能把 fixture hash 当上游 hash。其次，H700 当前使用 Sway/Wayland，上游可用 Linux host 的 DRM/KMS/fbdev 模式需要独占显示；改为启动前停止/恢复 Sway 会改变启动与 launcher 生命周期，改 Wayland backend 则超出当前上游接口。为遵守“不得编造 URL/revision/API”且不作未经授权的显示架构决策，本阶段不添加 package.mk/build/install 的伪集成，不把 PocketJS 当普通 app，不改 heya 核心/provider/options。阶段一调查与阶段二架构设计已推送；阶段三 package 实现、Hello World 和后续验收待正式可复现上游源与 H700 host strategy 确认后续做。
