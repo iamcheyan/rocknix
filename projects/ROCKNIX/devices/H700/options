@@ -78,6 +78,7 @@
     NFS_SUPPORT="no"
     SAMBA_SERVER="no"
     SFTP_SERVER="yes"
+    LOCAL_LOGIN="yes"
     SIMPLE_HTTP_SERVER="yes"
     ZEROTIER_SUPPORT="no"
     WIREGUARD_SUPPORT="no"
