@@ -53,7 +53,8 @@
 
 - 整合完成时的分支：integration/2026-10-27；随后按用户要求改名为 main。
 - 后续开发目录：~/development/rocknix，已切换到 main；rocknix-integrated 保留为 detached HEAD 的整合检查点。
-- 本地 main 已建立。推送因工作区快照中的个人路径及配置/脚本触发隐私检查而被拒绝；远端旧 main 已恢复为原 SHA，GitHub 默认分支仍为 next，尚未完成远端主线切换。未创建 PR。
+- 已将整合结果推送到 `origin/main`，并将 GitHub fork `iamcheyan/rocknix` 的默认分支设为 `main`。推送前按仓库隐私钩子修正了文档绝对路径、示例网络地址、空密码值与源码注释中的邮箱。
+- 原远端 main SHA `37be0eb79bb60dc1fd32dbea18fe4d9b6b6e41f3` 保存在备份分支和 bundle 中。未创建 PR。
 - 原主目录的 64 个改动已逐文件确认与快照一致，切换前额外保存为 Git stash；均已包含在 main 中，不应再次 apply。其他 worktree 未改动。
 - 远端旧 main（37be0eb79bb60dc1fd32dbea18fe4d9b6b6e41f3）保存为 backup/20261027/remote-main-before-integration，并已纳入 before-main-replacement.bundle。
 
