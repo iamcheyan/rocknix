@@ -27,6 +27,12 @@ else
   PKG_MESON_OPTS_TARGET+=" -Dwayland=disabled"
 fi
 
+if [ "${DISPLAYSERVER}" = "x11" ]; then
+  PKG_MESON_OPTS_TARGET+=" -Dx11=enabled"
+else
+  PKG_MESON_OPTS_TARGET+=" -Dx11=disabled"
+fi
+
 PKG_MESON_OPTS_TARGET+=" -Dsdl2-audio=enabled -Dsdl2-video=enabled -Dsdl2-gamepad=enabled"
 
 if [ "${TARGET_ARCH}" = "x86_64" ]; then

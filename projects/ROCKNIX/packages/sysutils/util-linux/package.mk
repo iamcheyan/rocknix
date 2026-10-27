@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
+# Copyright (C) 2009-2016 Stephan Raue
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
 
@@ -12,6 +12,7 @@ PKG_DEPENDS_HOST="ccache:host autoconf:host automake:host intltool:host libtool:
 PKG_DEPENDS_TARGET="toolchain"
 PKG_DEPENDS_INIT="toolchain"
 PKG_LONGDESC="A large variety of low-level system utilities that are necessary for a Linux system to function."
+PKG_STAMP="${LOCAL_LOGIN} ${SWAP_SUPPORT}"
 PKG_TOOLCHAIN="autotools"
 PKG_BUILD_FLAGS="+pic:host"
 
@@ -66,6 +67,10 @@ fi
 
 if [ "${SWAP_SUPPORT}" = "yes" ]; then
   PKG_CONFIGURE_OPTS_TARGET+=" --enable-zramctl"
+fi
+
+if [ "${LOCAL_LOGIN}" = "yes" ]; then
+  PKG_CONFIGURE_OPTS_TARGET+=" --enable-agetty"
 fi
 
 PKG_CONFIGURE_OPTS_HOST="--enable-shared \
