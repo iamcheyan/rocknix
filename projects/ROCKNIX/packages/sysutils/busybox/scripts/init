@@ -486,9 +486,7 @@ hdmi_con() {
 }
 
 load_splash() {
-  if [ "@DEVICENAME@" != "H700" ]; then
-    /usr/bin/rocknix-splash
-  fi
+  /usr/bin/rocknix-splash
 
   echo -en "\033[1000H\033[2K$(cat /sysroot/etc/issue)\n\n" >/dev/console
   if [ -f "/storage/.configured" ]
