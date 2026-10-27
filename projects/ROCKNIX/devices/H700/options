@@ -2,7 +2,7 @@
 # setup device defaults
 ################################################################################
 
-    DEVELOPER_MODE="${DEVELOPER_MODE:-false}"
+    DEVELOPER_MODE="${DEVELOPER_MODE:-true}"
     PROJECT_DEVELOPER_MODE="${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE}}"
 
   # The TARGET_CPU variable controls which processor should be targeted for

@@ -5,6 +5,8 @@ After=network.target
 [Service]
 Type=simple
 Environment=ADB_PORT=5555
+Environment=ADBD_LISTEN=tcp:5555
+Environment=ADBD_PORT=5555
 Environment=HOME=/storage
 ExecStart=/usr/sbin/adbd
 Restart=always
