@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
-# Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+# Copyright (C) 2009-2016 Stephan Raue
+# Copyright (C) 2018-present Team LibreELEC
 
 . config/options "${1}"
 
@@ -22,6 +22,7 @@ clean_package() {
       . "${i}/.rocknix-unpack"
       if [ "${STAMP_PKG_NAME}" = "${1}" ]; then
         build_msg "CLR_WARNING" "*" "$(print_color "CLR_WARNING_DIM" "Removing ${i} ...")"
+        chmod -R u+w "${i}" 2>/dev/null || true
         rm -rf "${i}"
       fi
     elif [ -d "${i}" -a -f "${i}/.rocknix-package" ]; then
@@ -29,6 +30,7 @@ clean_package() {
       . "${i}/.rocknix-package"
       if [ "${INFO_PKG_NAME}" = "${1}" ]; then
         build_msg "CLR_WARNING" "*" "$(print_color "CLR_WARNING_DIM" "Removing ${i} ...")"
+        chmod -R u+w "${i}" 2>/dev/null || true
         rm -rf "${i}"
       fi
     fi
