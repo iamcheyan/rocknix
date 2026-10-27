@@ -21,8 +21,8 @@
 | SSH | 远程管理 | 报告 09 |
 | systemd | 系统初始化 | 报告 01 |
 | heya | 新启动器 | 本项目 |
-| Sonata + mpv | 音乐应用和播放 | 本项目 |
-| foot + rocknix-hotkey | Sonata 的终端 UI 和手柄输入 | 本项目 |
+| XMPlayer + mpv | 媒体应用和播放 | 本项目 |
+| foot + rocknix-hotkey + mc | Disk 浏览器的终端 UI 和手柄输入 | 本项目 |
 
 ## 可保留（按需）
 
@@ -42,7 +42,7 @@
 | 组件 | 理由 |
 |---|---|
 | EmulationStation | 被 heya 取代 |
-| RetroArch、libretro 核心和独立模拟器 | H700 迷你镜像面向 heya + Sonata，不包含游戏运行时 |
+| RetroArch、libretro 核心和独立模拟器 | H700 迷你镜像面向 heya + XMPlayer，不包含游戏运行时 |
 | Scraper / 成就 | 游戏元数据系统 |
 | 主题引擎 | ES 专属 |
 | 游戏集合 | ES 专属 |

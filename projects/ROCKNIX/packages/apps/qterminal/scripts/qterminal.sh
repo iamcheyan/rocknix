@@ -21,6 +21,12 @@ set_setting "rocknix.touchscreen-keyboard.enabled" "0"
 pkill wvkbd-mobintl 2>/dev/null
 sleep 0.2
 
+mapper_pid=
+if command -v gptokeyb >/dev/null 2>&1; then
+  gptokeyb qterminal -c /usr/config/gptokeyb/qterminal.gptk &
+  mapper_pid=$!
+fi
+
 # -H is portrait height, -L is landscape height. SM8750 boots landscape via
 # sway transform=90, so -L is what matters here; without it wvkbd falls back
 # to a tiny default (~120 px) and the keys end up squished. -fn 32 fits the
@@ -35,6 +41,10 @@ swaymsg "workspace 99:qterminal"
 swaymsg 'for_window [app_id="qterminal"] move container to workspace 99:qterminal, focus'
 
 cleanup_osk() {
+  if [ -n "${mapper_pid}" ]; then
+    kill "${mapper_pid}" 2>/dev/null
+    wait "${mapper_pid}" 2>/dev/null
+  fi
   pkill wvkbd-mobintl 2>/dev/null
   set_setting "rocknix.touchscreen-keyboard.enabled" "${prior_tskb:-1}"
   [ -n "${prior_ws}" ] && swaymsg "workspace ${prior_ws}" 2>/dev/null

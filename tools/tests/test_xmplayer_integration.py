@@ -39,7 +39,6 @@ class XMPlayerIntegration(unittest.TestCase):
             self.assertEqual(app["id"], "xmplayer")
             self.assertEqual(app["manifestVersion"], 1)
             self.assertEqual(Path(app["entrypoint"]), ROOT / "tools/run-xmplayer-simulator.sh")
-            self.assertTrue((Path(directory) / "apps/sonata/app.json").is_file())
 
     def test_host_runner_selects_native_ffmpeg_and_preserves_data_directory(self):
         with tempfile.TemporaryDirectory() as directory:

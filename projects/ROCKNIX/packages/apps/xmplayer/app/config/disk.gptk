@@ -1,0 +1,17 @@
+up = up
+down = down
+left = left
+right = right
+
+a = enter
+b = esc
+x = space   # mark
+y = tab     # switch panel
+
+l1 = pageup
+l2 = f3     # view
+r1 = pagedown
+r2 = f4     # edit
+
+start = f10 # quit
+back = f10  # quit

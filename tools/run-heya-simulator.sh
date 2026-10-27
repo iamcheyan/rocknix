@@ -14,7 +14,6 @@ import sys
 root, state = map(Path, sys.argv[1:])
 entries = {
     "xmplayer": (root / "projects/ROCKNIX/packages/apps/xmplayer/app.json", "run-xmplayer-simulator.sh"),
-    "sonata": (root / "projects/ROCKNIX/packages/apps/sonata/apps/sonata/app.json", "run-sonata-simulator.sh"),
 }
 for name, (source, runner) in entries.items():
     manifest = json.loads(source.read_text())

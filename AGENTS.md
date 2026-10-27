@@ -45,3 +45,19 @@ Before outputting code or finalizing a PR description, you **MUST** run your out
 * Before flashing, identify the TF card by `lsblk` (removable flag, capacity, model, and current partitions), ensure it is not mounted, and confirm it is not a host disk. Write the decompressed image to the whole card device (for example `/dev/sdX`, not a partition), wait for `conv=fsync` to finish, then read back and compare the image bytes before ejecting.
 * If the kernel reports `Data phase error` or block I/O errors during a flash, treat the card as unverified even if `dd` copied all bytes into cache. Wait for the write process to exit; then retry with a different reader/USB port or card and require a clean read-back comparison.
 * A device-tree or boot-file override may be required for a particular board revision. Find and verify the exact file from the known-good card/backup or project records before flashing; do not guess or substitute a similarly named overlay. Record the override and its source here once identified.
+
+## 4. Sibling Repositories
+
+* `~/development/heya` is the heya launcher source (branch `master`, remote `iamcheyan/heya`). `projects/ROCKNIX/packages/apps/heya/package.mk` pins a commit plus archive SHA-256, so edit the Go code there and bump the pin; never edit a vendored copy.
+* heya Go work uses `/usr/local/go/bin/go` and `/usr/local/go/bin/gofmt`. `go` is not on `PATH`.
+* `~/development/sonata` is no longer part of the H700 image. Sonata was removed from the package set and from the heya app list.
+* heya tests that touch background jobs need a sleep before `Poll()`; a hot poll loop starves the worker goroutine on a single-CPU host.
+* Update the heya pin only after `git push` succeeds: GitHub serves no archive for an unpushed commit, so `PKG_URL` would 404.
+
+## 5. H700 Service Toggles
+
+* `projects/ROCKNIX/packages/rocknix/config/system/configs/system.cfg` holds every service switch as `*.enabled`: `adbd`, `avahi`, `ftp`, `http`, `rsyncd`, `samba`, `syncthing`, `telnet`, `ssh`.
+* `rocknix-services` (`/usr/bin`) is the only writer: `list`, `status KEY`, `start`/`stop`/`toggle KEY`, `set KEY on|off`.
+* Boot order: `098-devservices` starts what is enabled, then the existing `099-networkservices` stops the rest.
+* heya reaches the same switches with `heya-control service KEY on|off|toggle|status`; labels come from `/usr/share/heya/settings/services.conf`.
+* `/storage/.config/system/configs` is excluded from the upgrade sync, so `sources/post-update` copies only the `*.enabled` keys a card is missing; a saved choice is never overwritten.

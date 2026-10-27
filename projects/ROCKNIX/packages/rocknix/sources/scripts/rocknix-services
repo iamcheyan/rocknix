@@ -1,0 +1,93 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Toggle the dev-oriented network and file services from system.cfg.
+# Rows: setting|systemd units|start command when no unit exists
+
+. /etc/profile.d/001-functions
+
+services="
+adbusb.enabled||usbgadget
+avahi.enabled|avahi-daemon.service|
+ftp.enabled|proftpd.service|
+http.enabled|http.service|
+rsyncd.enabled|rsyncd.service|
+samba.enabled|smbd.service nmbd.service|
+syncthing.enabled|syncthing.service|
+telnet.enabled|telnet.socket|
+ssh.enabled|sshd.service|
+"
+
+usage() {
+  echo "Usage: rocknix-services {list|status KEY|start KEY|stop KEY|toggle KEY|set KEY on|off}" >&2
+  exit 2
+}
+
+row() {
+  echo "${services}" | awk -F'|' -v key="${1}" '$1 == key'
+}
+
+known() {
+  [ -n "$(row "${1}")" ] || usage
+}
+
+apply() {
+  local key="${1}" action="${2}" units cmd unit pid
+
+  known "${key}"
+  units=$(row "${key}" | cut -d'|' -f2)
+  cmd=$(row "${key}" | cut -d'|' -f3)
+
+  if [ "${key}" = adbusb.enabled ]; then
+    if [ "${action}" = start ]; then usbgadget adb; else usbgadget disabled; fi
+  elif [ -n "${cmd}" ]; then
+    pid=$(pgrep -f "^${cmd%% *}" | head -n1)
+    if [ "${action}" = start ]; then
+      [ -n "${pid}" ] || nohup ${cmd} >/dev/null 2>&1 &
+    elif [ -n "${pid}" ]; then
+      kill "${pid}" 2>/dev/null ||:
+    fi
+  else
+    for unit in ${units}; do
+      systemctl "${action}" "${unit}" >/dev/null 2>&1 ||:
+    done
+  fi
+
+  case "${action}" in
+    start) set_setting "${key}" 1 ;;
+    stop) set_setting "${key}" 0 ;;
+  esac
+}
+
+case "${1:-}" in
+  list)
+    echo "${services}" | while IFS='|' read -r key units cmd; do
+      [ -n "${key}" ] || continue
+      echo "${key}=$(get_setting "${key}")"
+    done
+    ;;
+  status)
+    known "${2}"
+    echo "${2}=$(get_setting "${2}")"
+    ;;
+  start|stop)
+    [ -n "${2:-}" ] || usage
+    apply "${2}" "${1}"
+    ;;
+  toggle)
+    [ -n "${2:-}" ] || usage
+    known "${2}"
+    if [ "$(get_setting "${2}")" = "1" ]; then apply "${2}" stop; else apply "${2}" start; fi
+    echo "${2}=$(get_setting "${2}")"
+    ;;
+  set)
+    [ -n "${2:-}" ] && [ -n "${3:-}" ] || usage
+    known "${2}"
+    case "${3}" in
+      on) apply "${2}" start ;;
+      off) apply "${2}" stop ;;
+      *) usage ;;
+    esac
+    echo "${2}=$(get_setting "${2}")"
+    ;;
+  *) usage ;;
+esac

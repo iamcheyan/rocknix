@@ -1,0 +1,4 @@
+CONF="ftp.conf"
+STATE=$(get_setting ftp.enabled)
+SVC="proftpd"
+DAEMONS=("proftpd.service")

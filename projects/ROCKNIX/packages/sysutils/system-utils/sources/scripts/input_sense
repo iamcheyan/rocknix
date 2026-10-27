@@ -433,6 +433,7 @@ set +e
       (${FUNCTION_POWER_PRESSED_EVENT})
         ${DEBUG} && log $0 "${FUNCTION_POWER_PRESSED_EVENT}: Pressed"
         /usr/bin/rocknix-fake-suspend power &
+        /usr/bin/rocknix-power-key &
       ;;
       (${FUNCTION_LID_CLOSE_EVENT})
         ${DEBUG} && log $0 "${FUNCTION_LID_CLOSE_EVENT}: Close"

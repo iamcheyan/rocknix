@@ -5,7 +5,7 @@
 
 # gadget setup functions (prepare_usb_network and cleanup_usb_network) are derived from code from
 #   * https://pastebin.com/VtAusEmf (author unknown)
-#   * David Lechner <david@lechnology.com>  https://github.com/ev3dev/ev3-systemd/blob/ev3dev-buster/scripts/ev3-usb.sh
+#   * David Lechner (ev3dev)  https://github.com/ev3dev/ev3-systemd/blob/ev3dev-buster/scripts/ev3-usb.sh
 #   * rundekugel @github https://github.com/rundekugel/USBGadgetNetwork/blob/main/create-dual-rndis-and-cdcecm.sh
 
 # For implementation benchmark results, see the end of this file
@@ -459,7 +459,10 @@ usb_start() {
 
 		mkdir -p /dev/usb-ffs/adb
 		mountpoint -q /dev/usb-ffs/adb || mount -t functionfs adb /dev/usb-ffs/adb
-		/usr/sbin/adbd &
+		killall adbd 2>/dev/null
+		sleep 0.3
+		adbd_tcp_enabled && export ADBD_LISTEN=tcp:5555
+		/usr/sbin/adbd >/dev/null 2>&1 &
 		sleep 1
 
 	elif [ "${USB_MODE}" = cdc ] ; then
@@ -497,6 +500,10 @@ umtp_teardown() {
 	rmdir /dev/ffs-umtp 2>/dev/null
 }
 
+adbd_tcp_enabled() {
+	grep -q '^adbd.enabled=1' /storage/.config/system/configs/system.cfg 2>/dev/null
+}
+
 adb_teardown() {
 	killall adbd 2>/dev/null
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -505,6 +512,7 @@ adb_teardown() {
 		sleep 0.1
 	done
 	rmdir /dev/usb-ffs/adb 2>/dev/null
+	adbd_tcp_enabled && ADBD_LISTEN=tcp:5555 /usr/sbin/adbd >/dev/null 2>&1 &
 }
 
 usb_stop() {
@@ -626,6 +634,13 @@ case "$1" in
 		echo "disabled network file_transfer adb"
 		;;
 	"--start")
+		[ -f "${GADGETCONF}" ] || USB_MODE=adb
+		# system.cfg wins over the cached mode so every freshly written image
+		# comes up in the mode a developer expects.
+		if [ -f /etc/profile.d/001-functions ]; then
+			. /etc/profile.d/001-functions
+			[ "$(get_setting adbusb.enabled)" = "1" ] && USB_MODE=adb
+		fi
 		usb_init_clean_state
 		prepare_usb_network
 		prepare_usb_mtp
@@ -653,8 +668,8 @@ case "$1" in
 		usb_start adb
 		;;
 	"adb_tcp")
-		export ADB_PORT=5555
-		pidof adbd >/dev/null 2>&1 || /usr/sbin/adbd &
+		export ADBD_LISTEN=tcp:5555
+		pidof adbd >/dev/null 2>&1 || /usr/sbin/adbd >/dev/null 2>&1 &
 		echo "ADB network daemon listening on port 5555"
 		;;
 	"adb_tcp_stop")
@@ -686,8 +701,8 @@ esac
 # Conditions:
 #   * performance governor: `echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`
 #   * server on gadget: `socat -b 4194304 /dev/null,ignoreeof tcp-listen:2003,fork,reuseaddr`
-#   * client on host: `dd if=/dev/urandom bs=1M status=progress | nc 10.1.1.2 2003`
-#   * switch NCM to direct mode: `brctl delif usbnet usb0; ip ad de 10.1.1.2/24 dev usbnet; ip ad ad 10.1.1.2/24 dev usb0`
+#   * client on host: `dd if=/dev/urandom bs=1M status=progress | nc 192.0.2.1 2003`
+#   * switch NCM to direct mode: `brctl delif usbnet usb0; ip ad de 192.0.2.1/24 dev usbnet; ip ad ad 192.0.2.1/24 dev usb0`
 #   * back to bridge mode (restart): `usbgadget cleanup; usbgadget prepare; usbgadget start cdc`
 #   * switch to rndis: `sudo usb_modeswitch -v 1d6b -p 0104 -u 2`
 #   * top delay 10 seconds

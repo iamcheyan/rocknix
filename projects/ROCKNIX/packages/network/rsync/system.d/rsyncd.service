@@ -1,0 +1,13 @@
+[Unit]
+Description=rsync daemon
+After=network.target
+
+[Service]
+Slice=background.slice
+ExecStartPre=/bin/sh -c '[ -f /storage/.config/rsyncd.conf ] || printf "[storage]\\npath = /storage\\nread only = false\\nuid = root\\ngid = root\\n" > /storage/.config/rsyncd.conf'
+ExecStart=/usr/bin/rsync --daemon --no-detach --config=/storage/.config/rsyncd.conf
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -25,7 +25,7 @@ XMPlayer 原作者是针对 **muOS** 开发的。在 muOS 系统下，后台默�
 
 ## 2. 彻底根治方案：注入原生手柄驱动桥（Native Gamepad Bridge）
 
-不需要在后台挂复杂的虚拟键盘守护进程，我们在 XMPlayer 的入口文件 [`projects/ROCKNIX/packages/apps/xmplayer/app/main.lua`](file:///home/tetsuya/development/rocknix/projects/ROCKNIX/packages/apps/xmplayer/app/main.lua) 注入了原生的手柄支持：
+不需要在后台挂复杂的虚拟键盘守护进程，我们在 XMPlayer 的入口文件 [`projects/ROCKNIX/packages/apps/xmplayer/app/main.lua`](projects/ROCKNIX/packages/apps/xmplayer/app/main.lua) 注入了原生的手柄支持：
 
 ### 2.1 映射按键按下与抬起
 ```lua
@@ -91,3 +91,38 @@ end
 | **L1 / R1 肩键** | `PageUp / PageDown` | 列表快速翻页、音量调整 |
 | **Start 键** | `Return` | 快捷播放 / 暂停 |
 | **Select 键** | `Escape` | 退出播放器返回主启动器 |
+
+---
+
+## 4. 中文和日文显示为方框：CJK 字体回退
+
+### 4.1 根因
+
+XMPlayer 的界面字体原先只有 `Figtree-SemiBold.otf` 和 `Oswald-SemiBold.ttf`，之后回退到 LÖVE 自带的默认字体。这几种字体没有完整的中日韩字形，所以音乐名、文件名和其他界面文本遇到中文或日文时会显示成方框。
+
+ROCKNIX 的 `MINI_DISTRO` 镜像已经通过 `PKG_FONTS="corefonts noto-sans-cjk"` 安装 Noto CJK，文件路径为：
+
+```text
+/usr/share/fonts/truetype/noto-cjk/NotoSansCJKsc-Regular.otf
+```
+
+问题在于 XMPlayer 原先没有加载这份系统字体，也没有把它放进 LÖVE 字体回退链。
+
+### 4.2 修复
+
+在 `projects/ROCKNIX/packages/apps/xmplayer/app/ui/assets.lua` 中，使用 Lua 文件 IO 从系统路径读取 Noto CJK，再用 `love.filesystem.newFileData` 创建字体数据。LÖVE 的虚拟文件系统只搜索应用目录和存档目录，因此不能把系统绝对路径直接当作应用内相对路径使用。
+
+每个 UI 字号现在使用以下回退顺序：
+
+1. Figtree 主字体
+2. Oswald 字体
+3. Noto Sans CJK SC
+4. LÖVE 默认字体
+
+同时在 `projects/ROCKNIX/packages/apps/xmplayer/package.mk` 显式依赖 `noto-sans-cjk`，确保构建 XMPlayer 的镜像会安装该字体。字体只由系统字体包提供，不在 XMPlayer 目录重复拷贝。
+
+如果系统字体文件不存在或读取失败，程序仍使用原有拉丁字体回退，不会因 CJK 字体缺失而阻止启动。
+
+### 4.3 设备验证
+
+新镜像装到 RG34XX 后，分别在 XMPlayer 的音乐列表、文件列表和设置界面检查包含简体中文、平假名、片假名及常见汉字的名称；确认文本不再显示方框。当前只完成代码修复，尚未在设备上验证渲染结果。

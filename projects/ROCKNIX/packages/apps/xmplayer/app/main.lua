@@ -299,6 +299,10 @@ end
 
 require("controller").install(love)
 
+function love.quit()
+    require("media_marker").set(false)
+end
+
 function love.keypressed(key)
     if indexing and indexing.is_scanning then
         return

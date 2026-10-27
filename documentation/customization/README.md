@@ -6,46 +6,47 @@
 
 ## 目录导航
 
-1. [01. 系统底层架构与核心认知](file:///home/tetsuya/development/rocknix/documentation/customization/01_architecture_and_concepts.md)
+1. [01. 系统底层架构与核心认知](documentation/customization/01_architecture_and_concepts.md)
    * 掌机双分区运作模型（只读 SquashFS + 可写 Storage）
    * 图形显示（DRM/KMS + Wayland/Sway）与按键输入栈
    * 启动链（Boot Flow）与自启动服务（systemd）
    * ROCKNIX 软件包管理规范（`package.mk`）
 
-2. [02. 基础编译环境搭建](file:///home/tetsuya/development/rocknix/documentation/customization/02_build_environment_setup.md)
+2. [02. 基础编译环境搭建](documentation/customization/02_build_environment_setup.md)
    * 为什么推荐容器化构建（Docker）
    * 构建开发镜像与一键进入环境
    * 针对 H700 目标设备的基线编译测试
 
-3. [03. 变更追踪与电脑端测试工作流](file:///home/tetsuya/development/rocknix/documentation/customization/03_development_and_testing_workflow.md)
+3. [03. 变更追踪与电脑端测试工作流](documentation/customization/03_development_and_testing_workflow.md)
    * 如何清晰追踪每一次代码改动（Git 规范与隔离规则）
    * 电脑端快速迭代验证（单包快速编译、产物检查）
    * 跨架构仿真与本地调试（QEMU 用户态测试）
    * 局域网快速推送到真机（免烧录、免插拔 SD 卡的极致效率）
    * 最终系统打包（SquashFS 与 .img.gz 固件生成）
 
-4. [04. 电脑端直接操作与调试体验（原生窗口与虚拟机）](file:///home/tetsuya/development/rocknix/documentation/customization/04_gui_and_vm_simulation.md)
+4. [04. 电脑端直接操作与调试体验（原生窗口与虚拟机）](documentation/customization/04_gui_and_vm_simulation.md)
    * 原生窗口模拟调试（以 720×480 掌机比例即时预览与手柄/键盘交互）
    * GUI 窗口如何通过 Docker 投射到主机桌面
    * QEMU 启动完整 ROCKNIX 虚拟系统进行全流程验证
 
-5. [05. XMPlayer 掌机按键失灵根因分析与原生手柄修复](file:///home/tetsuya/development/rocknix/documentation/customization/05_xmplayer_and_gamepad_fix.md)
+5. [05. XMPlayer 掌机按键失灵根因分析与原生手柄修复](documentation/customization/05_xmplayer_and_gamepad_fix.md)
    * 为什么在原版 ROCKNIX 里 XMPlayer 按键彻底瘫痪
    * 原生手柄驱动桥（Native Gamepad Bridge）补丁实现
    * RG34XX 实体按键与 XMB 功能映射表
+   * 中文/日文方框字根因与 Noto CJK 字体回退修复
 
-6. [06. 编译系统底层原理解析与本次全套定制归总](file:///home/tetsuya/development/rocknix/documentation/customization/06_build_system_deep_dive_and_customization_summary.md)
+6. [06. 编译系统底层原理解析与本次全套定制归总](documentation/customization/06_build_system_deep_dive_and_customization_summary.md)
    * 构建系统工作流剖析（Host 工具 -> 交叉工具链 -> 目标系统镜像）
    * 本地持久缓存机制（sources/ 源码包、.stamps/ 指纹时间戳）
    * 为什么后续编译速度会快几十倍（单包增量构建技巧）
    * 针对 RG34XX 专属开发版的 7 项核心定制改动总揽
 
-7. [07. 系统控制中心与 USB 扩展功能（MTP / ADB 调试）](file:///home/tetsuya/development/rocknix/documentation/customization/07_system_control_panel_and_usb_gadget.md)
+7. [07. 系统控制中心与 USB 扩展功能（MTP / ADB 调试）](documentation/customization/07_system_control_panel_and_usb_gadget.md)
    * 启动器原生集成系统控制中心（WiFi / 蓝牙 / 音量 / 亮度 / USB 模式）
    * Type-C 直插免拔卡 MTP 磁盘传输机制
    * USB 虚拟网卡与免密 ADB 极客调试工作流
 
-8. [08. 系统控制中心交互设计与 USB ADB / MTP / 网卡落地](file:///home/tetsuya/development/rocknix/documentation/customization/08_system_control_center_menu_and_usb_adb.md)
+8. [08. 系统控制中心交互设计与 USB ADB / MTP / 网卡落地](documentation/customization/08_system_control_center_menu_and_usb_adb.md)
    * 720×480 原生控制中心 14 项完整控制菜单设计与平滑滚动视窗
    * USB 复合 Gadget 4 大模式（MTP 磁盘、USB ADB、虚拟网卡、仅充电）
    * 无线 Wi-Fi ADB（TCP 端口 5555）一键开启与连接

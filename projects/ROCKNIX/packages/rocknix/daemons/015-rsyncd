@@ -1,0 +1,4 @@
+CONF="rsyncd.conf"
+STATE=$(get_setting rsyncd.enabled)
+SVC="rsyncd"
+DAEMONS=("rsyncd.service")

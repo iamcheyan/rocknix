@@ -1,0 +1,77 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Power key: keep playing with the screen off while a player holds /run/media.pid
+# (its own PID); otherwise suspend to RAM.
+
+. /etc/profile
+
+# only active where the platform quirk has told logind to ignore the key
+[ -e /storage/.config/logind.conf.d/power-key.conf ] || exit 0
+
+MARKER=/run/media.pid
+STATE=/run/rocknix-power-key
+SUSPENDING=${STATE}.suspending
+SCREEN_OFF=${STATE}.screen-off
+
+media_playing() {
+  local pid
+  pid=$(cat "${MARKER}" 2>/dev/null) || return 1
+  [[ "${pid}" =~ ^[0-9]+$ ]] && kill -0 "${pid}" 2>/dev/null
+}
+
+backlights() {
+  find /sys/class/backlight/*/ -name bl_power 2>/dev/null
+}
+
+set_backlight() {
+  local file
+  for file in $(backlights); do
+    echo "${1}" > "${file}"
+  done
+}
+
+block_gamepad() {
+  local event name
+  for event in /sys/class/input/event*; do
+    name=$(cat "${event}/device/name" 2>/dev/null)
+    [[ "${name}" == *Gamepad* ]] || continue
+    /usr/bin/evtest --grab "/dev/input/${event##*/}" > /dev/null &
+    echo $! >> "${SCREEN_OFF}.grabs"
+  done
+}
+
+unblock_gamepad() {
+  local pid
+  for pid in $(cat "${SCREEN_OFF}.grabs" 2>/dev/null); do
+    kill "${pid}" 2>/dev/null
+  done
+  rm -f "${SCREEN_OFF}.grabs"
+}
+
+screen_on() {
+  set_backlight 0
+  unblock_gamepad
+  rm -f "${SCREEN_OFF}"
+}
+
+if [ -e "${SUSPENDING}" ]; then
+  exit 0
+fi
+
+if [ -e "${SCREEN_OFF}" ]; then
+  screen_on
+  exit 0
+fi
+
+if media_playing; then
+  touch "${SCREEN_OFF}"
+  set_backlight 4
+  block_gamepad
+  exit 0
+fi
+
+touch "${SUSPENDING}"
+systemctl suspend
+# the key press that wakes the device is delivered after resume; ignore it
+sleep 2
+rm -f "${SUSPENDING}"

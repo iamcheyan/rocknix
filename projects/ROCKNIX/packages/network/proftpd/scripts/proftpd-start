@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run proftpd in the foreground with its writable log directory in place.
+set -eu
+
+conf=/storage/.config/proftpd.conf
+
+mkdir -p /storage/.config /var/log/proftpd
+[ -f "${conf}" ] || cp /etc/proftpd.conf "${conf}"
+
+exec /usr/sbin/proftpd -n -c "${conf}"

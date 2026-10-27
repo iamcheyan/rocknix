@@ -7,7 +7,7 @@ PKG_ARCH="aarch64"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/atalaygrgn/XMPlayer"
 PKG_URL=""
-PKG_DEPENDS_TARGET="toolchain mpv SDL2 freetype openal-soft libogg libvorbis mpg123 zlib gamecontrollerdb rocknix-hotkey"
+PKG_DEPENDS_TARGET="toolchain mpv mc SDL2 freetype openal-soft libogg libvorbis mpg123 zlib gamecontrollerdb rocknix-hotkey noto-sans-cjk"
 PKG_LONGDESC="All-in-one XMB-inspired media suite for handheld Linux devices"
 PKG_TOOLCHAIN="manual"
 

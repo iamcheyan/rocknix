@@ -1,0 +1,29 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Start the optional dev services that system.cfg enables.
+
+. /etc/profile.d/001-functions
+
+row() {
+  case "${1}" in
+    adbusb.enabled) echo "|usbgadget adb" ;;
+    avahi.enabled) echo "avahi-daemon.service|" ;;
+    ftp.enabled) echo "proftpd.service|" ;;
+    http.enabled) echo "http.service|" ;;
+    rsyncd.enabled) echo "rsyncd.service|" ;;
+    telnet.enabled) echo "telnet.socket|" ;;
+  esac
+}
+
+for setting in adbusb.enabled avahi.enabled ftp.enabled http.enabled rsyncd.enabled telnet.enabled
+do
+  [ "$(get_setting "${setting}")" = "1" ] || continue
+  row=$(row "${setting}")
+  units=${row%%|*}
+  cmd=${row#*|}
+  if [ -n "${cmd}" ]; then
+    ${cmd} >/dev/null 2>&1 &
+  else
+    systemctl start ${units} >/dev/null 2>&1 ||:
+  fi
+done

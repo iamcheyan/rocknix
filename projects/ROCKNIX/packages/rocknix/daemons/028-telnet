@@ -1,0 +1,4 @@
+CONF="telnet.conf"
+STATE=$(get_setting telnet.enabled)
+SVC="telnet.socket"
+DAEMONS=("telnet.socket")

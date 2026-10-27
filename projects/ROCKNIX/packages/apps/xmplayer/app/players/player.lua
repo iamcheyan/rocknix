@@ -2,6 +2,7 @@ local history = require("history")
 local system = require("system")
 local utils = require("utils")
 local runtime = require("runtime")
+local media_marker = require("media_marker")
 local player = {}
 
 -- Flag to signal main.lua to do a hard refresh
@@ -162,7 +163,9 @@ function player.play_video(filepath, resume, options)
             runtime.command("mpv"), target_src, loop_flag, screenshot_arg, sub_arg, runtime.quote(watch_later_dir), resume_flag)
 
         print("Executing: " .. command)
+        media_marker.set(true)
         os.execute(command)
+        media_marker.set(false)
 
         -- Delete the temporary playlist file if it was created
         if temp_playlist_path then
@@ -221,7 +224,9 @@ function player.play_video(filepath, resume, options)
             local command = string.format('%s%s -fs -autoexit -noborder%s%s %s', env_prefix, ffplay_bin, vf_arg, ss_arg,
                 runtime.quote(p))
             print("Executing: " .. command)
+            media_marker.set(true)
             os.execute(command)
+            media_marker.set(false)
         end
 
         print("FFplay exited, returning to XMPlayer")

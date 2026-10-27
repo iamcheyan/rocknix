@@ -1,9 +1,25 @@
 #!/bin/sh
+# Seed heya's writable app directory from the read-only image copies.
+#
+# Images only add apps. Removing one needs an explicit entry in removed-apps,
+# because that is the only list that can tell an image leftover apart from an
+# app the user added by hand.
 
 source_root=/usr/share/heya/apps
 target_root=/storage/heya/apps
+removed=/usr/share/heya/removed-apps
 
 [ -d "${source_root}" ] || exit 0
+mkdir -p "${target_root}"
+
+if [ -f "${removed}" ]; then
+  while read -r app_id; do
+    [ -n "${app_id}" ] || continue
+    case "${app_id}" in \#*) continue ;; esac
+    [ -f "${source_root}/${app_id}/app.json" ] && continue
+    rm -rf "${target_root:?}/${app_id}"
+  done < "${removed}"
+fi
 
 for manifest in "${source_root}"/*/app.json; do
   [ -f "${manifest}" ] || continue
@@ -16,3 +32,4 @@ for manifest in "${source_root}"/*/app.json; do
   mkdir -p "${target_root}/${app_id}"
   cp "${manifest}" "${target}"
 done
+exit 0

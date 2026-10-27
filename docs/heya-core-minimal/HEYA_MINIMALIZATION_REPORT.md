@@ -1,6 +1,7 @@
 # 08 · 最小化报告
 
 > 基线：`next` @ `742bd52562`。首个目标：H700 Pocket Linux 镜像。当前改动裁剪 H700 镜像，不影响其它设备。
+> 2026-10-26 的后续改动（删除 Sonata、服务开关、Disk 浏览）见 `WORKLOG_2026-10-26.md`。
 
 ## 1. 当前系统结构图
 
@@ -16,7 +17,7 @@ flowchart TB
     SWAY["sway.service"] --> HEYA["heya.service"]
   end
   subgraph FRONT["前端"]
-    HEYA --> SONATA["Sonata（heya 应用）"]
+    HEYA --> APPS["XMPlayer / Disk / 服务设置"]
   end
   BOOT --> BASE --> DISPLAY --> FRONT
 ```
@@ -36,7 +37,7 @@ flowchart TB
 | SSH (openssh) | 远程管理 |
 | systemd | 系统初始化 |
 | heya | 新启动器 |
-| Sonata + mpv | 音乐库与播放 |
+| XMPlayer + mpv | 媒体播放 |
 
 ## 3. 建议删除组件
 
@@ -56,7 +57,7 @@ flowchart TB
 | 风险 | 等级 | 缓解 |
 |---|---|---|
 | 前端切换后启动链断裂 | 高 | H700 UI_SERVICE 启动 sway + heya |
-| Sonata 首次启动没有应用条目 | 中 | autostart 将包内默认 manifest 复制到 `/storage/heya/apps` |
+| heya 首次启动没有应用条目 | 中 | autostart 将包内默认 manifest 复制到 `/storage/heya/apps` |
 | 触摸/键盘输入 | 中 | 保留 sway-touch 或改用 heya 输入 |
 | 电源/散热 | 低 | 保留 powerstate / fancontrol |
 | 用户数据丢失 | 低 | `/storage` 不变，ES 配置可忽略 |
@@ -66,7 +67,7 @@ flowchart TB
 
 1. 创建 `heya-core-minimal` 分支并完成架构审计（已完成）
 2. H700 包集合禁用游戏镜像、ES、旧 handheld-launcher 和可选服务（已实现）
-3. 将 H700 UI_SERVICE 切换为 Sway + heya，并加入 Sonata 应用（已实现）
+3. 将 H700 UI_SERVICE 切换为 Sway + heya，并加入 XMPlayer 与 Disk 应用（已实现）
 4. `make H700` 构建与设备启动验证（待执行）
 
 ## 6. 预计收益
@@ -84,4 +85,4 @@ flowchart TB
 - `[待验证]` H700 默认启用的 systemd 服务全集
 - `[待验证]` 完整构建耗时与各包体积
 - `[待验证]` H700 镜像能否完整构建
-- `[待验证]` 实机启动后 heya.service、Sonata 和 mpv 是否正常
+- `[待验证]` 实机启动后 heya.service、XMPlayer、Disk 和 mpv 是否正常

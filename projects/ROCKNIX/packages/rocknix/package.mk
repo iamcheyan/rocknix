@@ -69,6 +69,12 @@ EOF
   cp ${PKG_DIR}/sources/scripts/* ${INSTALL}/usr/bin
   chmod 0755 ${INSTALL}/usr/bin/* 2>/dev/null ||:
 
+  ### Autostart hooks and service toggles consumed by rocknix-autostart.service
+  mkdir -p ${INSTALL}/usr/lib/autostart/common ${INSTALL}/usr/lib/autostart/daemons
+  cp ${PKG_DIR}/autostart/* ${INSTALL}/usr/lib/autostart/common
+  cp ${PKG_DIR}/daemons/* ${INSTALL}/usr/lib/autostart/daemons
+  chmod 0755 ${INSTALL}/usr/lib/autostart/common/* ${INSTALL}/usr/lib/autostart/daemons/*
+
   ### Fix and migrate to autostart package
   enable_service rocknix-autostart.service
 
@@ -89,9 +95,12 @@ EOF
     sed -i "s#system.loglevel=none#system.loglevel=verbose#g" ${INSTALL}/usr/config/system/configs/system.cfg
   fi
 
+  ### H700 is a dev image: services start from the system.cfg toggles via
+  ### rocknix-services; Wi-Fi and SSH are on so the device is reachable at first boot.
   if [ "${DEVICE}" = "H700" ]
   then
     sed -i "s#ssh.enabled=0#ssh.enabled=1#g" ${INSTALL}/usr/config/system/configs/system.cfg
+    sed -i "s#wifi.enabled=0#wifi.enabled=1#g" ${INSTALL}/usr/config/system/configs/system.cfg
   fi
 
   ### Disable automount on AMD64

@@ -1,0 +1,33 @@
+#!/bin/sh
+# Open midnight commander with every mounted storage volume in the panel tree.
+set -eu
+
+export HOME=/storage
+export TERM=xterm-256color
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt}"
+
+mapper_pid=
+cleanup() {
+  if [ -n "${mapper_pid}" ]; then
+    kill "${mapper_pid}" 2>/dev/null || true
+    wait "${mapper_pid}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+trap 'exit 143' HUP INT TERM
+
+if command -v gptokeyb >/dev/null 2>&1; then
+  gptokeyb disk -c /usr/share/xmplayer/config/disk.gptk &
+  mapper_pid=$!
+fi
+
+export MC_DISK_ROOT=/storage/disk
+mkdir -p "${MC_DISK_ROOT}"
+for mount in /storage /storage/games-external /media/* /run/media/*
+do
+  [ -d "${mount}" ] || continue
+  [ "$(mountpoint -q "${mount}" && echo mounted)" = mounted ] || continue
+  [ "${mount}" = /storage ] || ln -sfn "${mount}" "${MC_DISK_ROOT}/$(basename "${mount}")"
+done
+
+exec foot -a disk -e mc --nomouse "${MC_DISK_ROOT}"

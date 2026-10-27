@@ -26,25 +26,31 @@ def resolve(root, path):
 
 def check(root):
     commands = [
-        'heya', 'heya-control', 'sonata', 'sonata-launch', 'xmplayer',
-        'xmplayer-playback', 'mpv', 'foot', 'gptokeyb', 'nmcli', 'rfkill', 'evtest',
+        'heya', 'heya-control', 'xmplayer',
+        'xmplayer-playback', 'mpv', 'foot', 'gptokeyb', 'nmcli', 'evtest',
+        'disk-browser', 'mc', 'rocknix-services',
     ]
     errors = []
     for command in commands:
         if not os.access(resolve(root, '/usr/bin/' + command), os.X_OK):
             errors.append(f'missing executable: /usr/bin/{command}')
+    if not os.access(resolve(root, '/usr/sbin/rfkill'), os.X_OK):
+        errors.append('missing executable: /usr/sbin/rfkill')
     for path in [
         '/usr/lib/bluetooth/bluetoothd', '/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt',
         '/usr/lib/systemd/system/heya.service', '/usr/lib/autostart/common/050-heya-apps',
         '/usr/lib/udev/rules.d/99-automount.rules', '/usr/lib/tmpfiles.d/rocknix-dirs.conf',
-        '/usr/share/heya/apps/sonata/app.json', '/usr/share/heya/apps/xmplayer/app.json',
+        '/usr/share/heya/apps/xmplayer/app.json', '/usr/share/heya/apps/disk/app.json',
+        '/usr/lib/autostart/daemons/003-avahi', '/usr/lib/autostart/daemons/028-telnet',
+        '/usr/lib/systemd/system/rsyncd.service', '/usr/lib/systemd/system/telnet.socket',
+        '/usr/lib/systemd/system/http.service', '/usr/lib/systemd/system/proftpd.service',
     ]:
         if not resolve(root, path).is_file():
             errors.append(f'missing runtime file: {path}')
     for path in sorted((root / 'usr/share/xmplayer/bin').glob('*')):
         if path.name == 'gptokeyb2':
             errors.append('obsolete bundled gptokeyb2 still installed')
-    entries = ['/usr/bin/' + name for name in ('heya', 'sonata', 'mpv', 'foot', 'gptokeyb')]
+    entries = ['/usr/bin/' + name for name in ('heya', 'mpv', 'gptokeyb')]
     entries += ['/usr/share/xmplayer/bin/' + name for name in ('love', 'ffmpeg', 'ffplay')]
     visited = set()
     for entry in entries:

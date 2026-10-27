@@ -1,0 +1,13 @@
+[Unit]
+Description=ProFTPD server
+After=network.target
+
+[Service]
+Slice=background.slice
+ExecStart=/usr/bin/proftpd-start
+Restart=on-failure
+RestartSec=10
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

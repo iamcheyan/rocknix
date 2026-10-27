@@ -1,0 +1,4 @@
+CONF="http.conf"
+STATE=$(get_setting http.enabled)
+SVC="simple-http-server"
+DAEMONS=("http.service")

@@ -198,3 +198,14 @@ then
   rsync -a /usr/config/ppsspp/PSP/SYSTEM/controls.ini /storage/.config/ppsspp/PSP/SYSTEM/controls.ini
 fi
 
+# /storage/.config/system/configs is excluded from the config sync, so new
+# service toggles would never reach an existing card. Copy only the *.enabled
+# keys the card is missing; a saved choice is never overwritten.
+SYSTEM_CFG=/storage/.config/system/configs/system.cfg
+if [ -f "${SYSTEM_CFG}" ] && [ -f /usr/config/system/configs/system.cfg ]; then
+  tocon "Merging service toggles..."
+  for key in $(grep -o "^[a-z0-9._]*\.enabled=" /usr/config/system/configs/system.cfg); do
+    grep -q "^${key}" "${SYSTEM_CFG}" || printf '%s\n' "$(grep "^${key}" /usr/config/system/configs/system.cfg)" >> "${SYSTEM_CFG}"
+  done
+  sort_settings
+fi

@@ -6,6 +6,7 @@ local utils                = require("utils")
 local ffmpeg_audio         = require("ffmpeg_audio")
 local viewport             = require("viewport")
 local indexing             = require("indexing")
+local media_marker         = require("media_marker")
 
 local music                = {}
 
@@ -190,6 +191,7 @@ function music.load_track(track_info)
         ffmpeg_audio.play()
         music.playing = true
         music.paused = false
+        media_marker.set(true)
         if music.pending_slide_dir then
             music.slide_x = music.pending_slide_dir
             music.pending_slide_dir = nil
@@ -200,6 +202,7 @@ function music.load_track(track_info)
     else
         print("Failed to load with FFmpeg: " .. track_info.path)
         music.playing = false
+        media_marker.set(false)
         music.source = nil
         music.sound_data = nil
         music.pending_slide_dir = nil
@@ -283,6 +286,7 @@ function music.stop()
     music.playing = false
     music.paused = false
     music.elapsed = 0
+    media_marker.set(false)
 end
 
 function music.toggle_pause()
@@ -294,6 +298,7 @@ function music.toggle_pause()
         ffmpeg_audio.pause()
         music.paused = true
     end
+    media_marker.set(music.playing and not music.paused)
 end
 
 function music.next_track()
@@ -518,6 +523,7 @@ function music.update(dt)
     end
 
     -- Update playback state
+    media_marker.set(music.playing and not music.paused)
     if music.playing and not music.paused then
         music.elapsed = ffmpeg_audio.getElapsedTime()
 

@@ -16,6 +16,9 @@ if [ -z "${ARCH}" ]; then
 fi
 
 . config/options ""
+# Device options call distribution helpers such as get_kernel_make_extracmd,
+# which live outside config/functions.
+. ${DISTRO_DIR}/${DISTRO}/config/functions
 . projects/${PROJECT}/devices/${DEVICE}/options
 
 echo "Building ${DISTRO} for ${DEVICE}"

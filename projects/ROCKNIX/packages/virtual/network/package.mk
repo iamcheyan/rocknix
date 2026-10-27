@@ -7,7 +7,7 @@ PKG_VERSION=""
 PKG_LICENSE="various"
 PKG_SITE="https://libreelec.tv"
 PKG_URL=""
-PKG_DEPENDS_TARGET="toolchain iwd networkmanager netbase ethtool openssh iw wireless-regdb rsync avahi nss-mdns"
+PKG_DEPENDS_TARGET="toolchain iwd networkmanager netbase ethtool openssh iw wireless-regdb rsync avahi nss-mdns proftpd telnet"
 
 if [ "${MINI_DISTRO}" != "yes" ]; then
   PKG_DEPENDS_TARGET+=" tailscale miniupnpc speedtest-cli"

@@ -16,6 +16,9 @@ makeinstall_target() {
   cp -rf ${PKG_BUILD}/.${TARGET_NAME}/qterminal ${INSTALL}/usr/bin
   chmod 0755 ${INSTALL}/usr/bin/qterminal
 
+  mkdir -p ${INSTALL}/usr/config/gptokeyb
+  install -m 0644 ${PKG_DIR}/config/qterminal.gptk ${INSTALL}/usr/config/gptokeyb/qterminal.gptk
+
   mkdir -p ${INSTALL}/usr/config/modules
   cp -rf ${PKG_DIR}/scripts/* ${INSTALL}/usr/config/modules
   chmod 0755 ${INSTALL}/usr/config/modules/*

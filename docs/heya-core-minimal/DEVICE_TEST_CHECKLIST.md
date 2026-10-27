@@ -1,9 +1,11 @@
 # H700 mini：HX90 编译与上机检查
 
-本分支将 H700 前端改为 heya，默认应用为 XMPlayer 和 Sonata（Sonata `87d6f2f88ff7fd8018f616a12d7c1e86779fae30`）。heya 的源码由
+本分支将 H700 前端改为 heya，默认应用为 XMPlayer 与 Disk。heya 的源码由
 `projects/ROCKNIX/packages/apps/heya/package.mk` 中的 commit 和 SHA256 锁定；
 HX90 不会读取 NAS 上另一个工作目录里的未提交代码。
-当前 heya 源码版本：`0aaaf541905b5d1e6d322beff1544d6560b2e9da`。
+当前 heya 源码版本：`bca7c0510ac6c857b55c9532b9165dd332b8477c`。
+服务开关页（Services）已提交到 `~/development/heya`（`830ffd4`），推送成功后
+需要同步更新 `projects/ROCKNIX/packages/apps/heya/package.mk` 的 `PKG_VERSION` 与 `PKG_SHA256`。
 
 ## 编译前
 
@@ -43,7 +45,7 @@ AArch64 ELF 和递归共享库依赖；它不执行 ARM 程序，也不证明库
   选择网络后连接或输入密码，可断开或忘记保存的网络。
 - 蓝牙可扫描、配对、核对数字、输入 PIN/passkey、显示键盘配对码、重连、断开和移除。
   耳机和手柄各测一次；显示配对成功不能替代音频和按键实测。
-- `/storage/music` 放 Sonata 音乐；XMPlayer 的媒体目录由启动脚本初始化。
+- `/storage/music` 放音乐；XMPlayer 的媒体目录由启动脚本初始化。Disk 打开 mc，扫描 `/storage` 与挂载的 SD 卡。
   SSH/SFTP 保留，传文件前在真机检查 SSH 服务和认证设置。
 
 ## 必须在硬件完成的验收
@@ -53,7 +55,7 @@ AArch64 ELF 和递归共享库依赖；它不执行 ARM 程序，也不证明库
 3. Wi-Fi 扫描、正确/错误密码、带空格和符号的密码、取消、忘记网络；重启后自动重连。
 4. 蓝牙首次启用无需旧备份；新设备配对，拒绝配对码，接受配对码，断开重连，移除后重新配对。
 5. 音量和亮度调整后重启仍保留；Wi-Fi/蓝牙开关在重启、休眠唤醒后符合设置。
-6. XMPlayer FLAC/MP3 解码、视频启动和退出；Sonata 浏览和播放；扬声器、耳机、蓝牙音频分别验证。
+6. XMPlayer FLAC/MP3 解码、视频启动和退出；Disk 浏览内置存储与 SD 卡；扬声器、耳机、蓝牙音频分别验证。
 7. 电量百分比、充电/放电状态、卡槽挂载、拔卡重插、短按休眠和唤醒。
 
 ## 真机诊断

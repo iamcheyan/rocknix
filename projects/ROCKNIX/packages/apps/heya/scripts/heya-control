@@ -19,5 +19,20 @@ case "$control" in
       rocknix-bluetooth "$action"
     fi
     ;;
-  *) echo "Usage: heya-control {volume|brightness|wifi|bluetooth} VALUE" >&2; exit 2 ;;
+  services)
+    exec rocknix-services list
+    ;;
+  service)
+    [ -n "$value" ] || exit 2
+    case "${3:-status}" in
+      on|off) exec rocknix-services set "$value" "$3" ;;
+      toggle) exec rocknix-services toggle "$value" ;;
+      status) exec rocknix-services status "$value" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  disk)
+    exec /usr/bin/disk-browser
+    ;;
+  *) echo "Usage: heya-control {volume|brightness|wifi|bluetooth} VALUE | services | service KEY {on|off|toggle|status} | disk" >&2; exit 2 ;;
 esac

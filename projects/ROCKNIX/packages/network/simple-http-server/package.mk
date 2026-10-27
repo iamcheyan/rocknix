@@ -28,9 +28,8 @@ unpack() {
 }
 
 makeinstall_target() {
-  mkdir -p ${INSTALL}/usr/bin
+  mkdir -p ${INSTALL}/usr/bin ${INSTALL}/usr/lib/systemd/system
   install -Dm755 ${PKG_BUILD}/simple-http-server ${INSTALL}/usr/bin
-
-  mkdir -p ${INSTALL}/usr/lib/systemd/system
   install -Dm644 ${PKG_DIR}/system.d/simple-http-server.service ${INSTALL}/usr/lib/systemd/system
+  install -Dm644 ${PKG_DIR}/system.d/simple-http-server.service ${INSTALL}/usr/lib/systemd/system/http.service
 }

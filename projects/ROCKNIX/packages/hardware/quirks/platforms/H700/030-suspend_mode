@@ -22,3 +22,13 @@ if [ -z "${MYSLEEPMODE}" ]
 then
   /usr/bin/suspendmode mem
 fi
+
+# logind ignores the power key; rocknix-power-key suspends, or only blanks the
+# screen while a player holds /run/media.pid
+POWER_KEY_CONF="/storage/.config/logind.conf.d/power-key.conf"
+if [ ! -e "${POWER_KEY_CONF}" ]
+then
+  mkdir -p "$(dirname "${POWER_KEY_CONF}")"
+  printf '[Login]\nHandlePowerKey=ignore\n' > "${POWER_KEY_CONF}"
+  systemctl restart systemd-logind
+fi

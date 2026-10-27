@@ -19,7 +19,7 @@
 | RetroArch / libretro 核心 | 不打包 |
 | 独立模拟器 | 0 |
 | ES 前端、主题和工具 | 不打包 |
-| 额外播放器 | 仅保留 Sonata 依赖的 mpv |
+| 额外播放器 | 仅保留 XMPlayer 依赖的 mpv |
 
 ## 预计收益
 
@@ -47,8 +47,8 @@
 | `NetworkManager` / `iwd` | Wi-Fi |
 | `openssh` | SSH |
 | `heya` | 新启动器 |
-| `sonata` + `mpv` | 音乐库和播放 |
-| `foot` + `rocknix-hotkey` | Sonata 的终端 UI 和掌机按键输入 |
+| `mpv` | XMPlayer 播放后端 |
+| `foot` + `rocknix-hotkey` + `mc` | Disk 浏览器的终端 UI 和掌机按键输入 |
 
 ### 可选保留
 
@@ -71,21 +71,22 @@
 | `handheld-launcher` | 被 heya 取代 |
 | EmulationStation、主题和 ES 工具 | H700 镜像不再依赖 |
 | RetroArch、libretro 核心、独立模拟器 | H700 镜像不再依赖 |
-| handheld-launcher、adbd | 不纳入迷你镜像；XMPlayer 保留为 heya 应用 |
-| NFS、Samba 服务、简单 HTTP、VPN、模块包、调试包 | H700 迷你镜像关闭 |
+| handheld-launcher | 不纳入迷你镜像；XMPlayer 与 Disk 保留为 heya 应用 |
+| NFS、Samba 服务、VPN、模块包、调试包 | H700 迷你镜像关闭 |
 
 ## 修改路径
 
-1. `projects/ROCKNIX/devices/H700/options`：启用迷你镜像并选择 heya、sonata
+1. `projects/ROCKNIX/devices/H700/options`：启用迷你镜像并选择 heya、xmplayer
 2. `projects/ROCKNIX/packages/virtual/image/package.mk`：只为迷你镜像裁减可选包组
 3. `projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service`：启动 Sway + heya
-4. `projects/ROCKNIX/packages/apps/heya/`、`sonata/`：添加应用构建包和 Sonata manifest
+4. `projects/ROCKNIX/packages/apps/heya/`、`xmplayer/`：添加应用构建包和 heya manifest
 
 ## 验证
 
 - `make H700` 构建成功（待执行）
 - 镜像中不包含 `emulationstation`、`essway`、模拟器包（待镜像检查）
 - `systemctl status heya.service` 为 active
-- Heya 首次启动后能发现 Sonata，Sonata 能连接 mpv（待实机验证）
+- Heya 首次启动后能发现 XMPlayer 与 Disk（待实机验证）
 
-SSH/SFTP 保留，供真机调试及传输媒体。默认应用为 XMPlayer 与 Sonata。
+SSH/SFTP 保留，供真机调试及传输媒体。默认应用为 XMPlayer 与 Disk。
+开发服务（ADB、HTTP、Telnet、Avahi 等）由 `system.cfg` 的 `*.enabled` 开关控制，见 `rocknix-services`。

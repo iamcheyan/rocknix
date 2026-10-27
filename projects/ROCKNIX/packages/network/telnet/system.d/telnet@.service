@@ -1,0 +1,8 @@
+[Unit]
+Description=Telnet session
+After=network.target
+
+[Service]
+ExecStart=-/bin/busybox telnetd -i
+StandardInput=socket
+StandardOutput=socket

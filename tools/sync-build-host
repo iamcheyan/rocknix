@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Push the local working tree to the build host and build H700 there.
+#
+# git carries commits; rsync carries everything still uncommitted. Both are
+# required, because the build host compiles exactly what lands in its tree.
+set -euo pipefail
+
+host="${BUILD_HOST:-hx90}"
+remote="${BUILD_REMOTE:-development/rocknix}"
+branch="${BUILD_BRANCH:-heya-core-minimal}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cd "${repo_root}"
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "==> Working tree has uncommitted changes; they will be synced by rsync."
+fi
+
+echo "==> Pushing ${branch} to origin"
+git push origin "${branch}"
+
+echo "==> Fast-forwarding ${host}:${remote}"
+ssh "${host}" "cd ~/${remote} && git fetch -q origin && git merge --ff-only origin/${branch}"
+
+echo "==> Syncing uncommitted changes"
+# Build outputs and sources are host-local; everything else mirrors the tree so
+# the build never runs against a stale or half-applied state.
+# Anchored excludes: packages/*/sources/ are real source files and must sync.
+rsync -az --delete-after \
+  --exclude='/.git/' \
+  --exclude='/build.*/' \
+  --exclude='/sources/' \
+  --exclude='/target/' \
+  --exclude='/.buildlog/' \
+  --exclude='__pycache__/' \
+  ./ "${host}:~/${remote}/"
+
+echo "==> Verifying the build host matches this tree"
+# Only regular files: submodules and symlinks are not checksummed.
+list_files() {
+  git ls-files -s | awk '$1=="100644" || $1=="100755"' | cut -f2- \
+    | grep -vE '^(build\.|sources/|target/)'
+}
+list_files | tr '\n' '\0' | xargs -0 sha256sum | sort -k2 > /tmp/.sync-local.sums
+ssh "${host}" "cd ~/${remote} && $(declare -f list_files); list_files | tr '\n' '\0' | xargs -0 sha256sum | sort -k2" \
+  > /tmp/.sync-remote.sums
+
+if ! diff -q /tmp/.sync-local.sums /tmp/.sync-remote.sums > /dev/null; then
+  echo "ERROR: the build host does not match this tree:" >&2
+  diff /tmp/.sync-local.sums /tmp/.sync-remote.sums | head -20 >&2
+  exit 1
+fi
+rm -f /tmp/.sync-local.sums /tmp/.sync-remote.sums
+
+echo "==> ${host} is up to date with $(git rev-parse --short HEAD)"

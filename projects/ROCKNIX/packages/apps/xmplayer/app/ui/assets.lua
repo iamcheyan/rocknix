@@ -7,6 +7,22 @@ assets.sfx = {}
 
 local path_figtree = "assets/font/Figtree-SemiBold.otf"
 local path_oswald = "assets/font/Oswald-SemiBold.ttf"
+local path_cjk = "/usr/share/fonts/truetype/noto-cjk/NotoSansCJKsc-Regular.otf"
+
+local function load_cjk_font_data()
+    local file = io.open(path_cjk, "rb")
+    if not file then return nil end
+
+    local contents = file:read("*a")
+    file:close()
+    if not contents or contents == "" then return nil end
+
+    local ok, data = pcall(love.filesystem.newFileData, contents, "NotoSansCJKsc-Regular.otf")
+    if ok then return data end
+    return nil
+end
+
+local cjk_font_data = load_cjk_font_data()
 
 local font_sizes = {
     main         = 28,
@@ -87,8 +103,18 @@ function assets.update_font_scales(scale)
         local main_font = love.graphics.newFont(path_figtree, scaled_size)
         local oswald_fallback = love.graphics.newFont(path_oswald, scaled_size)
         local system_fallback = love.graphics.newFont(scaled_size)
+        local cjk_fallback
 
-        main_font:setFallbacks(oswald_fallback, system_fallback)
+        if cjk_font_data then
+            local ok, font = pcall(love.graphics.newFont, cjk_font_data, scaled_size)
+            if ok then cjk_fallback = font end
+        end
+
+        if cjk_fallback then
+            main_font:setFallbacks(oswald_fallback, cjk_fallback, system_fallback)
+        else
+            main_font:setFallbacks(oswald_fallback, system_fallback)
+        end
         assets.fonts[font_key] = wrap_font(main_font, scale)
     end
 end

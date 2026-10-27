@@ -74,15 +74,17 @@
     NFS_SUPPORT="no"
     SAMBA_SERVER="no"
     SFTP_SERVER="yes"
-    SIMPLE_HTTP_SERVER="no"
+    SIMPLE_HTTP_SERVER="yes"
     ZEROTIER_SUPPORT="no"
     WIREGUARD_SUPPORT="no"
-    MODULES_PKG="no"
+    MODULES_PKG="yes"
     DEBUG_PACKAGES="no"
-    HTOP_TOOL="no"
+    HTOP_TOOL="yes"
+    BTOP_TOOL="yes"
+    NANO_EDITOR="yes"
 
   # Additional packages to install
-    ADDITIONAL_PACKAGES="heya sonata xmplayer umtprd adbd"
+    ADDITIONAL_PACKAGES="heya xmplayer umtprd adbd"
 
   # Debug tty path
     DEBUG_TTY="/dev/ttyS0"

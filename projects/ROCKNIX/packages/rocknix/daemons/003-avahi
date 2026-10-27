@@ -1,0 +1,4 @@
+CONF="avahi.conf"
+STATE=$(get_setting avahi.enabled)
+SVC="avahi-daemon"
+DAEMONS=("avahi-daemon.service")
