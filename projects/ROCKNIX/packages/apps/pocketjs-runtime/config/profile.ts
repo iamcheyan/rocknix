@@ -1,0 +1,16 @@
+import { defineProfile } from "../../framework/src/profile.ts";
+
+export default defineProfile({
+  id: "rocknix-h700-kms",
+  platform: "linux",
+  form: "embedded",
+  tickHz: 60,
+  display: {
+    physicalViewport: [720, 480],
+    logicalViewports: [[720, 480]],
+    rasterDensity: 1,
+    presentations: ["native"],
+  },
+  capabilities: ["input.buttons", "text.glyphs.baked"],
+  roleCapabilities: {},
+});

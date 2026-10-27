@@ -5,5 +5,7 @@
 
 ### Set the default device configuration
 cat <<EOF >/storage/.config/profile.d/090-ui_service
-UI_SERVICE="sway.service heya.service"
+UI_SERVICE="pocketjs-kms.service"
+export SDL_VIDEODRIVER=kmsdrm
+unset WAYLAND_DISPLAY DISPLAY
 EOF

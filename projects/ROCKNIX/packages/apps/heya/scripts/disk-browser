@@ -16,11 +16,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' HUP INT TERM
 
-if command -v gptokeyb >/dev/null 2>&1; then
-  gptokeyb disk -c /usr/share/xmplayer/config/disk.gptk &
-  mapper_pid=$!
-fi
-
 export MC_DISK_ROOT=/storage/disk
 mkdir -p "${MC_DISK_ROOT}"
 for mount in /storage /storage/games-external /media/* /run/media/*
@@ -30,4 +25,14 @@ do
   [ "${mount}" = /storage ] || ln -sfn "${mount}" "${MC_DISK_ROOT}/$(basename "${mount}")"
 done
 
-exec foot -a disk -e mc --nomouse "${MC_DISK_ROOT}"
+if [ "${SDL_VIDEODRIVER:-}" = kmsdrm ]; then
+  cd "${MC_DISK_ROOT}"
+  exec commander
+fi
+
+if command -v gptokeyb >/dev/null 2>&1; then
+  gptokeyb disk -c /usr/share/xmplayer/config/disk.gptk &
+  mapper_pid=$!
+fi
+
+foot -a disk -e mc --nomouse "${MC_DISK_ROOT}"

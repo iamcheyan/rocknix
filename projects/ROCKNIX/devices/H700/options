@@ -47,15 +47,16 @@
 
   # For maximum cross compatbility
     PREFER_GLES="yes"
+    OPENGL="no"
 
   # Batteryplus voltage-based battery percentage daemon (yes / no)
     BATTERYPLUS_SUPPORT="yes"
 
   # Displayserver to use (wl / no)
-    DISPLAYSERVER="wl"
+    DISPLAYSERVER="no"
 
   # Windowmanager to use (weston / swaywm-env / no)
-    WINDOWMANAGER="swaywm-env"
+    WINDOWMANAGER="none"
 
   # Additional drivers to install:
   # for a list of additional drivers see packages/linux-drivers
@@ -80,14 +81,14 @@
     SIMPLE_HTTP_SERVER="yes"
     ZEROTIER_SUPPORT="no"
     WIREGUARD_SUPPORT="no"
-    MODULES_PKG="yes"
+    MODULES_PKG="no"
     DEBUG_PACKAGES="no"
     HTOP_TOOL="yes"
     BTOP_TOOL="yes"
     NANO_EDITOR="yes"
 
   # Additional packages to install
-    ADDITIONAL_PACKAGES="heya xmplayer umtprd adbd"
+    ADDITIONAL_PACKAGES="pocketjs-runtime heya xmplayer commander umtprd adbd"
 
   # Debug tty path
     DEBUG_TTY="/dev/ttyS0"

@@ -1,16 +1,25 @@
 [Unit]
-Description=PocketJS Linux KMS foreground UI
+Description=ROCKNIX PocketJS direct KMS interface
 After=local-fs.target systemd-user-sessions.service
-Conflicts=sway.service
+Conflicts=pocketjs-recovery.service
 Before=graphical.target
+OnFailure=pocketjs-recovery.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
-Type=oneshot
-RemainAfterExit=no
+Type=simple
+Environment=HOME=/storage
+EnvironmentFile=-/storage/.config/pocketjs/runtime.conf
+TTYPath=/dev/tty7
+StandardInput=tty
+TTYReset=yes
+TTYVHangup=yes
+ExecStartPre=/usr/bin/chvt 7
 ExecStart=/usr/libexec/pocketjs-session
-ExecStartPost=/usr/bin/systemctl start sway.service
-ExecStopPost=/usr/bin/systemctl start sway.service
-TimeoutStartSec=0
+Restart=always
+RestartSec=3
+TimeoutStopSec=5
 KillMode=control-group
 
 [Install]

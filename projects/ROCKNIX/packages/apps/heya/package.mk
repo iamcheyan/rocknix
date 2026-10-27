@@ -54,9 +54,11 @@ makeinstall_target() {
   mkdir -p "${INSTALL}/usr/share/heya/apps/disk"
   install -m 0644 "${PKG_DIR}/apps/disk/app.json" \
     "${INSTALL}/usr/share/heya/apps/disk/app.json"
-  mkdir -p "${INSTALL}/usr/share/heya/apps/terminal"
-  install -m 0644 "${PKG_DIR}/apps/terminal/app.json" \
-    "${INSTALL}/usr/share/heya/apps/terminal/app.json"
+  if [ "${DISPLAYSERVER}" = "wl" ]; then
+    mkdir -p "${INSTALL}/usr/share/heya/apps/terminal"
+    install -m 0644 "${PKG_DIR}/apps/terminal/app.json" \
+      "${INSTALL}/usr/share/heya/apps/terminal/app.json"
+  fi
   mkdir -p "${INSTALL}/usr/share/heya/settings"
   install -m 0644 "${PKG_DIR}/settings/services.conf" \
     "${INSTALL}/usr/share/heya/settings/services.conf"
@@ -66,6 +68,9 @@ makeinstall_target() {
   mkdir -p "${INSTALL}/usr/share/heya"
   install -m 0644 "${PKG_DIR}/config/removed-apps" \
     "${INSTALL}/usr/share/heya/removed-apps"
+  if [ "${DISPLAYSERVER}" != "wl" ]; then
+    echo terminal >> "${INSTALL}/usr/share/heya/removed-apps"
+  fi
   if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
     install -m 0755 "${PKG_BUILD}/devexec" "${INSTALL}/usr/bin/devexec"
   fi
@@ -79,14 +84,16 @@ makeinstall_target() {
   install -m 0644 "${PKG_BUILD}/themes/default/theme.json" \
     "${INSTALL}/usr/share/heya/themes/default/theme.json"
 
-  mkdir -p "${INSTALL}/usr/lib/systemd/system"
-  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
-    sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
-      "${PKG_DIR}/integrations/rocknix/heya.service" \
-      > "${INSTALL}/usr/lib/systemd/system/heya.service"
-  else
-    install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
-      "${INSTALL}/usr/lib/systemd/system/heya.service"
+  if [ "${DISPLAYSERVER}" = "wl" ]; then
+    mkdir -p "${INSTALL}/usr/lib/systemd/system"
+    if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+      sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
+        "${PKG_DIR}/integrations/rocknix/heya.service" \
+        > "${INSTALL}/usr/lib/systemd/system/heya.service"
+    else
+      install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
+        "${INSTALL}/usr/lib/systemd/system/heya.service"
+    fi
   fi
 
   mkdir -p "${INSTALL}/usr/lib/autostart/common"

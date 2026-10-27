@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ "$#" -eq 0 ]; then
+  echo "Usage: pocket-session-run COMMAND [ARG...]" >&2
+  exit 2
+fi
+
+mkdir -p /run/lock
+exec 9>/run/lock/pocketjs-display.lock
+flock -n 9 || { echo "Another foreground application owns the display" >&2; exit 1; }
+
+resume=0
+systemctl is-active --quiet pocketjs-kms.service && resume=1
+cleanup() {
+  status=$?
+  trap - EXIT
+  systemctl stop pocketjs-foreground.service || true
+  if [ "$resume" = 1 ]; then
+    systemctl start pocketjs-kms.service || true
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+
+systemctl stop pocketjs-kms.service
+systemd-run --unit=pocketjs-foreground --wait --collect --service-type=exec \
+  --property=TTYPath=/dev/tty7 --property=StandardInput=tty --property=TTYReset=yes \
+  --property='ExecStartPre=/usr/bin/chvt 7' --property=Conflicts=pocketjs-recovery.service \
+  --property=KillMode=control-group --property=TimeoutStopSec=5 \
+  --property='UnsetEnvironment=WAYLAND_DISPLAY DISPLAY' \
+  --setenv=HOME=/storage --setenv=SDL_VIDEODRIVER=kmsdrm --setenv=SDL_AUDIODRIVER=pulseaudio \
+  --setenv=LOVE_GRAPHICS_USE_OPENGLES=1 \
+  --setenv=XDG_RUNTIME_DIR=/run/0-runtime-dir \
+  --setenv=SDL_GAMECONTROLLERCONFIG_FILE=/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt \
+  -- "$@"
