@@ -45,7 +45,6 @@ if [ -f ${SWAY_CONFIG_DAEMON} ] ; then
 fi
 
 echo SWAY_DAEMON_ARGS=\"${SWAY_DAEMON_CONF} ${SWAY_DAEMON_ARGS}\" > ${SWAY_CONFIG_RUN}
-echo WAYLAND_DISPLAY=wayland-1 >> ${SWAY_CONFIG_RUN}
 
 # Rotate on the primary plane what fits it, composite the rest.
 . /etc/profile
