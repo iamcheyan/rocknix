@@ -2,8 +2,8 @@
 # setup device defaults
 ################################################################################
 
-    export DEVELOPER_MODE="${DEVELOPER_MODE:-true}"
-    export PROJECT_DEVELOPER_MODE="${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE}}"
+    export DEVELOPER_MODE="true"
+    export PROJECT_DEVELOPER_MODE="true"
 
   # The TARGET_CPU variable controls which processor should be targeted for
   # generated code.
