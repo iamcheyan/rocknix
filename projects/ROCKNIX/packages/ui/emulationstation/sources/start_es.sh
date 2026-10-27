@@ -11,6 +11,10 @@ prerotate_env "${WLR_CON_TRANSFORM}" "${ES_MODE%%x*}"
 
 scanout_reset_stale
 
+if [ -x /usr/bin/heya ]; then
+  exec /usr/bin/heya --theme /storage/heya/themes/theme.json --apps /storage/heya/apps
+fi
+
 if [ -x /usr/bin/handheld-launcher ]; then
   exec /usr/bin/handheld-launcher
 fi
