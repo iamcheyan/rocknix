@@ -4,7 +4,7 @@
 PKG_NAME="heya"
 PKG_VERSION="bca7c0510ac6c857b55c9532b9165dd332b8477c"
 PKG_SHA256="cdea7d48083111777fabf2e5592b3bb97515037dd2992f8c1a33c0e5f6f20d79"
-PKG_ARCH="aarch64"
+PKG_ARCH="any"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/iamcheyan/heya"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
@@ -15,7 +15,11 @@ PKG_TOOLCHAIN="manual"
 make_target() {
   export CGO_ENABLED=1
   export GOOS=linux
-  export GOARCH=arm64
+  case "${TARGET_ARCH}" in
+    aarch64) export GOARCH=arm64 ;;
+    x86_64) export GOARCH=amd64 ;;
+    *) die "unsupported heya architecture: ${TARGET_ARCH}" ;;
+  esac
   export CC="${CC}"
   export CXX="${CXX}"
   export CGO_CFLAGS="${CFLAGS}"
