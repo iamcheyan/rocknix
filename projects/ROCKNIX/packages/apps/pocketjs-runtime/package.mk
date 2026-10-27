@@ -7,7 +7,7 @@ PKG_SITE="https://github.com/pocket-nexus/pocketjs"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 PKG_SHA256="8b33c1f710323f384ecef63a85fae9a329aac11c7d8747d99c01bbdb538d2a87"
 PKG_DEPENDS_HOST="toolchain:host bun:host"
-PKG_DEPENDS_TARGET="toolchain cargo:host rust:host pocketjs-runtime:host"
+PKG_DEPENDS_TARGET="toolchain cargo:host rust:host llvm:host pocketjs-runtime:host"
 PKG_LONGDESC="PocketJS Linux DRM/KMS and fbdev JavaScript UI runtime"
 PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="parallel"
@@ -34,10 +34,13 @@ makeinstall_host() {
 
 make_target() {
   export RUSTC="${TOOLCHAIN}/bin/rustc"
+  export LIBCLANG_PATH="${TOOLCHAIN}/lib"
+  export LD_LIBRARY_PATH="${TOOLCHAIN}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  export BINDGEN_EXTRA_CLANG_ARGS="--target=${TARGET_NAME} --sysroot=${SYSROOT_PREFIX} -isystem ${SYSROOT_PREFIX}/usr/include"
   python3 "${PKG_DIR}/scripts/prepare-workspace.py" "${PKG_BUILD}" "${TOOLCHAIN}/bin/cargo"
   POCKETJS_PROFILE_RS="${TOOLCHAIN}/share/pocketjs/h700/pocket_profile.rs" \
     "${TOOLCHAIN}/bin/cargo" build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
-      --package pocket-linux-kms --target "${TARGET_NAME}"
+      --package pocket-linux-kms --package rocknix-pocketjs-bindings --target "${TARGET_NAME}"
 }
 
 makeinstall_target() {

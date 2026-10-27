@@ -17,6 +17,14 @@ provides an explicit display handoff to native KMS apps from SSH, and restores
 PocketJS after that app exits. A full launcher migration needs system-service
 interfaces that the upstream KMS program does not currently compose.
 
+Native commands for hardware acceptance include `pocket-session-run xmplayer`,
+`pocket-session-run disk-browser`, and `pocket-session-run mpv /storage/videos/FILE`.
+The native mpv configuration uses DRM/OpenGL instead of Vulkan. Heya is retained
+as a manual SDL application, without a Wayland service or a foot terminal entry.
+Nested native players launched from inside an already running SDL app still need
+device testing; this change proves serialized ownership through the explicit
+handoff helper, not arbitrary concurrent native windows.
+
 ## Build contract
 
 - PocketJS source: upstream revision `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`,
@@ -30,6 +38,10 @@ interfaces that the upstream KMS program does not currently compose.
   `tools/packaging/esp-idf/vendor.ts`; every external dependency/version/checksum
   must remain a member of the original locked set before `cargo build --locked`.
   This avoids fetching the unrelated PSP/PocketBook SDK submodules.
+- A build-only shim enables upstream rquickjs `bindgen` for ROCKNIX's custom
+  target triple. It selects the exact locked rquickjs version and uses host
+  libclang with the target sysroot; no pre-generated bindings are renamed and
+  no upstream runtime/core source is patched.
 - The immutable boot app is `/usr/share/pocketjs/apps/boot.pocket`. An optional
   `POCKETJS_APP` in `/storage/.config/pocketjs/runtime.conf` selects a user app;
   package admission failure returns to the immutable boot app.

@@ -56,4 +56,11 @@ post_makeinstall_target() {
       sed -i 's/^hwdec=.*/hwdec=v4l2m2m-copy,auto/' ${INSTALL}/etc/mpv/mpv.conf ${INSTALL}/usr/config/mpv/mpv.conf
     ;;
   esac
+
+  if [ "${DISPLAYSERVER}" = "no" ]; then
+    for config in "${INSTALL}/etc/mpv/mpv.conf" "${INSTALL}/usr/config/mpv/mpv.conf"; do
+      sed -i 's/^gpu-api=.*/gpu-api=opengl/' "$config"
+      echo 'gpu-context=drm' >> "$config"
+    done
+  fi
 }

@@ -72,7 +72,7 @@ def check(root, frontend=None):
             profile = json.loads(resolve(root, '/usr/share/pocketjs/pocket-profile.json').read_text())['profile']
             if profile['id'] != 'rocknix-h700-kms' or profile['display']['physicalViewport'] != [720, 480]:
                 errors.append('unexpected PocketJS profile or display geometry')
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, TypeError):
             errors.append('missing or invalid PocketJS profile export')
     elif not resolve(root, '/usr/lib/systemd/system/heya.service').is_file():
         errors.append('missing runtime file: /usr/lib/systemd/system/heya.service')
