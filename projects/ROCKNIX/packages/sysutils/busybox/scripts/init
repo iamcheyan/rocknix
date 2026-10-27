@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2010-2011 Roman Weber (roman@openelec.tv)
-# Copyright (C) 2012 Yann Cézard (eesprit@free.fr)
-# Copyright (C) 2009-2014 Stephan Raue (stephan@openelec.tv)
+# Copyright (C) 2010-2011 Roman Weber
+# Copyright (C) 2012 Yann Cézard
+# Copyright (C) 2009-2014 Stephan Raue
 # Copyright (C) 2016-2018 Team LibreELEC (https://libreelec.tv)
 # Copyright (C) 2018-present Team CoreELEC (https://coreelec.org)
 # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
@@ -69,7 +69,9 @@ exec 2>/dev/null
 MACHINE_UID="$(awk '/^Serial/{s='0000000' $3; print substr(s, length(s) - 7)}' /proc/cpuinfo 2>/dev/null)"
 [ -z "${MACHINE_UID}" ] && MACHINE_UID="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d :)"
 
-clear >/dev/console
+if [ "@DEVICENAME@" != "H700" ]; then
+  clear >/dev/console
+fi
 
 # script functions
 progress() {
@@ -484,7 +486,9 @@ hdmi_con() {
 }
 
 load_splash() {
-  /usr/bin/rocknix-splash
+  if [ "@DEVICENAME@" != "H700" ]; then
+    /usr/bin/rocknix-splash
+  fi
 
   echo -en "\033[1000H\033[2K$(cat /sysroot/etc/issue)\n\n" >/dev/console
   if [ -f "/storage/.configured" ]
