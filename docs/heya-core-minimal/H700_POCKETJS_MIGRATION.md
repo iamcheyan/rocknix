@@ -3,7 +3,8 @@
 Branch: `feat/h700-pocketjs-kms`, based on `main` at `44529c238f`.
 The canonical checkout has another active writer; this task uses a dedicated worktree.
 
-Status: target package implemented and cross-built; complete image verification in progress.
+Status: target package and complete HX90 image build verified. Physical RG34XX
+acceptance remains pending.
 
 ## Scope
 
@@ -58,18 +59,23 @@ handoff helper, not arbitrary concurrent native windows.
 - Compile the profile, boot app and AArch64 runtime with the ROCKNIX toolchain.
 - Check the built rootfs for the boot app, runtime library closure, startup
   service and absence of Wayland/Sway binaries/libraries.
-- Produce the DDR4 `.img.gz` and upgrade `.tar`, recording their source commit
-  and SHA-256. Do not overwrite the build host's dirty checkout.
+- Produced the DDR4 `.img.gz` and upgrade `.tar` from commit
+  `996755c2049abb4abcd77f855ab54bf918daea89` in the isolated HX90 worktree.
+  SHA-256: image `546279cebbb53644faf4706665b33be03cfb524433af4c375472d518495fee16`;
+  upgrade tar `2319a0262eda4d468b2b0d36bf13ea4db867ae3a06a17c1e05bae729e5869b9c`.
+  Both checksum files verify. Artifacts are under
+  `~/development/.worktrees/rocknix-h700-pocketjs-kms-build/target/` on HX90.
 - On RG34XX: cold boot, visible first frame/orientation, controller navigation,
   native app handoff/exit, suspend/resume and recovery. Hardware results must be
   recorded separately from host/headless checks.
 
-No hardware verification or completed image build is claimed by this record.
+The image build and rootfs checks below do not replace physical device
+verification.
 
 ## Verification results
 
-- Resolved H700 image plan: 281 steps, with PocketJS host/target stages and no
-  Wayland/Sway dependency. RK3566 retains its Wayland/Sway plan (693 steps).
+- Resolved H700 image plan: 286 steps on HX90, with PocketJS host/target stages
+  and no Wayland/Sway dependency. RK3566 retains its Wayland/Sway plan (693 steps).
 - Existing plus new Python tests: 14 passed. Lifecycle cases include rejected
   package fallback, failed native apps, argument/exit-status preservation,
   interruption, exclusive display ownership, and recovery-console restoration.
@@ -80,7 +86,13 @@ No hardware verification or completed image build is claimed by this record.
   target sysroot headers. Its actual ELF plus ROCKNIX loader/libraries passed
   package admission and five 720x480 headless ticks under `qemu-aarch64`.
 - Independent read-only review found no remaining concrete code defect after
-  the binding fix. Full image/rootfs checks and physical hardware remain pending.
+  the binding and build fixes.
+- HX90 full image build completed for `ROCKNIX-H700.aarch64-20261027-DDR4`.
+  `check-mini-rootfs.py --frontend pocketjs` passed, including PocketJS runtime
+  closure, agetty recovery entrypoint, and absence of Sway/Wayland files. The
+  rebuilt mpv ELF has no X11, Xfixes or Wayland shared-library dependency.
+- The image selects `sun50i-h700-anbernic-rg34xx.dtb`; the DDR3-only overlay is
+  not selected. No RG34XX hardware boot or display test has been performed.
 
 The remote canonical checkout has unrelated uncommitted work and a separate image
 build. This task uses a remote Git worktree and its own copy of the build cache,
