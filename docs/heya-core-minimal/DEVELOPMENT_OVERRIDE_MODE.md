@@ -1,6 +1,6 @@
 # ROCKNIX Development Override Mode 设计报告
 
-状态：实现于 `feat/development-override`，基线 `origin/heya-core-minimal` (`94eb46217286a35a3eaf5b7559990111b1a9350f`)。报告按 CPR #76 指定仓库分支的源码核实；该分支包含 heya integration，但不包含本机原 heya checkout 的未提交改动。
+状态：实现提交 `e441421b3273ecdae2136fe7ad31cfe63aa8c9b0` 已推送到 `origin/heya-core-minimal`；本地实现使用隔离分支 `feat/development-override`，基于目标分支 `68e0166446c7ebbb21f7062ffa8fa49a79b11723`。报告按 CPR #76 指定分支源码核实；原工作树未提交改动未纳入。
 
 ## 1. 真实启动链
 

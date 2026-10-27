@@ -23,4 +23,5 @@
 
 ## Delivery
 
-- Pending final commit and push to `origin/heya-core-minimal`; CPR #76 remains open.
+- Commit `e441421b3273ecdae2136fe7ad31cfe63aa8c9b0` pushed to `origin/heya-core-minimal`; CPR #76 remains open.
+- Follow-up documentation correction is being recorded separately after independent review.
