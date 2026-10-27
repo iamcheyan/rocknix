@@ -1,0 +1,32 @@
+services:
+  rocknix-desktop:
+    image: rocknix-desktop:local
+    build:
+      context: ${ROCKNIX_ROOTFS:-.runtime/rootfs}
+      dockerfile: ${ROCKNIX_DOCKERFILE:-docker/Dockerfile}
+      additional_contexts:
+        rootfs: ${ROCKNIX_ROOTFS:-.runtime/rootfs}
+    init: true
+    environment:
+      HOME: /storage
+      DISPLAY: ${DISPLAY:-}
+      XAUTHORITY: /run/host-xauth
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
+      XDG_RUNTIME_DIR: /run/desktop
+      SDL_VIDEODRIVER: ${SDL_VIDEODRIVER:-dummy}
+      SDL_AUDIODRIVER: ${SDL_AUDIODRIVER:-dummy}
+      SDL_GAMECONTROLLERCONFIG_FILE: /usr/config/SDL-GameControllerDB/gamecontrollerdb.txt
+      CFW_NAME: ROCKNIX
+    volumes:
+      - ./docker/fixtures/storage:/storage:rw
+      - ./docker/fixtures/services:/run/rocknix-mocks:ro
+    tmpfs:
+      - /run
+      - /tmp
+      - /var/log
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command: ["/usr/bin/rocknix-desktop-mocks"]
+    profiles: [runtime]

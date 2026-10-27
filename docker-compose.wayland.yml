@@ -1,0 +1,8 @@
+services:
+  rocknix-desktop:
+    volumes:
+      - type: bind
+        source: ${ROCKNIX_WAYLAND_SOCKET:-/nonexistent}
+        target: /run/wayland-0
+        bind:
+          create_host_path: false

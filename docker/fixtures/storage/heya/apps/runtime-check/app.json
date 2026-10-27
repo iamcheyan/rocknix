@@ -1,0 +1,10 @@
+{
+  "manifestVersion": 1,
+  "id": "runtime-check",
+  "name": "Runtime Check",
+  "description": "No-op entry used to inspect heya app discovery",
+  "entrypoint": "/usr/bin/true",
+  "workingDirectory": "/storage",
+  "icon": "nf-md-check",
+  "category": "system"
+}

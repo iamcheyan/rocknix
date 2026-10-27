@@ -1,0 +1,15 @@
+services:
+  rocknix-desktop:
+    volumes:
+      - type: bind
+        source: ${ROCKNIX_X11_SOCKET_DIR:-/tmp/.X11-unix}
+        target: /tmp/.X11-unix
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ROCKNIX_XAUTH_FILE:?X11 mode must generate a temporary Xauthority file}
+        target: /run/host-xauth
+        read_only: true
+        bind:
+          create_host_path: false
