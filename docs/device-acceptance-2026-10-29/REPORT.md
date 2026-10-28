@@ -73,7 +73,7 @@
 | G4 | 文档一致 | PASS | BUILD.md | - | 与 build-iteration-fastpath.md 一致 |
 | H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
 | H2 | 与 dev 重复判定 | PASS（判定） | H-evidence.txt | - | 功能重叠，建议见 DEC-004 |
-| I1 | 连续使用场景 | PARTIAL | A04-page-0.png, A04-page-1.png, C04-before.png, C04-after.png | - | 代表性使用帧；完整脚本受限于无目视 |
+| I1 | 连续使用场景 | PASS | I1-01-shell.png, I1-02-ls.png, I1-03-uname.png, I1-04-ws2-files.png, I1-05-input-before.png, I1-06-input-after.png, I1-07-back-shell.png | - | 7 步连续会话（终端→ls→uname→切工作区→输入提交→返回），每步画面有变化 |
 | I2 | 无残留异常 | PASS | - | - | 0 僵尸；仅 2 个既有失败；storage 1% |
 | I3 | 已知限制清单 | PASS | REPORT 本节 | - | 见文末已知限制 |
 | K1 | 屏幕休眠守护进程 | PASS | K02-default.png | f0821e95fa | is-active=active，进程在跑 |
@@ -447,3 +447,13 @@
 
 说明：`hello/main.tsx` 的改动已由用户提交 `faacfe0e6a` 收编，故不再出现在未提交列表。
 说明：`pocketjs-sleep` 的两处修复已提交（`f0821e95fa`）。
+
+### I1 连续使用场景（整体验收）
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 03:15
+- 设备状态：H700 / pocketshell-dev active（Dev Center 真实终端/PTY）
+- 操作步骤（Playwright 驱动真实 Dev Center）：① 选 SHELL；② 输入工作区提交 `ls -la /storage`；③ 提交 `uname -a`；④ 切到 WS2 (FILES)；⑤ 回 SHELL，输入工作区键入 `echo i1marker` 并提交；⑥ Escape 返回。
+- 预期 / 实测：每步画面均变化、无卡死/白屏。像素差：shell→ls **3.35%**、ls→uname **5.34%**、WS1→WS2 **4.14%**、输入提交前后 **0.13%**（单行输出，合理）。
+- 截图：![](./I1-01-shell.png) ![](./I1-02-ls.png) ![](./I1-03-uname.png) ![](./I1-04-ws2-files.png) ![](./I1-05-input-before.png) ![](./I1-06-input-after.png) ![](./I1-07-back-shell.png)
+- 问题与根因：无（会话连贯，无崩溃/错位）。
+- 未验证/限制：本会话在 Dev Center（真实 server PTY + 真实浏览器 UI）中进行；设备 LCD 侧为启动器界面（A/D 组已单独截帧）。`htop` 因目标端无对应 terminfo 报 TERM 错（见 I3），改用 `ls`/`uname` 演示终端输出。
