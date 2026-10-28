@@ -19,3 +19,9 @@ Additional review fixes include browser log retention, reconnect sequence reset,
 RG34XX updated through HX90 ADB using only SYSTEM/KERNEL plus their MD5 files, extracted with no ownership/permission preservation. Uploaded `.new` files were read back and matched before renaming. Existing U-Boot, dtb.img, extlinux configuration and STORAGE were preserved. The boot partition was synchronized and remounted read-only.
 
 Device reboot verified: kernel build timestamp `Wed Oct 28 13:06:55 UTC 2026`; pocketjs-kms active with zero restarts; all three app packages admitted by runtime `--check`. SYSTEM MD5 `9985242ad0e26c78f09c96f2ad7b932f`; KERNEL MD5 `24a7e84888f9fec5c0d87ae4d79edfdb`. Remote Dev remains inactive. Existing rocknix-usbgadget service still reports exit status 1, as before the update; ADB works. Physical screen/controller acceptance was not performed.
+
+## Handheld scale correction
+
+Shell, Library and Showcase now declare 360×240 logical viewports; profile raster density is 2 with integer-fit presentation to the 720×480 LCD. Density1 produced an InvalidFrame on the device backend, so density2 is required as well as the manifest change. Shell uses12 rows×46 columns,16px logical row height and12px logical monospace text (24px raster text). Input panel geometry, menu windowing and selection movement were adjusted to fit.
+
+Full H700 image build passed. SYSTEM-only update readback MD5 `71b156e43467587e7b418097e3e2fb0d` matched before activation. Reboot verified standard `/usr/libexec/pocketjs-session`, active service with zero restarts, admitted boot package, and actual720×480 DRM capture showing enlarged text. Old SYSTEM retained as `/flash/SYSTEM.before-scale2`. Concurrent uncommitted font work was preserved and not included in this scoped deployment.
