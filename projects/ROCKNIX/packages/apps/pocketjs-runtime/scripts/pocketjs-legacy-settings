@@ -1,0 +1,28 @@
+#!/bin/bash
+set -u
+export TERM=xterm-256color
+while choice=$(dialog --stdout --title 'Network / USB settings' --menu 'A: Enter  B: Escape  SELECT: input' 11 44 6 wifi 'Connect Wi-Fi' disconnect 'Disconnect Wi-Fi' bluetooth 'Bluetooth console' usb 'USB mode' info 'Network status'); do
+  clear
+  case "$choice" in
+    wifi)
+      nmcli device wifi list
+      printf '\nNetwork name (SSID): '
+      IFS= read -r ssid
+      [ -z "$ssid" ] || nmcli --ask device wifi connect "$ssid"
+      read -r -p 'Press Enter to return.' ;;
+    disconnect)
+      device=$(nmcli -t -f DEVICE,TYPE device | awk -F: '$2 == "wifi" {print $1; exit}')
+      [ -z "$device" ] || nmcli device disconnect "$device"
+      read -r -p 'Press Enter to return.' ;;
+    bluetooth)
+      printf 'Use scan on, pair ADDRESS, connect ADDRESS, remove ADDRESS; quit returns.\n'
+      bluetoothctl ;;
+    usb)
+      mode=$(dialog --stdout --title USB --menu 'Changing USB mode can disconnect ADB.' 11 44 6 adb 'USB ADB' file_transfer 'File transfer' network 'USB network' disabled 'Disable USB' adb_tcp 'Network ADB on' adb_tcp_stop 'Network ADB off') || continue
+      usbgadget "$mode"
+      read -r -p 'Press Enter to return.' ;;
+    info)
+      { nmcli device status; nmcli connection show --active; ip -4 addr; } | less -R ;;
+  esac
+done
+clear

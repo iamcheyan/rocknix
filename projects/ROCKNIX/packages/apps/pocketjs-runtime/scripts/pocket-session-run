@@ -34,12 +34,22 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
 
+drm_index=0
+for status in /sys/class/drm/card*-*/status; do
+  [ -r "$status" ] && [ "$(cat "$status")" = connected ] || continue
+  connector=${status%/status}
+  connector=${connector##*/}
+  card=${connector%%-*}
+  drm_index=${card#card}
+  break
+done
 systemctl stop pocketjs-kms.service
 systemd-run --unit=pocketjs-foreground --wait --collect --service-type=exec \
   --property=TTYPath=/dev/tty7 --property=StandardInput=tty --property=TTYReset=yes \
   --property='ExecStartPre=/usr/bin/chvt 7' --property=Conflicts=pocketjs-recovery.service \
   --property=KillMode=control-group --property=TimeoutStopSec=5 \
   --property='UnsetEnvironment=WAYLAND_DISPLAY DISPLAY' \
+  --setenv=SDL_KMSDRM_DEVICE_INDEX="${drm_index}" \
   --setenv=HOME=/storage --setenv=SDL_VIDEODRIVER=kmsdrm --setenv=SDL_AUDIODRIVER=pulseaudio \
   --setenv=LOVE_GRAPHICS_USE_OPENGLES=1 \
   --setenv=XDG_RUNTIME_DIR=/run/0-runtime-dir \

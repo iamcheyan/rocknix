@@ -1100,6 +1100,16 @@ impl PocketShell {
             }
             return String::new();
         }
+        if head == "RESET" && rest == "0" {
+            if let Some(mut session) = self.sessions[0].take() {
+                unsafe { libc::kill(-(session.child.id() as i32), libc::SIGKILL); }
+                let _ = session.child.kill();
+                let _ = session.child.wait();
+                unsafe { libc::close(session.master); }
+            }
+            self.start(0);
+            return String::new();
+        }
         if head == "RESIZE" {
             let mut size = rest.split('x');
             if let (Some(rows), Some(cols)) = (size.next(), size.next()) {
