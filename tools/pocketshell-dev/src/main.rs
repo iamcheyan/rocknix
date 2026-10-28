@@ -10,12 +10,18 @@
 //!   GET  /api/frame        dirty rows + cursor since the last poll
 //!   GET  /api/state        workspace/buffer/perf snapshot (JSON)
 //!   GET  /api/log          event log (JSON)
-//!   POST /api/input        `WS<TAB>KEY ENTER` | `ACTIVATE n` | `RESIZE RxC`
+//!   GET  /api/ota/status   filesystem simulator slot status
+//!   GET  /api/ota/log      structured simulator audit log
+//!   POST /api/ota/check    verify local fixture manifest
+//!   POST /api/ota/confirm  commit simulated active slot after health success
+//!   POST /api/ota/boot-failure report simulated failed boot
+//!   POST /api/ota/rollback cancel pending or manually roll back simulated slot
 //!   POST /api/ansi         parse arbitrary bytes through a throwaway terminal
 
 #[path = "../../../projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketshell-terminal.rs"]
 mod pocketshell_terminal;
 mod replay;
+mod ota;
 
 use pocketshell_terminal::{playground, PocketShell};
 use replay::Replay;
@@ -70,6 +76,12 @@ fn main() {
             std::process::exit(1);
         }
         return;
+    }
+    if args.get(1).map(String::as_str)==Some("push") {
+        let dry=args.iter().any(|a|a=="--dry-run");let fixture=std::env::var("POCKETSHELL_OTA_FIXTURE").unwrap_or_else(|_|"fixtures/ota".into());
+        if !dry||args.get(2).filter(|a|!a.starts_with('-')).is_none(){eprintln!("usage: pocketshell-dev push <device-ip> --dry-run");std::process::exit(2);}
+        let root=std::env::var("POCKETSHELL_OTA_ROOT").unwrap_or_else(|_|"/tmp/pocketshell-ota-sim".into());let key=std::env::var("POCKETSHELL_OTA_PUBLIC_KEY").unwrap_or_else(|_|"fixtures/ota/public-key.hex".into());
+        if let Err(e)=ota::push_dry_run(&root,&fixture,&key){eprintln!("push dry-run failed: {e}");std::process::exit(1);}return;
     }
     let port: u16 = args
         .get(1)
@@ -423,11 +435,21 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
             state.lock().unwrap().shell.command(&format!("RESIZE\t{}", text.trim()));
             respond(&mut stream, "200 OK", "text/plain", b"ok");
         }
+        ("GET", "/api/ota/status") => {
+            let body=match ota::SlotManager::open(ota_root()).and_then(|m|m.state()){Ok(s)=>format!("{{\"ok\":true,\"simulation\":true,\"state\":{}}}",serde_json::to_string(&s).unwrap_or_else(|_|"null".into())),Err(e)=>format!("{{\"ok\":false,\"error\":\"{}\"}}",escape_json(&e))};respond(&mut stream,"200 OK","application/json",body.as_bytes());
+        }
+        ("GET", "/api/ota/log") => {let body=ota::SlotManager::open(ota_root()).map(|m|format!("{{\"lines\":[{}]}}",m.logs().lines().map(|l|format!("\"{}\"",escape_json(l))).collect::<Vec<_>>().join(","))).unwrap_or_else(|e|format!("{{\"error\":\"{}\"}}",escape_json(&e)));respond(&mut stream,"200 OK","application/json",body.as_bytes());}
+        ("POST", "/api/ota/check") => {let body=ota::check_fixture(&ota_root(),&fixture_root(),&public_key_path());respond(&mut stream,"200 OK","application/json",body.as_bytes());}
+        ("POST", "/api/ota/install") => {let body=ota::install_fixture(&ota_root(),&fixture_root(),&public_key_path());respond(&mut stream,"200 OK","application/json",body.as_bytes());}
+        ("POST", "/api/ota/confirm") => {let body=match ota::SlotManager::open(ota_root()).and_then(|m|m.confirm(true)){Ok(s)=>format!("{{\"ok\":true,\"state\":{}}}",serde_json::to_string(&s).unwrap_or_else(|_|"null".into())),Err(e)=>format!("{{\"ok\":false,\"error\":\"{}\"}}",escape_json(&e))};respond(&mut stream,"200 OK","application/json",body.as_bytes());}
+        ("POST", "/api/ota/boot-failure") => {let body=match ota::SlotManager::open(ota_root()).and_then(|m|m.boot_failure()){Ok(s)=>format!("{{\"ok\":true,\"state\":{}}}",serde_json::to_string(&s).unwrap_or_else(|_|"null".into())),Err(e)=>format!("{{\"ok\":false,\"error\":\"{}\"}}",escape_json(&e))};respond(&mut stream,"200 OK","application/json",body.as_bytes());}
         _ => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
     }
     Ok(())
 }
-
+fn ota_root()->std::path::PathBuf{std::env::var_os("POCKETSHELL_OTA_ROOT").map(Into::into).unwrap_or_else(||std::env::temp_dir().join("pocketshell-ota-sim"))}
+fn fixture_root()->std::path::PathBuf{std::env::var_os("POCKETSHELL_OTA_FIXTURE").map(Into::into).unwrap_or_else(||std::path::PathBuf::from("fixtures/ota"))}
+fn public_key_path()->std::path::PathBuf{std::env::var_os("POCKETSHELL_OTA_PUBLIC_KEY").map(Into::into).unwrap_or_else(||fixture_root().join("public-key.hex"))}
 fn decode_escapes(source: &str) -> Vec<u8> {
     let bytes = source.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

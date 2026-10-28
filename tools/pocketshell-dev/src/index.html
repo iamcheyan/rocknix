@@ -80,6 +80,7 @@
   <button class="tab" data-panel="log">Runtime Log</button>
   <button class="tab" data-panel="perf">Performance</button>
   <button class="tab" data-panel="ansi">ANSI Playground</button>
+  <button class="tab" data-panel="ota">OTA Simulator</button>
 </div>
 
 <main>
@@ -109,9 +110,18 @@
     </div>
     <div id="panel-ansi" class="hidden">
       <h2>ANSI Playground</h2>
-      <textarea id="ansiInput">\x1b[1;32mPocketShell\x1b[0m ANSI playground\n\x1b[31mred\x1b[0m \x1b[33myellow\x1b[0m \x1b[36mcyan\x1b[0m \x1b[35mmagenta\x1b[0m \x1b[7minverse\x1b[0m \x1b[1;4mbold+underline\x1b[0m\n\x1b[44;97m white on blue \x1b[0m  \x1b[38;5;208m256-colour orange\x1b[0m  \x1b[48;5;24m bg-24 \x1b[0m</textarea>
+      <textarea id="ansiInput">\x1b[1;32mPocketShell ANSI playground\x1b[0m</textarea>
       <button class="go" id="ansiRun">Parse</button>
       <div id="ansiOut"></div>
+    </div>
+    <div id="panel-ota" class="hidden">
+      <h2>OTA Simulator · filesystem only</h2>
+      <div class="kv" id="otaState"></div>
+      <p><button class="go" id="otaCheck">Check fixture</button> <button class="go" id="otaInstall">Stage inactive slot</button> <button class="go" id="otaRollback">Rollback</button></p>
+      <p><button class="go" id="otaConfirm">Confirm healthy boot</button> <button class="go" id="otaFail">Simulate boot failure</button></p>
+      <pre id="otaResult">No OTA request yet.</pre>
+      <h2>Changelog</h2><pre id="otaChangelog"></pre>
+      <h2>Audit log</h2><pre id="otaLog"></pre>
     </div>
   </aside>
 </main>
@@ -377,6 +387,25 @@
     html += '</pre>';
     document.getElementById('ansiOut').innerHTML = html;
   });
+  async function otaRequest(path) {
+    const res = await fetch('/api/ota/' + path, {method: path === 'status' || path === 'log' ? 'GET' : 'POST'});
+    const data = await res.json();
+    document.getElementById('otaResult').textContent = JSON.stringify(data, null, 2);
+    if (data.changelog) document.getElementById('otaChangelog').textContent = data.changelog;
+    refreshOta();
+  }
+  async function refreshOta() {
+    const [status, log] = await Promise.all([fetch('/api/ota/status').then(r=>r.json()), fetch('/api/ota/log').then(r=>r.json())]);
+    const s = status.state;
+    document.getElementById('otaState').innerHTML = s ? [['Active',s.active],['Pending',s.pending||'none'],['Version',s.confirmed_version],['Failed boots',s.boot_failures],['State',s.status],['Mode','filesystem simulator']].map(([k,v])=>'<span>'+k+'</span><span>'+escapeHtml(String(v))+'</span>').join('') : escapeHtml(status.error||'unavailable');
+    document.getElementById('otaLog').textContent = (log.lines||[]).join('\n');
+  }
+  document.getElementById('otaCheck').onclick=()=>otaRequest('check');
+  document.getElementById('otaInstall').onclick=()=>otaRequest('install');
+  document.getElementById('otaRollback').onclick=()=>otaRequest('rollback');
+  document.getElementById('otaConfirm').onclick=()=>otaRequest('confirm');
+  document.getElementById('otaFail').onclick=()=>otaRequest('boot-failure');
+  refreshOta();
 
   const bar = document.getElementById('wsbar');
   NAMES.forEach((name, i) => {
