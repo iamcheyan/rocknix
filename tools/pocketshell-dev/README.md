@@ -1,9 +1,9 @@
-# PocketShell Developer Host
+# PocketShell Dev Center
 
-Browser harness for the PocketShell terminal frontend. It runs the **same**
-`pocketshell-terminal.rs` module the firmware uses — the PTY manager, the ANSI
-parser and the screen buffer are not reimplemented here — and serves it on
-`0.0.0.0:8080`.
+Browser harness for PocketShell's terminal frontend. It runs the same
+`pocketshell-terminal.rs` module used by the runtime and exposes it through the
+versioned `/ws` protocol plus a browser Dev Center UI. State sync uses cells and
+attribute runs; it does not use screenshots.
 
 ![WS1 shell](screenshots/01-ws1-shell.png)
 
@@ -29,13 +29,18 @@ workspace lifetimes and per-frame cost.
 
 ```sh
 cd tools/pocketshell-dev
-cargo run --release            # http://127.0.0.1:8080
-cargo run --release -- 9090    # alternate port
+cargo run --release -- --bind 192.168.1.42 --port 8080   # LAN access
+cargo run --release -- --bind 127.0.0.1 --port 8080    # loopback only
 ```
 
-Exit with Ctrl-C; nothing is installed system-wide.
+Open `http://<device-ip>:8080` in a browser on the same LAN. The host serves the
+Dev Center UI and a versioned WebSocket endpoint at `/ws`. Public IPv4/IPv6
+binds are refused unless `--allow-public` is passed explicitly.
 
-## Keys
+On the H700 device the same binary ships as a systemd service
+(`pocketshell-dev.service`, default off). Toggle it with
+`rocknix-services set pocketshell-dev.enabled on|off`; the launch wrapper
+binds the first private IPv4 address found by `ip -4`.
 
 | Key | Action |
 |---|---|
@@ -52,6 +57,15 @@ Exit with Ctrl-C; nothing is installed system-wide.
 | Ctrl-C | Interrupt |
 
 The Input Workspace is a render overlay. `POST /api/input` accepts `INPUT\tENTER`, `INPUT\tEXIT`, `INPUT\tBUFFER <text>`, `INPUT\tLAYOUT <name>`, `INPUT\tFUNCTION <name>`, `INPUT\tSUBMIT`, `INPUT\tCLEAR`, `INPUT\tDELETE <text>`, and `INPUT\tFAVORITE <text>`. `/api/state` includes an `input` object with `entered`, `previousView`, `buffer`, `layout`, `function`, and submitted `history`.
+## WebSocket protocol v1
+
+The browser connects to `ws://<device-ip>:8080/ws` and sends a `hello` envelope.
+The server replies with separate sequenced envelopes: `workspace_state`,
+`terminal_buffer`, `runtime_state`, `metrics`, `logs`, and `frame_mirror_status`.
+A fresh connection or workspace switch starts with a full buffer snapshot
+(`full_snapshot: true`); later frames are row deltas. Malformed messages, bad
+versions, oversized payloads and out-of-range input produce an `error` envelope.
+See `REMOTE_DEV.md` for the full message catalogue.
 
 ## Panels
 
@@ -59,43 +73,43 @@ The Input Workspace is a render overlay. `POST /api/input` accepts `INPUT\tENTER
   workspace, alternate-screen state, bytes in/out.
 - **Workspace Inspector** — one row per workspace: state, PID, `/dev/pts/N`,
   buffer cells, idle seconds. Proves the PTY survives a switch.
-- **Runtime Log** — `Workspace Created`, `PTY Started`, `Workspace Activated`,
-  `PTY Exited`, `Resize Events`, plus parser faults.
-- **Performance** — FPS, smoothed frame cost, cells and attribute runs rendered,
-  buffer size, workspace count.
-- **ANSI Playground** — paste escape sequences (`\x1b[31m`, `\x1b[38;5;208m`,
-  `\x1b[7m`, …) and inspect the resulting cells with their exact colours and the
-  parser error count.
+- **Metrics** — FPS, frame time, workspace count, ANSI events, input events,
+  buffer size. CPU, memory and network counters are not measured by the host
+  and are shown as estimates/unavailable.
+- **Logs** — runtime, PTY and renderer events.
+- **ANSI Inspector** — paste escape sequences and inspect the resulting cells
+  with their exact colours and the parser error count.
+- **PTY Inspector** — JSON dump of the active workspace's PID, PTY path,
+  state and byte counters.
 
-## Recording
+## Session recording and replay
 
-`record-terminal` is built in as a subcommand:
+Browser **Save session.json** records every `workspace_state`,
+`terminal_buffer`, `input`, `switch_workspace`, `logs` and `metrics` event with
+wall-clock timestamps. Replaying the file through the same state renderer
+reproduces the screen without screenshots. Host PTY recording/replay from the
+original harness remains available for byte-level ANSI parser demonstrations.
 
-```sh
-./target/release/pocketshell-dev record recordings/top-session.log -- top -b -n 2 -d 1
-RECORD_MS=3000 ./target/release/pocketshell-dev record out.log -- env TERM=xterm-256color ls --color=always
-```
+## Frame mirror
 
-Format is one chunk per line, `<milliseconds>\t<hex bytes>`. Hex keeps escape
-sequences and UTF-8 intact, so a replay exercises the real parser. `TERM` matters:
-`ls --color=always` still emits no colour when `TERM` is unset.
+Frame mirror is a bounded fallback for programs outside PocketShell. The host
+harness reports capture unavailable; no H700 frame capture is claimed or
+bundled. See `REMOTE_DEV.md` for the recommended DRM/KMS approach and its
+limitations.
 
-Load a recording from the host (`POST /api/replay/load`) and it becomes WS6.
+## Keys
 
-## Screenshots
-
-| File | Shows |
+| Key | Action |
 |---|---|
-| `01-ws1-shell.png` | `cd`, `ls`, `echo` in WS1 with real multibyte output |
-| `02-ws2-files.png` | WS2 file browser in the alternate screen with selection highlight |
-| `03-ws3-vim.png` | vim editing a Rust file, syntax colours, status line |
-| `04-ws4-top.png` | top: CPU bars, load average, coloured memory columns |
-| `05-ws5-log.png` | WS5 metrics and the workspace lifecycle log |
-| `06-ws6-replay.png` | replayed `ls -la` with blue directory entries |
-| `07-workspace-inspector.png` | per-workspace PID, PTY path, cells, idle |
-| `08-performance.png` | FPS 62, frame cost ~0.03 ms, runs rendered |
-| `09-runtime-log.png` | lifecycle events |
-| `10-ansi-playground.png` | parsed escape sequences with colour swatches |
+| Arrows | D-pad up/down/left/right |
+| Enter | A |
+| Escape | B |
+| Q / E | L / R |
+| 1 / 2 | L1 / R1 |
+| Tab | Start |
+| `` ` `` | Select |
+| X / Y | X / Y buttons |
+| other printable keys and Ctrl-C | text into the active workspace |
 
 ## Known differences from the device
 
@@ -104,6 +118,40 @@ Load a recording from the host (`POST /api/replay/load`) and it becomes WS6.
 - 24 rows is the panel limit; `top` output longer than that scrolls, exactly as
   it will on hardware.
 - Mouse reporting and bracketed paste are not implemented anywhere yet.
+- Frame mirror capture is not implemented in this host build; only the protocol
+  status response exists.
 
 These are model-level limitations, not host-level ones, so the host does not
 hide them.
+
+## Verification
+
+Host harness evidence (no H700 device connected):
+
+```sh
+cargo test --release --test protocol
+```
+
+That integration test starts the host on an ephemeral loopback port, opens
+`/ws`, and asserts versioned ordered envelopes (`workspace_state`,
+`terminal_buffer`, `logs`, `runtime_state`, `metrics`), a full first terminal
+snapshot, workspace switching to WS3, accepted key/text input, and rejection of
+out-of-range input with `error` / `invalid_input`.
+
+Browser evidence: `screenshots/11-*` show a live Chromium session rendering
+the 720×480 screen from terminal rows, switching workspaces, and injecting keys
+## Screenshots
+
+| File | Shows |
+|---|---|
+| `01`–`10` | original host harness panels: shell, files, vim, top, log, replay, inspector, performance, runtime log, ANSI playground |
+| `11-ws1-shell.png` | live Dev Center shell workspace rendered from terminal rows |
+| `11-ws2-files.png` | workspace switch to WS2 through `/ws` |
+| `11-remote-input.png` | remote key injection accepted and logged |
+| `11-workspace-inspector.png` | PID / PTY / cells / idle for every workspace |
+| `11-metrics.png` | FPS, frame time, workspace count, ANSI and input events |
+| `11-logs.png` | runtime and PTY lifecycle log |
+| `11-ansi-inspector.png` | parsed escape sequences with colour swatches |
+| `11-pty-inspector.png` | JSON PTY inspection of the active workspace |
+| `11-frame-mirror-poc.png` | frame mirror request answered as capture-unavailable |
+| `11-session-recording.png` | session.json recording controls |

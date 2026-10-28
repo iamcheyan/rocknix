@@ -1146,6 +1146,14 @@ impl PocketShell {
                 "CTRL_C" => b"\x03".to_vec(),
                 "CTRL_D" => b"\x04".to_vec(),
                 "CTRL_L" => b"\x0c".to_vec(),
+                "X" => b"x".to_vec(),
+                "Y" => b"y".to_vec(),
+                "L" => b"q".to_vec(),
+                "R" => b"e".to_vec(),
+                "L1" => b"\x1b[5~".to_vec(),
+                "R1" => b"\x1b[6~".to_vec(),
+                "START" => b"\t".to_vec(),
+                "SELECT" => b"`".to_vec(),
                 _ => Vec::new(),
             }
         } else {

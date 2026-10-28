@@ -42,6 +42,7 @@ make_target() {
   POCKETJS_PROFILE_RS="${TOOLCHAIN}/share/pocketjs/h700/pocket_profile.rs" \
     "${TOOLCHAIN}/bin/cargo" build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
       --package pocket-linux-kms --package rocknix-pocketjs-bindings --target "${TARGET_NAME}"
+  "${TOOLCHAIN}/bin/cargo" build --manifest-path "${ROOT}/tools/pocketshell-dev/Cargo.toml" --locked --release --target "${TARGET_NAME}"
 }
 
 makeinstall_target() {
@@ -62,6 +63,8 @@ makeinstall_target() {
     "${INSTALL}/usr/lib/systemd/system/pocketjs-recovery.service"
   install -D -m 0755 "${PKG_DIR}/scripts/rocknix-hotkeys" \
     "${INSTALL}/usr/bin/rocknix-hotkeys"
-  install -D -m 0644 "${PKG_DIR}/system.d/rocknix-hotkeys.service" \
-    "${INSTALL}/usr/lib/systemd/system/rocknix-hotkeys.service"
+  install -D -m 0644 "${PKG_DIR}/system.d/rocknix-hotkeys.service" "${INSTALL}/usr/lib/systemd/system/rocknix-hotkeys.service"
+  install -D -m 0755 "${CARGO_TARGET_DIR}/${TARGET_NAME}/release/pocketshell-dev" "${INSTALL}/usr/libexec/pocketshell-dev"
+  install -D -m 0755 "${PKG_DIR}/scripts/pocketshell-dev" "${INSTALL}/usr/bin/pocketshell-dev"
+  install -D -m 0644 "${PKG_DIR}/system.d/pocketshell-dev.service" "${INSTALL}/usr/lib/systemd/system/pocketshell-dev.service"
 }

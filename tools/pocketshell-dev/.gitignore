@@ -1,3 +1,4 @@
 target/
 recordings/top-session.log
+screenshots/session.json
 *.swp

@@ -1,0 +1,18 @@
+[Unit]
+Description=PocketShell Remote Developer Host
+After=network-online.target pocketjs-kms.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/pocketshell-dev
+Environment=HOME=/storage
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/storage
+
+[Install]
+WantedBy=multi-user.target

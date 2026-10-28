@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+bind=${POCKETSHELL_DEV_BIND:-}
+if [ -z "$bind" ]; then
+  bind=$(ip -4 -o addr show scope global | awk '$4 ~ /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/ { sub(/\/.*/, "", $4); print $4; exit }')
+fi
+if [ -z "$bind" ]; then
+  echo "PocketShell Dev: no private IPv4 address found; set POCKETSHELL_DEV_BIND explicitly" >&2
+  exit 1
+fi
+exec /usr/libexec/pocketshell-dev --bind "$bind" --port 8080
