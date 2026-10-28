@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PocketShell Developer Host</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2334d399'/><text x='4' y='12' font-size='11' fill='%2305130c'>&gt;</text></svg>">
+<style>
+  :root { --bg:#0b1220; --panel:#111a2b; --line:#1e293b; --ink:#e2e8f0; --dim:#94a3b8; --accent:#34d399; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.45 ui-sans-serif,system-ui,"Noto Sans CJK JP",sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:10px 20px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; letter-spacing:.02em; }
+  header .meta { color:var(--dim); font-size:12px; font-family:ui-monospace,monospace; }
+  #tabs { display:flex; gap:6px; padding:8px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab { border:1px solid var(--line); background:transparent; color:var(--dim);
+         padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .tab.on { color:#05130c; background:var(--accent); border-color:var(--accent); font-weight:600; }
+  main { display:grid; grid-template-columns:minmax(0,760px) minmax(320px,1fr); gap:18px; padding:18px 20px 28px; align-items:start; }
+  @media (max-width:1100px) { main { grid-template-columns:1fr; } }
+
+  .device { background:#05080f; border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .bezel { background:#000; border-radius:8px; padding:6px; box-shadow:inset 0 0 0 1px #1f2937; }
+  #screen { display:block; width:100%; height:auto; image-rendering:pixelated; border-radius:4px; background:#0f172a; }
+  .device .brand { display:flex; justify-content:space-between; color:#64748b; font-size:11px;
+                   font-family:ui-monospace,monospace; padding:8px 4px 0; }
+  #wsbar { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .ws { border:1px solid var(--line); color:var(--dim); background:#0b1220; border-radius:5px;
+        padding:3px 9px; font:12px/1.4 ui-monospace,monospace; cursor:pointer; }
+  .ws.on { color:#05130c; background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .hint { color:#64748b; font-size:11.5px; margin-top:10px; font-family:ui-monospace,monospace; }
+
+  aside { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-height:520px; }
+  aside h2 { font-size:13px; margin:0 0 10px; color:var(--accent); letter-spacing:.04em; text-transform:uppercase; }
+  table { width:100%; border-collapse:collapse; font:12px/1.5 ui-monospace,monospace; }
+  th,td { text-align:left; padding:3px 6px; border-bottom:1px solid #16233a; }
+  th { color:var(--dim); font-weight:500; }
+  .ok { color:#34d399; } .warn { color:#fbbf24; } .bad { color:#f87171; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font:12px/1.6 ui-monospace,monospace; }
+  .kv span:nth-child(odd) { color:var(--dim); }
+  pre { margin:0; white-space:pre-wrap; word-break:break-word; font:11.5px/1.55 ui-monospace,monospace; color:#cbd5e1; }
+  textarea { width:100%; height:90px; background:#0b1220; color:var(--ink); border:1px solid var(--line);
+             border-radius:8px; padding:8px 10px; font:12px/1.5 ui-monospace,monospace; resize:vertical; }
+  button.go { margin-top:8px; background:var(--accent); color:#05130c; border:0; border-radius:6px;
+              padding:6px 14px; font-weight:700; cursor:pointer; }
+  #ansiOut { margin-top:12px; }
+  .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:-1px; margin-right:6px; }
+  .logline { font:11.5px/1.6 ui-monospace,monospace; color:#cbd5e1; }
+  .logline.alt { color:#64748b; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PocketShell Developer Host</h1>
+  <span class="meta">physical 720×480 · logical 360×240 · scale 2×</span>
+  <span class="meta" id="link">connecting…</span>
+</header>
+
+<div id="tabs">
+  <button class="tab on" data-panel="buffer">Terminal Buffer</button>
+  <button class="tab" data-panel="workspaces">Workspace Inspector</button>
+  <button class="tab" data-panel="log">Runtime Log</button>
+  <button class="tab" data-panel="perf">Performance</button>
+  <button class="tab" data-panel="ansi">ANSI Playground</button>
+</div>
+
+<main>
+  <section class="device">
+    <div id="wsbar"></div>
+    <div class="bezel"><canvas id="screen" width="720" height="480"></canvas></div>
+    <div class="brand"><span>ANBERNIC</span><span>RG34XX</span></div>
+    <div class="hint">Q/E = L/R · 1/2 = L1/R1 · Enter = A · Backspace = B · Tab = START · ` = SELECT · ↑↓←→ = 方向键</div>
+  </section>
+
+  <aside>
+    <div id="panel-buffer">
+      <h2>Terminal Buffer</h2>
+      <div class="kv" id="bufferKv"></div>
+    </div>
+    <div id="panel-workspaces" class="hidden">
+      <h2>Workspace Inspector</h2>
+      <table id="wsTable"><thead><tr><th>WS</th><th>State</th><th>PID</th><th>PTY</th><th>Cells</th><th>Idle</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div id="panel-log" class="hidden">
+      <h2>Runtime Log</h2>
+      <div id="logLines"></div>
+    </div>
+    <div id="panel-perf" class="hidden">
+      <h2>Performance</h2>
+      <div class="kv" id="perfKv"></div>
+    </div>
+    <div id="panel-ansi" class="hidden">
+      <h2>ANSI Playground</h2>
+      <textarea id="ansiInput">\x1b[1;32mPocketShell\x1b[0m ANSI playground\n\x1b[31mred\x1b[0m \x1b[33myellow\x1b[0m \x1b[36mcyan\x1b[0m \x1b[35mmagenta\x1b[0m \x1b[7minverse\x1b[0m \x1b[1;4mbold+underline\x1b[0m\n\x1b[44;97m white on blue \x1b[0m  \x1b[38;5;208m256-colour orange\x1b[0m  \x1b[48;5;24m bg-24 \x1b[0m</textarea>
+      <button class="go" id="ansiRun">Parse</button>
+      <div id="ansiOut"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const ROWS = 24, COLS = 54, CELL_W = 12, CELL_H = 16, OX = 20, OY = 45;
+  const NAMES = ['SHELL', 'FILES', 'VIM', 'TOP', 'LOG', 'REPLAY'];
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d');
+
+  let active = 0;
+  let rows = Array.from({ length: ROWS }, () => []);
+  let cursor = { row: 0, col: 0, visible: false };
+  let state = null;
+  let link = document.getElementById('link');
+
+  const hex = (v) => '#' + v.toString(16).padStart(6, '0');
+  const abgrToRgb = (v) => v & 0xffffff;
+
+  function draw() {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textBaseline = 'top';
+    ctx.font = '12px "DejaVu Sans Mono", ui-monospace, monospace';
+
+    // Header
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, canvas.width, 44);
+    ctx.fillStyle = '#34d399';
+    ctx.font = 'bold 16px "DejaVu Sans Mono", ui-monospace, monospace';
+    const title = '\u25C0 WS' + (active + 1) + ':' + NAMES[active] + ' \u25B6';
+    ctx.fillText(title, 20, 14);
+
+    // Cells
+    ctx.font = '12px "DejaVu Sans Mono", ui-monospace, monospace';
+    for (let r = 0; r < ROWS; r++) {
+      const runs = rows[r] || [];
+      for (const run of runs) {
+        const chars = Array.from(run.text);
+        const inverse = (run.flags & 2) !== 0;
+        const fg = hex(inverse ? abgrToRgb(run.bg) : abgrToRgb(run.fg));
+        const bg = hex(inverse ? abgrToRgb(run.fg) : abgrToRgb(run.bg));
+        if (bg !== '#0f172a') {
+          ctx.fillStyle = bg;
+          ctx.fillRect(OX + run.col * CELL_W, OY + r * CELL_H, chars.length * CELL_W, CELL_H);
+        }
+        ctx.fillStyle = fg;
+        ctx.fillText(run.text, OX + run.col * CELL_W, OY + r * CELL_H + 2);
+      }
+    }
+
+    // Cursor as an inverted cell
+    if (cursor.visible && cursor.row < ROWS) {
+      const x = OX + cursor.col * CELL_W;
+      const y = OY + cursor.row * CELL_H;
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(x, y, CELL_W, CELL_H - 1);
+      let ch = ' ';
+      for (const run of rows[cursor.row] || []) {
+        const chars = Array.from(run.text);
+        if (cursor.col >= run.col && cursor.col < run.col + chars.length) { ch = chars[cursor.col - run.col]; break; }
+      }
+      ctx.fillStyle = '#05130c';
+      ctx.fillText(ch, x, y + 2);
+    }
+
+    // Footer hint strip
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 432, canvas.width, 48);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText('L/R WS   L1/R1 PgUp/PgDn   \u2191\u2193 keys   A Enter   B Esc/WS1   START switch   SELECT command', OX, 444);
+  }
+
+  function applyFrame(text) {
+    if (!text) return;
+    for (const record of text.split('\n')) {
+      if (!record) continue;
+      const fields = record.split('\t');
+      if (fields[0] === 'C') {
+        cursor = { row: +fields[1] || 0, col: +fields[2] || 0, visible: fields[3] === '1' };
+      } else if (fields[0] === 'L') {
+        const row = +fields[1];
+        if (!(row >= 0 && row < ROWS)) continue;
+        const runs = [];
+        for (const field of fields.slice(2)) {
+          const parts = field.split(':');
+          if (parts.length < 5) continue;
+          const text = parts.slice(4).join(':').replace(/\\t/g, '    ').replace(/\\n/g, '').replace(/\\\\/g, '\\');
+          if (!text) continue;
+          runs.push({ fg: parseInt(parts[0], 16), bg: parseInt(parts[1], 16), flags: +parts[2] || 0, col: +parts[3] || 0, text });
+        }
+        rows[row] = runs;
+      }
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch('/api/frame', { cache: 'no-store' });
+      applyFrame(await res.text());
+      link.textContent = 'live · ' + location.host;
+      link.className = 'meta ok';
+    } catch (e) {
+      link.textContent = 'disconnected';
+      link.className = 'meta bad';
+    }
+    draw();
+  }
+
+  async function refreshState() {
+    try {
+      state = await (await fetch('/api/state', { cache: 'no-store' })).json();
+      renderPanels();
+    } catch (e) { /* keep last */ }
+  }
+
+  let synced = false;
+  function renderPanels() {
+    if (!state) return;
+    // Follow the host's selected view on first attach (it may be the replay buffer).
+    if (!synced) {
+      active = state.view ?? state.visible;
+      synced = true;
+      if (active === 5) fetch('/api/replay/control', { method: 'POST', body: 'repaint' });
+    }
+    const viewIdx = state.view ?? state.visible;
+    const ws = viewIdx === 5
+      ? { name: 'REPLAY', state: state.replay.playing ? 'playing' : 'paused', pid: 0, pty: '-', cells: 0, idle: 0, bytesIn: 0, bytesOut: 0, altScreen: false }
+      : (state.workspaces[viewIdx] || state.workspaces[0]);
+    document.getElementById('bufferKv').innerHTML = [
+      ['Rows', state.rows], ['Cols', state.cols],
+      ['Cursor', 'row ' + cursor.row + ', col ' + cursor.col + (cursor.visible ? '' : ' (hidden)')],
+      ['Visible cells', (viewIdx === 5 ? (state.replay.chunks + ' replay chunks') : state.cells + ' / ' + (state.rows * state.cols))],
+      ['Runs rendered', viewIdx === 5 ? 'replay buffer' : state.runs],
+      ['Active', 'WS' + (viewIdx + 1) + ' ' + ws.name + ' (' + ws.state + ')'],
+      ['Alt screen', ws.altScreen ? 'yes' : 'no'],
+      ['Bytes in/out', ws.bytesIn + ' / ' + ws.bytesOut]
+    ].map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
+
+    const tbody = document.querySelector('#wsTable tbody');
+    tbody.innerHTML = state.workspaces.map((w, i) =>
+      '<tr><td' + (i === viewIdx ? ' class="ok"' : '') + '>WS' + (w.id + 1) + '</td>' +
+      '<td class="' + (w.state === 'running' ? 'ok' : w.state === 'exited' ? 'bad' : 'warn') + '">' + w.state + '</td>' +
+      '<td>' + (w.pid || '-') + '</td><td>' + w.pty + '</td><td>' + w.cells + '</td>' +
+      '<td>' + (w.idle ? w.idle.toFixed(1) + 's' : '-') + '</td></tr>').join('');
+
+    document.getElementById('logLines').innerHTML = state.log.length
+      ? state.log.map((line, i) => '<div class="logline' + (i % 2 ? ' alt' : '') + '">' + escapeHtml(line) + '</div>').join('')
+      : '<pre>(empty)</pre>';
+
+    document.getElementById('perfKv').innerHTML = [
+      ['FPS', state.fps.toFixed(1)],
+      ['Frame time', state.frameMs.toFixed(2) + ' ms'],
+      ['Rendered cells', viewIdx === 5 ? 'replay buffer' : state.cells],
+      ['Rendered lines/runs', viewIdx === 5 ? 'replay buffer' : state.runs],
+      ['Buffer size', state.cols + ' × ' + state.rows],
+      ['Workspace count', state.workspaces.length],
+      ['Visible workspace', 'WS' + ((state.view ?? state.visible) + 1)],
+      ['Replay', (state.replay && state.replay.name !== '-')
+        ? state.replay.name + ' · ' + state.replay.elapsedMs + '/' + state.replay.durationMs + 'ms · ' + state.replay.chunks + ' chunks'
+        : 'not loaded']
+    ].map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
+
+    document.querySelectorAll('#wsbar .ws').forEach((el, i) => el.classList.toggle('on', i === active));
+  }
+
+  const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function switchTo(id) {
+    if (id === active && id !== 5) return;
+    active = id;
+    rows = Array.from({ length: ROWS }, () => []);
+    cursor = { row: 0, col: 0, visible: false };
+    await fetch('/api/input', { method: 'POST', body: 'ACTIVATE\t' + id });
+    if (id === 5) {
+      await fetch('/api/replay/control', { method: 'POST', body: 'repaint' });
+    } else {
+      await fetch('/api/input', { method: 'POST', body: 'REPAINT\t' + id });
+    }
+    draw();
+    document.querySelectorAll('#wsbar .ws').forEach((el, i) => el.classList.toggle('on', i === active));
+  }
+
+  async function send(command) {
+    await fetch('/api/input', { method: 'POST', body: command });
+  }
+
+  const key = (k) => send(active + '\tKEY ' + k);
+  const text = (t) => send(active + '\tTEXT ' + t);
+
+  window.addEventListener('keydown', async (e) => {
+    if (e.target.tagName === 'TEXTAREA') return;
+    let handled = true;
+    switch (e.key) {
+      case 'q': case 'Q': await switchTo((active + 5) % 6); break;
+      case 'e': case 'E': await switchTo((active + 1) % 6); break;
+      case '1': await key('PGUP'); break;
+      case '2': await key('PGDN'); break;
+      case 'Enter': await key('ENTER'); break;
+      case 'Backspace': await key('ESC'); await switchTo(0); break;
+      case 'Tab': await switchTo((active + 1) % 6); break;
+      case '`': await switchTo(0); break;
+      case 'ArrowUp': await key('UP'); break;
+      case 'ArrowDown': await key('DOWN'); break;
+      case 'ArrowLeft': await key('LEFT'); break;
+      case 'ArrowRight': await key('RIGHT'); break;
+      case 'Escape': await key('ESC'); break;
+      default:
+        if (e.ctrlKey && e.key === 'c') { await key('CTRL_C'); }
+        else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { await text(e.key); }
+        else handled = false;
+    }
+    if (handled) e.preventDefault();
+  });
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((x - OX) / CELL_W), row = Math.floor((y - OY) / CELL_H);
+    link.textContent = 'click row ' + row + ' col ' + col;
+  });
+
+  document.querySelectorAll('#tabs .tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .tab').forEach((t) => t.classList.toggle('on', t === tab));
+      document.querySelectorAll('aside > div').forEach((p) => p.classList.add('hidden'));
+      document.getElementById('panel-' + tab.dataset.panel).classList.remove('hidden');
+    });
+  });
+
+  document.getElementById('ansiRun').addEventListener('click', async () => {
+    const res = await fetch('/api/ansi', { method: 'POST', body: document.getElementById('ansiInput').value });
+    const data = await res.json();
+    const cells = data.runs.slice(0, 400);
+    const lines = new Map();
+    for (const c of cells) {
+      if (!lines.has(c.row)) lines.set(c.row, []);
+      lines.get(c.row).push(c);
+    }
+    let html = '<div class="kv"><span>Cursor</span><span>row ' + data.meta.cursor[0] + ', col ' + data.meta.cursor[1] + '</span>' +
+               '<span>Cursor visible</span><span>' + (data.meta.visible ? 'yes' : 'no') + '</span>' +
+               '<span>Parser errors</span><span>' + data.meta.parserErrors + '</span></div><hr style="border:0;border-top:1px solid #16233a;margin:10px 0">';
+    html += '<pre>';
+    for (const [row, list] of [...lines.entries()].sort((a, b) => a[0] - b[0])) {
+      html += 'row ' + String(row).padStart(2) + ' │ ';
+      let last = 0;
+      for (const c of list) {
+        if (c.col > last) html += ' '.repeat(c.col - last);
+        html += '<span class="swatch" style="background:' + hex(c.fg) + '"></span>' + escapeHtml(c.ch);
+        last = c.col + 1;
+      }
+      html += '\n';
+    }
+    html += '</pre>';
+    document.getElementById('ansiOut').innerHTML = html;
+  });
+
+  const bar = document.getElementById('wsbar');
+  NAMES.forEach((name, i) => {
+    const el = document.createElement('button');
+    el.className = 'ws' + (i === 0 ? ' on' : '');
+    el.textContent = 'WS' + (i + 1) + ' ' + name;
+    el.onclick = () => switchTo(i);
+    bar.appendChild(el);
+  });
+
+  fetch('/api/input', { method: 'POST', body: 'REPAINT\t0' });
+
+  draw();
+  poll();
+  setInterval(poll, 100);
+  refreshState();
+  setInterval(refreshState, 700);
+})();
+</script>
+</body>
+</html>

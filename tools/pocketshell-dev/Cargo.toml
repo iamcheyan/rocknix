@@ -1,0 +1,13 @@
+[package]
+name = "pocketshell-dev"
+version = "0.1.0"
+edition = "2021"
+description = "PocketShell Developer Host: browser harness for the ROCKNIX terminal frontend"
+publish = false
+
+[[bin]]
+name = "pocketshell-dev"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
