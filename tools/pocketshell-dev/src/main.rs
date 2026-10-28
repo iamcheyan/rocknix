@@ -508,7 +508,7 @@ fn websocket(stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<()
                         }
                         let mut shared = state.lock().unwrap();
                         shared.input_events += 1;
-                        if let Some(key) = key.as_deref() { if let Some(command) = remote::key_command(key) { shared.shell.command(&format!("{workspace}\t{command}")); } }
+                        if let Some(key) = key.as_deref() { if let Some(command) = remote::key_command(key) { shared.shell.command(&format!("{workspace}\tKEY {}", command.strip_prefix("KEY ").unwrap_or(command))); } }
                         if let Some(text) = text { shared.shell.command(&format!("{workspace}\tTEXT {text}")); }
                         shared.shell.command("LOG\tRemote input accepted");
                     }
