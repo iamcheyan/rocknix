@@ -1,6 +1,6 @@
 --- a/main.c
 +++ b/main.c
-@@ -3,119 +3,160 @@
+@@ -3,119 +3,170 @@
  #include <unistd.h>
  #include <errno.h>
  #include <string.h>
@@ -9,19 +9,43 @@
 -#include "svg_parser.h"
 -#include "svg_renderer.h"
  #include "dt_rotation.h"
-
+ 
 -int z9(void);
-+// 7 columns x 9 rows bold dot-matrix font for KOROOS
++// 7 columns x 9 rows bold dot-matrix font for KoroOS
 +static const uint8_t glyph_K[9] = {
-+    0b1100011,
 +    0b1100110,
 +    0b1101100,
 +    0b1111000,
++    0b1110000,
 +    0b1111000,
 +    0b1101100,
 +    0b1100110,
 +    0b1100011,
 +    0b1100011
++};
++
++static const uint8_t glyph_o[9] = {
++    0b0000000,
++    0b0000000,
++    0b0111110,
++    0b1100011,
++    0b1100011,
++    0b1100011,
++    0b1100011,
++    0b0111110,
++    0b0000000
++};
++
++static const uint8_t glyph_r[9] = {
++    0b0000000,
++    0b0000000,
++    0b1101110,
++    0b1111000,
++    0b1100000,
++    0b1100000,
++    0b1100000,
++    0b1100000,
++    0b0000000
 +};
 +
 +static const uint8_t glyph_O[9] = {
@@ -36,28 +60,6 @@
 +    0b0111110
 +};
 +
-+static const uint8_t glyph_R[9] = {
-+    0b1111110,
-+    0b1100011,
-+    0b1100011,
-+    0b1100011,
-+    0b1111110,
-+    0b1111000,
-+    0b1101100,
-+    0b1100110,
-+    0b1100011
-+};
-
--/*
-- * SVG path data for rendering the logo
-- * Contains the path data for each component of the logo
-- * Index meaning:
-- * 0: "R" in logo
-- * 1: "O" in logo
-- * 2: "C" in logo
-- * 3: "K" in logo
-- * 4: "N" in logo
-- * 5: "I" in logo
 - * 6: "X" in logo
 - */
 -const char *svg_paths[] = {
@@ -67,7 +69,8 @@
 -    "M 661.357 359.628 L 661.357 262.108 L 762.073 359.628 L 799.853 359.628 L 685.438 247.872 L 788.145 140.106 L 754.353 140.106 L 661.357 237.894 L 661.357 140.106 L 634.217 140.106 L 634.217 359.628 L 661.357 359.628 Z",
 -    "M 821.944 140.106 L 821.944 359.628 L 849.084 359.628 L 849.084 186.006 L 960.038 359.628 L 987.178 359.628 L 987.178 140.106 L 960.038 140.106 L 960.038 313.861 L 849.084 140.106 L 821.944 140.106 Z",
 -    "M 1034.814 140.106 L 1034.814 359.627 L 1061.955 359.627 L 1061.955 140.106 L 1034.814 140.106 Z",
--    "M 1116.9 359.628 L 1183.554 264.768 L 1250.208 359.628 L 1284 359.628 L 1200.45 241.219 L 1270.96 140.106 L 1238.369 140.106 L 1183.554 218.469 L 1128.74 140.106 L 1096.141 140.106 L 1166.658 241.219 L 1083.109 359.628 L 1116.9 359.628 Z"
+-    "M 1116.9 359.628 L 1183.554 264.768 L 1250.208 359.628 L 1284 359.628 L 1200.45 241.219 L 1270.96 140.106 L 1238.369 140.106 L 1183.554 218.469 L 1128.74 140.106 L 1096.141 140.106 L 1166.658 241.219 L 1083.109 359.628 Z",
+-};
 +static const uint8_t glyph_S[9] = {
 +    0b0111111,
 +    0b1100000,
@@ -78,8 +81,9 @@
 +    0b0000011,
 +    0b1100011,
 +    0b0111110
+-};
  };
-
+ 
 -/* Color definitions for each path component
 - * First 4 paths are red (brand color)
 - * Last 3 paths are gray (secondary color)
@@ -92,10 +96,7 @@
 -    "rgb(85,85,85)",   // Gray
 -    "rgb(85,85,85)",   // Gray
 -    "rgb(85,85,85)"    // Gray
-+static const uint8_t *glyphs[6] = {
-+    glyph_K, glyph_O, glyph_R, glyph_O, glyph_O, glyph_S
- };
-
+ 
 -#define NUM_PATHS (sizeof(svg_paths) / sizeof(svg_paths[0]))
 +static void draw_dot(Framebuffer *fb, int x, int y, int size, uint32_t color, int rotation) {
 +    for (int dy = 0; dy < size; dy++) {
@@ -124,7 +125,7 @@
 +        }
 +    }
 +}
-
+ 
 -/*
 - * Main program entry point
 - */
@@ -133,20 +134,20 @@
 -
 -    // Get rotation from device tree
      int rotation = get_display_rotation();
-
+ 
 -    // Check framebuffer device accessibility
      if (access(fb_device, R_OK | W_OK) != 0) {
 -        fprintf(stderr, "Cannot access %s: %s\n", fb_device, strerror(errno));
          return 1;
      }
-
+ 
 -    // Initialize framebuffer
      Framebuffer *fb = fb_init(fb_device);
      if (!fb) {
 -        fprintf(stderr, "Failed to initialize framebuffer\n");
          return 1;
      }
-
+ 
 -    // Calculate display parameters
 -    DisplayInfo *display_info = calculate_display_info(fb);
 -    if (!display_info) {
@@ -159,7 +160,7 @@
 +        w = fb->vinfo.yres;
 +        h = fb->vinfo.xres;
      }
-
+ 
 -    // Clear screen to black
      for (uint32_t y = 0; y < fb->vinfo.yres; y++) {
          for (uint32_t x = 0; x < fb->vinfo.xres; x++) {
@@ -167,7 +168,7 @@
 +            set_pixel(fb, x, y, 0xFF0A0A0E);
          }
      }
-
+ 
 -    // Process and render each path component
 -    for (size_t i = 0; i < NUM_PATHS; i++) {
 -        SVGPath *svg = parse_svg_path(svg_paths[i], svg_colors[i]);
@@ -190,9 +191,8 @@
 +    int start_y = (h - total_height_px) / 2;
 +
 +    uint32_t char_colors[6] = {
-+        0xFFF1F5F9, 0xFFF1F5F9,
-+        0xFFF1F5F9, 0xFFF1F5F9,
-+        0xFFF59E0B, 0xFFF59E0B
++        0xFFF59E0B, 0xFFF1F5F9, 0xFFF1F5F9,
++        0xFFF1F5F9, 0xFFF1F5F9, 0xFFF59E0B
 +    };
 +
 +    int cur_unit_x = 0;
@@ -223,7 +223,7 @@
 -        free_svg_path(svg);
 +        cur_unit_x += glyph_w + glyph_spacing;
      }
-
+ 
 -    // Flush changes to the framebuffer
      fb_flush(fb);
 -

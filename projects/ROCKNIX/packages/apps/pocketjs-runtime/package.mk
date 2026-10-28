@@ -33,7 +33,7 @@ makeinstall_host() {
 }
 
 make_target() {
-  export RUSTC="${TOOLCHAIN}/bin/rustc"
+  export RUSTC=
   export LIBCLANG_PATH="${TOOLCHAIN}/lib"
   export LD_LIBRARY_PATH="${TOOLCHAIN}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
   export BINDGEN_EXTRA_CLANG_ARGS="--target=${TARGET_NAME} --sysroot=${SYSROOT_PREFIX} -isystem ${SYSROOT_PREFIX}/usr/include"
@@ -60,4 +60,8 @@ makeinstall_target() {
     "${INSTALL}/usr/lib/systemd/system/pocketjs-kms.service"
   install -D -m 0644 "${PKG_DIR}/system.d/pocketjs-recovery.service" \
     "${INSTALL}/usr/lib/systemd/system/pocketjs-recovery.service"
+  install -D -m 0755 "${PKG_DIR}/scripts/rocknix-hotkeys" \
+    "${INSTALL}/usr/bin/rocknix-hotkeys"
+  install -D -m 0644 "${PKG_DIR}/system.d/rocknix-hotkeys.service" \
+    "${INSTALL}/usr/lib/systemd/system/rocknix-hotkeys.service"
 }

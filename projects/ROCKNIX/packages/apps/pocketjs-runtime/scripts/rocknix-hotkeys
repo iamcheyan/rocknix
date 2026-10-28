@@ -1,0 +1,71 @@
+#!/bin/bash
+# Force-quit the current foreground application when START and SELECT are held
+# together. The KoroOS runtime owns the display, so a stuck application can
+# otherwise only be cleared by power cycling the handheld.
+#
+# H700 exposes its buttons through the legacy joystick interface; the evdev
+# node stays silent, so this reads /dev/input/js* directly.
+set -uo pipefail
+
+JS_DEVICE=${HOTKEY_DEVICE:-}
+if [ -z "${JS_DEVICE}" ]; then
+  for dev in /sys/class/input/js*/device/name; do
+    [ -r "${dev}" ] || continue
+    [ "$(cat "${dev}")" = "H700 Gamepad" ] || continue
+    node=${dev#/sys/class/input/}
+    JS_DEVICE=/dev/input/${node%%/*}
+    break
+  done
+fi
+[ -n "${JS_DEVICE}" ] || { echo "rocknix-hotkeys: H700 Gamepad not found" >&2; exit 1; }
+[ -r "${JS_DEVICE}" ] || { echo "rocknix-hotkeys: ${JS_DEVICE} unreadable" >&2; exit 1; }
+
+HOLD=${HOTKEY_HOLD_MS:-1000}
+# Linux gamepad button indices used by the H700 mapping.
+SELECT_BTN=${HOTKEY_SELECT_BTN:-8}
+START_BTN=${HOTKEY_START_BTN:-9}
+
+start_down=0
+select_down=0
+since=0
+fired=0
+
+now_ms() { date +%s%3N; }
+
+force_quit() {
+  [ "${fired}" -eq 1 ] && return 0
+  fired=1
+  logger -t rocknix-hotkeys "START+SELECT held for ${HOLD}ms; stopping the foreground session"
+  systemctl stop pocketjs-foreground.service 2>/dev/null ||
+    systemctl restart pocketjs-kms.service 2>/dev/null || true
+}
+
+# struct js_event { u32 time; s16 value; u8 type; u8 number; } — 8 bytes.
+start_ts=$(date +%s%3N)
+exec 9< "${JS_DEVICE}"
+while read -r -N8 ev <&9; do
+  [ -n "${ev}" ] || continue
+  set -- $(printf '%s' "${ev}" | od -An -tu1)
+  type=$7
+  number=$8
+  value=$2
+
+  # type 0x81 is JS_EVENT_BUTTON (initial state dump uses 0x80).
+  [ $(( type & 1 )) -eq 1 ] || continue
+
+  case "${number}" in
+    "${START_BTN}") start_down=${value} ;;
+    "${SELECT_BTN}") select_down=${value} ;;
+    *) continue ;;
+  esac
+
+  if [ "${start_down}" -eq 1 ] && [ "${select_down}" -eq 1 ]; then
+    [ "${since}" -gt 0 ] || since=$(now_ms)
+    if [ $(( $(now_ms) - since )) -ge "${HOLD}" ]; then
+      force_quit
+    fi
+  else
+    since=0
+    fired=0
+  fi
+done
