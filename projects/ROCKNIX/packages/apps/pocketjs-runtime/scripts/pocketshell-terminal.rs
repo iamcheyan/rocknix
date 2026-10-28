@@ -693,10 +693,11 @@ impl Terminal {
                     col += 1;
                     continue;
                 }
-                let mut text = String::new();
+                let start_col = col;
                 let start_fg = cell.fg;
                 let start_bg = cell.bg;
                 let start_flags = cell.flags;
+                let mut text = String::new();
                 while col < self.buffer.cols {
                     let next = self.buffer.cell(row, col);
                     if next.fg != start_fg || next.bg != start_bg || next.flags != start_flags {
@@ -709,7 +710,9 @@ impl Terminal {
                     output.push('\t');
                 }
                 first = false;
-                output.push_str(&format!("{start_fg:06x}:{start_bg:06x}:{start_flags}:"));
+                // The start column is explicit: leading and interior blanks are
+                // skipped runs, so the renderer cannot derive position by summing.
+                output.push_str(&format!("{start_fg:06x}:{start_bg:06x}:{start_flags}:{start_col}:"));
                 output.push_str(&escape_run(&text));
             }
             output.push('\n');
@@ -781,6 +784,56 @@ fn color_256(value: u8) -> u32 {
     }
 }
 
+fn json_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Feed arbitrary bytes through a throwaway terminal and describe the result.
+/// Used by the developer host's ANSI playground; the device never calls it.
+pub fn playground(bytes: &[u8], rows: usize, cols: usize) -> (String, String) {
+    let mut terminal = Terminal::new(rows, cols);
+    terminal.feed(bytes);
+    let mut runs = String::from("[");
+    let mut first = true;
+    for row in 0..rows {
+        for col in 0..cols {
+            let cell = terminal.buffer.cell(row, col);
+            if cell.ch == ' ' && cell.bg == DEFAULT_BG && cell.flags == 0 {
+                continue;
+            }
+            if !first {
+                runs.push(',');
+            }
+            first = false;
+            runs.push_str(&format!(
+                "{{\"row\":{row},\"col\":{col},\"ch\":\"{}\",\"fg\":\"{:06x}\",\"bg\":\"{:06x}\",\"flags\":{}}}",
+                json_escape(&cell.ch.to_string()),
+                cell.fg,
+                cell.bg,
+                cell.flags
+            ));
+        }
+    }
+    runs.push(']');
+    let meta = format!(
+        "{{\"cursor\":[{},{}],\"visible\":{},\"parserErrors\":{}}}",
+        terminal.cursor.row, terminal.cursor.col, terminal.cursor.visible as u8, terminal.parser_errors
+    );
+    (runs, meta)
+}
+
 fn escape_run(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
@@ -808,6 +861,11 @@ struct PtySession {
     child: Child,
     terminal: Terminal,
     exited_reported: bool,
+    pty_path: String,
+    started: Instant,
+    last_activity: Instant,
+    bytes_in: u64,
+    bytes_out: u64,
 }
 
 pub struct PocketShell {
@@ -848,6 +906,14 @@ impl PocketShell {
         self.log.push(message);
         if self.log.len() > 200 {
             self.log.remove(0);
+        }
+    }
+
+    /// Mark every row dirty so the next frame carries the whole screen. A newly
+    /// attached browser has no row cache, so the host asks for this on connect.
+    pub fn repaint(&mut self, id: usize) {
+        if let Some(session) = self.sessions.get_mut(id).and_then(|slot| slot.as_mut()) {
+            session.terminal.buffer.dirty.fill(true);
         }
     }
 
@@ -963,11 +1029,25 @@ impl PocketShell {
                     libc::close(slave);
                     let flags = libc::fcntl(master, libc::F_GETFL);
                     libc::fcntl(master, libc::F_SETFL, flags | libc::O_NONBLOCK);
+                    let pty_path = {
+                        let raw = libc::ptsname(master);
+                        if raw.is_null() {
+                            String::from("unknown")
+                        } else {
+                            std::ffi::CStr::from_ptr(raw).to_string_lossy().into_owned()
+                        }
+                    };
+                    let now = Instant::now();
                     self.sessions[id] = Some(PtySession {
                         master,
                         child,
                         terminal: Terminal::new(self.rows, self.cols),
                         exited_reported: false,
+                        pty_path,
+                        started: now,
+                        last_activity: now,
+                        bytes_in: 0,
+                        bytes_out: 0,
                     });
                     self.record(format!("Workspace Created WS{}; PTY Started", id + 1));
                 }
@@ -993,6 +1073,8 @@ impl PocketShell {
                     break;
                 }
                 session.terminal.feed(&bytes[..count as usize]);
+                session.bytes_out += count as u64;
+                session.last_activity = Instant::now();
             }
             if !session.exited_reported && session.child.try_wait().ok().flatten().is_some() {
                 session.exited_reported = true;
@@ -1010,6 +1092,12 @@ impl PocketShell {
         let rest = parts.next().unwrap_or("");
         if head == "LOG" {
             self.record(rest.to_owned());
+            return String::new();
+        }
+        if head == "REPAINT" {
+            if let Ok(id) = rest.trim().parse::<usize>() {
+                self.repaint(id);
+            }
             return String::new();
         }
         if head == "RESIZE" {
@@ -1065,12 +1153,27 @@ impl PocketShell {
         };
         if !payload.is_empty() {
             unsafe { libc::write(session.master, payload.as_ptr().cast(), payload.len()) };
+            session.bytes_in += payload.len() as u64;
+            session.last_activity = Instant::now();
         }
         String::new()
     }
 
     /// Frame callback: pump PTYs and return the visible workspace's dirty rows.
     pub fn frame(&mut self) -> String {
+        let started = Instant::now();
+        let output = self.frame_inner();
+        // Every path is measured, including the log snapshot.
+        let elapsed_ms = started.elapsed().as_secs_f32() * 1000.0;
+        self.frame_ms = if self.frame_ms > 0.0 {
+            self.frame_ms * 0.9 + elapsed_ms * 0.1
+        } else {
+            elapsed_ms
+        };
+        output
+    }
+
+    fn frame_inner(&mut self) -> String {
         self.pump();
         self.frames += 1;
         let elapsed = self.last_fps_at.elapsed();
@@ -1081,24 +1184,31 @@ impl PocketShell {
         }
         let id = self.visible;
         if id == 4 {
-            return String::new();
+            // The log workspace owns no PTY; its frame is the metrics snapshot.
+            return self.log_snapshot();
         }
         let Some(session) = self.sessions[id].as_mut() else { return String::new() };
-        let started = Instant::now();
         let rows = session.terminal.take_dirty_rows(24);
         let mut runs = 0usize;
         let mut cells = 0usize;
         for line in rows.lines().filter(|line| line.starts_with("L\t")) {
             for run in line.split('\t').skip(2) {
                 runs += 1;
-                if let Some((_, text)) = run.split_once(':').and_then(|(_, rest)| rest.split_once(':')) {
+                // Wire shape is fg:bg:flags:col:text — skip the four numeric fields.
+                let mut parts = run.splitn(5, ':');
+                parts.next();
+                parts.next();
+                parts.next();
+                parts.next();
+                if let Some(text) = parts.next() {
                     cells += text.chars().count();
                 }
             }
         }
-        self.rendered_runs = runs;
-        self.rendered_cells = cells;
-        self.frame_ms = started.elapsed().as_secs_f32() * 1000.0;
+        if !rows.is_empty() {
+            self.rendered_runs = runs;
+            self.rendered_cells = cells;
+        }
         if rows.is_empty() {
             return session.terminal.cursor_line();
         }
@@ -1118,6 +1228,87 @@ impl PocketShell {
         let mut output = rows;
         output.push_str(&session.terminal.cursor_line());
         output
+    }
+
+    /// JSON snapshot for the developer host's inspectors. Kept here so the
+    /// board diagnostics read the same state the device renders.
+    pub fn inspector_json(&self) -> String {
+        let mut out = String::with_capacity(1024);
+        out.push_str(&format!(
+            "{{\"cols\":{},\"rows\":{},\"visible\":{},\"fps\":{:.1},\"frameMs\":{:.3},\"cells\":{},\"runs\":{},\"logs\":{},",
+            self.cols,
+            self.rows,
+            self.visible,
+            self.fps,
+            self.frame_ms,
+            self.rendered_cells,
+            self.rendered_runs,
+            self.log.len()
+        ));
+        out.push_str("\"workspaces\":[");
+        for id in 0..WORKSPACES {
+            if id > 0 {
+                out.push(',');
+            }
+            let name = match id {
+                0 => "SHELL",
+                1 => "FILES",
+                2 => "VIM",
+                3 => "TOP",
+                _ => "LOG",
+            };
+            match self.sessions[id].as_ref() {
+                Some(session) => {
+                    // `exited_reported` is maintained by `frame()`; reading it keeps
+                    // the inspector side-effect free.
+                    let state = if session.exited_reported { "exited" } else { "running" };
+                    out.push_str(&format!(
+                        "{{\"id\":{id},\"name\":\"{name}\",\"kind\":\"pty\",\"state\":\"{state}\",\"pid\":{},\"pty\":\"{}\",\"cells\":{},\"uptime\":{:.1},\"idle\":{:.1},\"bytesIn\":{},\"bytesOut\":{},\"altScreen\":{}}}",
+                        session.child.id(),
+                        session.pty_path,
+                        session.terminal.visible_cells(),
+                        session.started.elapsed().as_secs_f32(),
+                        session.last_activity.elapsed().as_secs_f32(),
+                        session.bytes_in,
+                        session.bytes_out,
+                        session.terminal.alternate_screen_active,
+                    ));
+                }
+                None => {
+                    out.push_str(&format!(
+                        "{{\"id\":{id},\"name\":\"{name}\",\"kind\":\"{}\",\"state\":\"idle\",\"pid\":0,\"pty\":\"-\",\"cells\":{},\"uptime\":0,\"idle\":0,\"bytesIn\":0,\"bytesOut\":0,\"altScreen\":false}}",
+                        if id == 4 { "log" } else { "pty" },
+                        self.cols * self.rows
+                    ));
+                }
+            }
+        }
+        out.push_str("],\"log\":[");
+        for (index, entry) in self.log.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push('"');
+            out.push_str(&json_escape(entry));
+            out.push('"');
+        }
+        out.push_str("]}");
+        out
+    }
+
+    /// Event log only, for the log viewer pane.
+    pub fn log_json(&self) -> String {
+        let mut out = String::from("[");
+        for (index, entry) in self.log.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push('"');
+            out.push_str(&json_escape(entry));
+            out.push('"');
+        }
+        out.push(']');
+        out
     }
 
     fn log_snapshot(&mut self) -> String {
@@ -1152,7 +1343,7 @@ impl PocketShell {
         for (row, line) in lines.iter().enumerate().take(self.rows) {
             let fg = if row < 4 { 0x23d18b } else { 0xe5e5e5 };
             output.push_str(&format!(
-                "L\t{}\t{:06x}:{:06x}:0:{}\n",
+                "L\t{}\t{:06x}:{:06x}:0:0:{}\n",
                 row,
                 fg,
                 DEFAULT_BG,
@@ -1399,6 +1590,7 @@ mod tests {
         let rows = terminal.take_dirty_rows(8);
         assert!(rows.starts_with("L\t0\t"), "got {rows:?}");
         assert!(rows.contains("0dbc79"), "fg should be green, got {rows:?}");
+        assert!(rows.contains(":0:ok"), "run should carry its column, got {rows:?}");
         assert!(rows.contains("ok"));
         assert!(terminal.take_dirty_rows(8).is_empty());
     }
