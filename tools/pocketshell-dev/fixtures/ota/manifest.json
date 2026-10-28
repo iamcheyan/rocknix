@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "package": "package.tar",
+  "size": 10240,
+  "sha256": "ac0a2d5cee8071c1af61cba39e7bf672a037bcf86bf5b81df381349fc5e378dd",
+  "signature": "aa1abb92beb3ac873c63982d84e7ce38a2c3636599dc05b4fa0e3e8ab1c444a7635f031fe44e84f9de3dbd2764e9b3c2ad30ca417e69bc9dcfd4698d77169905",
+  "update_type": "workspace",
+  "requires_reboot": false,
+  "requires_slot_switch": false,
+  "rollback_supported": false,
+  "health_check_required": false,
+  "changed": [
+    "apps/demo.txt"
+  ],
+  "changelog": "Fixture update 2: demo workspace file."
+}

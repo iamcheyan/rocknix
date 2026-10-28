@@ -82,6 +82,7 @@
   <button class="tab" data-panel="perf">Metrics</button>
   <button class="tab" data-panel="ansi">ANSI Inspector</button>
   <button class="tab" data-panel="pty">PTY Inspector</button>
+  <button class="tab" data-panel="ota">OTA Simulator</button>
 </div>
 
 <div class="session"><button id="sessionDownload" class="go">Save session.json</button><label>Replay session <input id="sessionFile" type="file" accept="application/json"></label><button id="mirrorToggle" class="tab">Frame Mirror PoC</button></div>
@@ -112,11 +113,20 @@
     </div>
     <div id="panel-ansi" class="hidden">
       <h2>ANSI Playground</h2>
-      <textarea id="ansiInput">\x1b[1;32mPocketShell\x1b[0m ANSI playground\n\x1b[31mred\x1b[0m \x1b[33myellow\x1b[0m \x1b[36mcyan\x1b[0m \x1b[35mmagenta\x1b[0m \x1b[7minverse\x1b[0m \x1b[1;4mbold+underline\x1b[0m\n\x1b[44;97m white on blue \x1b[0m  \x1b[38;5;208m256-colour orange\x1b[0m  \x1b[48;5;24m bg-24 \x1b[0m</textarea>
+      <textarea id="ansiInput">\x1b[1;32mPocketShell ANSI playground\x1b[0m</textarea>
       <button class="go" id="ansiRun">Parse</button>
       <div id="ansiOut"></div>
     </div>
     <div id="panel-pty" class="hidden"><h2>PTY Inspector</h2><pre id="ptyOut">Awaiting workspace state</pre></div>
+    <div id="panel-ota" class="hidden">
+      <h2>OTA Simulator · filesystem only</h2>
+      <div class="kv" id="otaState"></div>
+      <p><button class="go" id="otaCheck">Check fixture</button> <button class="go" id="otaInstall">Stage inactive slot</button> <button class="go" id="otaRollback">Rollback</button></p>
+      <p><button class="go" id="otaConfirm">Confirm healthy boot</button> <button class="go" id="otaFail">Simulate boot failure</button></p>
+      <pre id="otaResult">No OTA request yet.</pre>
+      <h2>Changelog</h2><pre id="otaChangelog"></pre>
+      <h2>Audit log</h2><pre id="otaLog"></pre>
+    </div>
   </aside>
 </main>
 <section id="inputWorkspace" aria-label="Input Workspace">
@@ -281,6 +291,7 @@
 
 
   window.addEventListener('keydown',(e)=>{
+    if (inputState.entered || e.key === 'F2' || e.key === '`') return;
     if (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
     let handled = true;
     switch(e.key) {
@@ -343,6 +354,25 @@
     html += '</pre>';
     document.getElementById('ansiOut').innerHTML = html;
   });
+  async function otaRequest(path) {
+    const res = await fetch('/api/ota/' + path, {method: path === 'status' || path === 'log' ? 'GET' : 'POST'});
+    const data = await res.json();
+    document.getElementById('otaResult').textContent = JSON.stringify(data, null, 2);
+    if (data.changelog) document.getElementById('otaChangelog').textContent = data.changelog;
+    refreshOta();
+  }
+  async function refreshOta() {
+    const [status, log] = await Promise.all([fetch('/api/ota/status').then(r=>r.json()), fetch('/api/ota/log').then(r=>r.json())]);
+    const s = status.state;
+    document.getElementById('otaState').innerHTML = s ? [['Active',s.active],['Pending',s.pending||'none'],['Version',s.confirmed_version],['Failed boots',s.boot_failures],['State',s.status],['Mode','filesystem simulator']].map(([k,v])=>'<span>'+k+'</span><span>'+escapeHtml(String(v))+'</span>').join('') : escapeHtml(status.error||'unavailable');
+    document.getElementById('otaLog').textContent = (log.lines||[]).join('\n');
+  }
+  document.getElementById('otaCheck').onclick=()=>otaRequest('check');
+  document.getElementById('otaInstall').onclick=()=>otaRequest('install');
+  document.getElementById('otaRollback').onclick=()=>otaRequest('rollback');
+  document.getElementById('otaConfirm').onclick=()=>otaRequest('confirm');
+  document.getElementById('otaFail').onclick=()=>otaRequest('boot-failure');
+  refreshOta();
 
   const bar = document.getElementById('wsbar');
   NAMES.forEach((name, i) => {
@@ -354,8 +384,6 @@
   });
 
   draw();
-  refreshState();
-  setInterval(refreshState, 700);
   const INPUT_FUNCTIONS = ['Keyboard', 'History', 'Commands', 'Phrases', 'Sessions', 'Agent'];
   const INPUT_LAYOUTS = {
     ABC: ['A B C D E F G','H I J K L M N','O P Q R S T U','V W X Y Z'],
@@ -370,6 +398,7 @@
   const INPUT_SESSIONS = [['PVE','ssh pve'],['DEVBOX','ssh devbox'],['NAS','ssh nas'],['CLAUDE','tmux attach -t claude'],['AIDER','tmux attach -t aider'],['CODEX','tmux attach -t codex'],['Remote Agent','ssh agent']];
   const INPUT_AGENTS = ['查看日志','查看异常','分析系统状态','检查存储空间','检查网络连接','更新 ROM 库','生成 SSH 配置','管理 Workspace','生成脚本','生成命令'].map((x)=>[x,`请${x}，先检查当前系统状态并给出可执行结论。`]);
   let inputState = { entered:false, previousView:0, buffer:'', layout:'ABC', function:'Keyboard', history:[] };
+  async function refreshState() { state = await (await fetch("/api/state")).json(); renderPanels(); }
   const postInput = (action) => fetch('/api/input', { method:'POST', body:'INPUT\t'+action });
   async function enterInput() { await postInput('ENTER'); inputState.entered=true; renderInputWorkspace(); }
   async function exitInput() { await postInput('EXIT'); inputState.entered=false; document.getElementById('inputWorkspace').classList.remove('open'); draw(); refreshState(); }
@@ -408,7 +437,7 @@
     if(e.key==='PageUp'||e.key==='PageDown'){const i=INPUT_FUNCTIONS.indexOf(inputState.function);inputState.function=INPUT_FUNCTIONS[(i+(e.key==='PageDown'?1:5))%6];postInput('FUNCTION '+inputState.function);renderInputWorkspace();e.preventDefault();return;}
     if(e.key.length===1&&!e.ctrlKey&&!e.metaKey){setInputBuffer(inputState.buffer+e.key);e.preventDefault();}
   });
-  window.addEventListener('keydown',async(e)=>{if(e.key==='`'){await enterInput();e.preventDefault();}});
+  window.addEventListener('keydown',async(e)=>{if(e.key==='`'||e.key==='F2'){await enterInput();e.preventDefault();}});
   setInterval(async()=>{try{const s=await(await fetch('/api/state',{cache:'no-store'})).json();if(s.input&&!inputState.entered&&s.input.entered){inputState={...inputState,...s.input};renderInputWorkspace();}else if(s.input){inputState.history=s.input.history||[];for(const phrase of s.input.phrases||[])if(!customPhrases.includes(phrase))customPhrases.push(phrase);}}catch(_){}},700);
   connect();
 })();

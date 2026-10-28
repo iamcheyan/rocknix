@@ -155,3 +155,10 @@ the 720×480 screen from terminal rows, switching workspaces, and injecting keys
 | `11-pty-inspector.png` | JSON PTY inspection of the active workspace |
 | `11-frame-mirror-poc.png` | frame mirror request answered as capture-unavailable |
 | `11-session-recording.png` | session.json recording controls |
+## OTA simulator
+
+The **OTA Simulator** tab uses a filesystem root only. It initializes `slot-a`, `slot-b`, and `recovery` fixtures under `${TMPDIR:-/tmp}/pocketshell-ota-sim`; override with `POCKETSHELL_OTA_ROOT`. The checked-in signed local package is under `fixtures/ota`. Check the manifest, stage to the inactive slot, confirm a simulated healthy boot, simulate boot failures (rollback after three), or request rollback from the browser.
+
+The HTTP API exposes `GET /api/ota/status`, `GET /api/ota/log`, `POST /api/ota/check`, `POST /api/ota/install`, `POST /api/ota/confirm`, `POST /api/ota/boot-failure`, and `POST /api/ota/rollback`. Configure fixtures with `POCKETSHELL_OTA_FIXTURE` and a trusted public key with `POCKETSHELL_OTA_PUBLIC_KEY`.
+
+`cargo run -- push 192.0.2.1 --dry-run` exercises local package verification and slot staging without connecting to the address, rebooting, or touching a device. The example address is documentation-only. HTTP remote, local discovery, GitHub Releases, and USB providers are explicitly unsupported. See [docs/ota.md](docs/ota.md) for architecture, state transitions, H700 evidence, and integration gaps. The simulator is not hardware update support.
