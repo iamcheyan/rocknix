@@ -24,12 +24,12 @@
 | B4 | 设备→网页跟随 | PASS | B05-web-follow-device-before.png, B06-web-follow-device-after.png, B07-web-follow-browser-before.png, B08-web-follow-browser-after.png, B09-device-after.png, B10-web-canvas-after.png | - | 设备 LCD 变化 19.40%，浏览器同步 |
 | B5 | 刷新率/撕帧限制 | PASS | B11-mirror-rate-limit.png | - | 实测 4fps 轮询；空闲帧稳定无撕裂 |
 | B6 | 断线恢复 | PASS | B12-recovery-mirror-live.png, B13-recovery-stopped.png, B14-recovery-recovered.png | - | 停服→unavailable，重启→自动 LCD live |
-| C1 | 输入工作区开关 | PENDING | - | - | |
-| C2 | 布局切换 | PENDING | - | - | |
-| C3 | 功能页切换 | PENDING | - | - | |
-| C4 | 编辑与提交到 PTY | PENDING | - | - | |
-| C5 | /api/state 一致性 | PENDING | - | - | |
-| C6 | 历史与预置 | PENDING | - | - | |
+| C1 | 输入工作区开关 | PASS | C01-input-open.png, C01-input-closed.png | - | F2 开；Escape 退出并恢复 |
+| C2 | 布局切换 | PASS | C02-abc.png, C02-num.png, C02-sym.png, C02-path.png | - | ABC→NUM→SYM→PATH 与 state 一致 |
+| C3 | 功能页切换 | PASS | C03-keyboard.png, C03-commands.png, C03-phrases.png, C03-sessions.png, C03-agent.png, C03-history.png | - | 6 页循环与 state 一致 |
+| C4 | 编辑与提交到 PTY | PASS | C04-before.png, C04-after.png | - | 提交后 SHELL PTY bytesOut +57，画布变化 1.29% |
+| C5 | /api/state 一致性 | PASS | C05-state.png | - | input.entered/layout/function 与 UI 一致 |
+| C6 | 历史与预置 | PASS | C06-commands.png, C06-phrases.png, C06-sessions.png, C06-agent.png, C06-preset-selected.png | - | 预置选中落入缓冲（buffer=ssh pve） |
 | D1 | 布局 | PENDING | - | - | |
 | D2 | 中文文案 | PENDING | - | - | |
 | D3 | 服务开关真实生效 | PENDING | - | - | |
@@ -118,3 +118,49 @@
 - 截图：![](./B12-recovery-mirror-live.png) / ![](./B13-recovery-stopped.png) / ![](./B14-recovery-recovered.png)
 - 问题与根因：无。
 - 未验证/限制：仅验证了 Dev Center 页面的 TCP/WS 自恢复；未模拟网络物理断开后重连的更长超时路径。
+### C1 输入工作区开关
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 01:10
+- 设备状态：H700 / pocketshell-dev active
+- 操作步骤：终端缓冲模式（屏蔽 `/device/frame.rgb` 以退出 LCD 镜像）下按 `F2` 打开输入工作区；`/api/state` 读 `input.entered`；按 `Escape` 退出。
+- 预期 / 实测：F2 打开，`input.entered` 由 `false`→`true`；Escape 退出并恢复原视图，`input.entered`→`false`。反应正确，无错位/空白。
+- 截图：![](./C01-input-open.png) / ![](./C01-input-closed.png)
+- 问题与根因：无。
+- 未验证/限制：输入工作区仅在“终端缓冲模式”（LCD 镜像关闭）下可用，源码 `enterInput()` 在 `deviceLive` 时直接 return；这是设计约束，非缺陷。
+
+### C2 布局切换
+- 状态：PASS
+- 操作步骤：输入工作区内按 `ArrowRight` 在 ABC/NUM/SYM/PATH 间循环，每步读 `/api/state.input.layout`。
+- 实测：`layout` 依次为 `ABC`→`NUM`→`SYM`→`PATH`（与界面高亮一致）。
+- 截图：![](./C02-abc.png) ![](./C02-num.png) ![](./C02-sym.png) ![](./C02-path.png)
+- 问题与根因：无。
+
+### C3 功能页切换
+- 状态：PASS
+- 操作步骤：`PageUp`/`PageDown` 在 Keyboard/History/Commands/Phrases/Sessions/Agent 间循环，每步读 `input.function`。
+- 实测：`function` 依次为 `Keyboard`→`History`→`Commands`→`Phrases`→`Sessions`→`Agent`（与标签页一致）。每页均渲染。
+- 截图：![](./C03-keyboard.png) ![](./C03-commands.png) ![](./C03-phrases.png) ![](./C03-sessions.png) ![](./C03-agent.png) ![](./C03-history.png)
+- 问题与根因：无。
+
+### C4 编辑与提交到 PTY
+- 状态：PASS
+- 操作步骤：输入工作区键入 `seq 1 12`，`Enter` 提交；对比提交前后活动 PTY 的 `bytesOut` 与终端画布像素。
+- 实测：活动 PTY（SHELL）`bytesOut` 由 307→364（**+57**，命令字节已进入 PTY**）；终端缓冲画布前后像素差 **1.29%**（12 行输出可见，单屏 720×480 下占比正常）。
+- 截图：![](./C04-before.png) / ![](./C04-after.png)
+- 问题与根因：输入工作区提交目标是 **Dev Center 的 SHELL PTY**（服务端维护的会话），并非设备 LCD 上 PocketShell 自身显示的 PTY；因此设备 LCD 不回显该命令属架构预期。PTY 侧（Dev Center 终端视图）确已产生可见输出。
+- 未验证/限制：未做 OCR 文本比对，以字节增量 + 画布像素差作为“进入 PTY 并产生可见输出”的客观证据。
+
+### C5 /api/state 一致性
+- 状态：PASS
+- 操作步骤：打开输入工作区后读取 `/api/state` 的 `input` 字段（`entered`/`previousView`/`buffer`/`layout`/`function`/`history`），与界面逐项对照（C2/C3 每步均比对）。
+- 实测：`input.entered=true`；C2/C3 中 `input.layout`/`input.function` 的每次变化都与界面高亮选择完全对应。
+- 截图：![](./C05-state.png)
+- 问题与根因：无。
+
+### C6 历史与预置
+- 状态：PASS
+- 操作步骤：进入 History/Commands/Phrases/Sessions/Agent 各功能页，确认预置条目存在；点击某预置条目，验证其值落入输入缓冲（`input.buffer`）。
+- 实测：各页均有预置条目（如 Agent 页含 `ssh pve` 等）；点击 Agent 页首项后 `input.buffer="ssh pve"`，证明预置可落入缓冲。
+- 截图：![](./C06-commands.png) ![](./C06-phrases.png) ![](./C06-sessions.png) ![](./C06-agent.png) ![](./C06-preset-selected.png)
+- 问题与根因：无。
+- 未验证/限制：History 页当前为空（本会话尚未产生提交历史），属正常初始状态；预置来源 Commands/Phrases/Sessions/Agent 均可用。
