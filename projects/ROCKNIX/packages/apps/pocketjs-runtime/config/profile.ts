@@ -7,9 +7,9 @@ export default defineProfile({
   tickHz: 60,
   display: {
     physicalViewport: [720, 480],
-    logicalViewports: [[720, 480]],
+    logicalViewports: [[360, 240], [720, 480]],
     rasterDensity: 1,
-    presentations: ["native"],
+    presentations: ["native", "integer-fit"],
   },
   capabilities: ["input.buttons", "text.glyphs.baked"],
   roleCapabilities: {},

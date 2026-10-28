@@ -9,8 +9,8 @@ type Run = { text: string; fg: number; bg: number; flags: number };
 
 const NAMES = ["SHELL", "FILES", "VIM", "TOP", "LOG"];
 const LOG_WORKSPACE = 4;
-// DisplayProfile: 54x24 cells at 12px mono (12x16) = 648x384 inside the 720x480 panel.
-const ROWS = 24;
+// 360×240 logical pixels scale 2× to the LCD; 12px text appears at 24px.
+const ROWS = 12;
 
 const abgr = (rgb: number) => {
   const r = rgb & 0xff;
@@ -47,6 +47,12 @@ mount(() => {
     [["PVE", "ssh pve"], ["DEVBOX", "ssh devbox"], ["NAS", "ssh nas"], ["CLAUDE", "tmux attach -t claude"], ["AIDER", "tmux attach -t aider"], ["CODEX", "tmux attach -t codex"], ["Remote Agent", "ssh agent"]],
     ["查看日志", "查看异常", "分析系统状态", "检查存储空间", "检查网络连接", "更新 ROM 库", "生成 SSH 配置", "管理 Workspace", "生成脚本", "生成命令"].map((label) => [label, `请${label}，检查当前系统并给出结论。`]),
   ];
+  const inputEntries = () => inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
+  const moveInputSelection = (direction: number) => {
+    const count = inputFunction() === 0 ? INPUT_LAYOUTS[inputLayout()].flatMap((row) => row.split(" ")).length + 3 : inputEntries().length;
+    setInputSelection((index) => count ? (index + direction + count) % count : 0);
+  };
+  const inputListStart = () => Math.max(0, inputSelection() - 7);
   let armed = false;
   let previousButtons = 0;
   const send = (command: string) => host?.__pocketshell?.(command) ?? "";
@@ -121,6 +127,7 @@ mount(() => {
   };
 
   onMount(() => {
+    send("RESIZE\t12x46");
     for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
     log("Workspace Created WS1..WS5");
     onTextEvent((event: TextEvent) => {
@@ -217,15 +224,15 @@ mount(() => {
   };
 
   return (
-    <View class="w-[720px] h-[480px] bg-slate-950">
-      <View class="absolute left-[20px] top-[8px] w-[680px] h-[31px] items-center">
-        <Text class="text-base font-mono font-bold text-emerald-300">◀ WS{active() + 1}:{NAMES[active()]} ▶</Text>
+    <View class="w-[360px] h-[240px] bg-slate-950">
+      <View class="absolute left-[10px] top-[4px] w-[340px] h-[16px] items-center">
+        <Text class="text-sm font-mono font-bold text-emerald-300">◀ WS{active() + 1}:{NAMES[active()]} ▶</Text>
       </View>
 
-      <View class="absolute left-[20px] top-[45px] w-[648px] h-[384px] flex-col">
+      <View class="absolute left-[10px] top-[22px] w-[340px] h-[192px] flex-col">
         <Index each={lines()}>
           {(runs, rowIndex) => (
-            <View class="w-[648px] h-[16px] flex-row">
+            <View class="w-[340px] h-[16px] flex-row">
               <Index each={withCursor(runs(), rowIndex)}>
                 {(run) => {
                   const c = runColor(run());
@@ -240,43 +247,43 @@ mount(() => {
           )}
         </Index>
         {commandOpen() ? (
-          <View class="absolute left-0 top-[368px] w-[648px] h-[16px] bg-slate-800">
+          <View class="absolute left-0 top-[176px] w-[340px] h-[16px] bg-slate-800">
             <Text class="text-xs font-mono text-white">: {input()}█</Text>
           </View>
-        ) : <View class="w-[1px] h-[1px]" />}
+        ) : <View class="w-[0px] h-[0px]" />}
       </View>
       {inputOpen() ? (
-        <View class="absolute left-0 top-0 w-[720px] h-[480px] bg-slate-950 flex-col">
-          <View class="absolute left-[20px] top-[8px] w-[680px] h-[34px] items-center"><Text class="text-base font-mono font-bold text-emerald-300">INPUT</Text></View>
-          <View class="absolute left-[20px] top-[45px] w-[680px] h-[42px] bg-slate-800"><Text class="text-sm font-mono text-white">{">"} {input()}█</Text></View>
-          <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
+        <View class="absolute left-0 top-0 w-[360px] h-[240px] bg-slate-950 flex-col">
+          <View class="absolute left-[10px] top-[4px] w-[340px] h-[17px] items-center"><Text class="text-sm font-mono font-bold text-emerald-300">INPUT</Text></View>
+          <View class="absolute left-[10px] top-[22px] w-[340px] h-[21px] bg-slate-800"><Text class="text-sm font-mono text-white">{">"} {input()}█</Text></View>
+          <View class="absolute left-[10px] top-[47px] w-[340px] h-[162px] flex-col">
             {inputFunction() === 0 ? (
               <>
-                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
-                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === row * 7 + col ? "text-sm font-mono text-slate-950 bg-emerald-300" : "text-sm font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
-                <View class="w-[680px] h-[40px] flex-row"><Text class="text-xs font-mono text-slate-100 bg-slate-800">SPACE　 BACKSPACE　 ENTER</Text></View>
+                <View class="w-[340px] h-[16px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
+                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[340px] h-[22px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].slice(0, row).reduce((count, line) => count + line.split(" ").length, 0) + col ? "text-sm font-mono text-slate-950 bg-emerald-300" : "text-sm font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
+                <View class="w-[340px] h-[20px] flex-row"><Index each={["SPACE", "BACKSPACE", "ENTER"]}>{(label, i) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{label()}　</Text>}</Index></View>
               </>
             ) : (
-              <Index each={inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()]}>
-                {(entry, i) => <View class={inputSelection() === i ? "w-[680px] h-[36px] bg-emerald-300" : "w-[680px] h-[36px] bg-slate-800"}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
+              <Index each={inputEntries().slice(inputListStart(), inputListStart() + 8)}>
+                {(entry, i) => <View class={inputSelection() === i + inputListStart() ? "w-[340px] h-[18px] bg-emerald-300" : "w-[340px] h-[18px] bg-slate-800"}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
               </Index>
             )}
           </View>
-          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
-          <View class="absolute left-[20px] top-[466px] w-[680px] h-[14px]"><Text class="text-2xs text-slate-500">L/R Layout　L1/R1 Function　↑↓ Select　A Choose　B Exit　SELECT Submit</Text></View>
+          <View class="absolute left-[5px] top-[210px] w-[350px] h-[16px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
+          <View class="absolute left-[10px] top-[228px] w-[340px] h-[12px]"><Text class="text-2xs text-slate-500">L/R布局 · L1/R1功能 · A选择 · B退出</Text></View>
         </View>
-      ) : <View class="w-[1px] h-[1px]" />}
+      ) : <View class="w-[0px] h-[0px]" />}
 
-      <View class="absolute left-[20px] top-[440px] w-[680px] h-[24px] items-center">
-        <Text class="text-2xs text-slate-500">L/R WS　L1/R1 PgUp/PgDn　↑↓ 键　A Enter　B Esc/WS1　START 切换　SELECT 命令</Text>
-      </View>
+      {!inputOpen() ? <View class="absolute left-[10px] top-[220px] w-[340px] h-[12px] items-center">
+        <Text class="text-2xs text-slate-500">START 切换 · SELECT 输入 · A 确认 · B 返回</Text>
+      </View> : null}
 
       <ActionHandler button={BTN.LEFT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 3) % 4) : switchTo(active() - 1)} />
       <ActionHandler button={BTN.RIGHT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 1) % 4) : switchTo(active() + 1)} />
       <ActionHandler button={BTN.LTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 5) % 6) : sendKey("PGUP")} />
       <ActionHandler button={BTN.RTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : sendKey("PGDN")} />
-      <ActionHandler button={BTN.UP} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("UP")} />
-      <ActionHandler button={BTN.DOWN} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("DOWN")} />
+      <ActionHandler button={BTN.UP} onPress={() => inputOpen() ? moveInputSelection(-1) : sendKey("UP")} />
+      <ActionHandler button={BTN.DOWN} onPress={() => inputOpen() ? moveInputSelection(1) : sendKey("DOWN")} />
       <ActionHandler button={BTN.CIRCLE} onPress={() => inputOpen() ? selectInputEntry(inputSelection()) : sendKey("ENTER")} />
       <ActionHandler button={BTN.CROSS} onPress={() => inputOpen() ? setInputOpen(false) : sendKey("ESC")} />
       <ActionHandler button={BTN.START} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : switchTo(active() + 1)} />
