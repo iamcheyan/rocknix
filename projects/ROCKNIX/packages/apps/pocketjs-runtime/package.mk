@@ -13,6 +13,8 @@ PKG_TOOLCHAIN="manual"
 PKG_BUILD_FLAGS="parallel"
 
 make_host() {
+  export XDG_CACHE_HOME="${PKG_BUILD}/.cache"
+  mkdir -p "${XDG_CACHE_HOME}/pocket-nexus/transforms"
   cd "${PKG_BUILD}"
   mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
   cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"
