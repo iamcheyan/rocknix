@@ -15,6 +15,7 @@ samba.enabled|smbd.service nmbd.service|
 syncthing.enabled|syncthing.service|
 telnet.enabled|telnet.socket|
 ssh.enabled|sshd.service|
+pocketshell-dev.enabled|pocketshell-dev.service|
 "
 
 usage() {

@@ -16,11 +16,14 @@
 #[path = "../../../projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketshell-terminal.rs"]
 mod pocketshell_terminal;
 mod replay;
+mod remote;
 
 use pocketshell_terminal::{playground, PocketShell};
 use replay::Replay;
+use remote::{ClientMessage, VERSION};
+use serde_json::{json, Value};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -36,9 +39,10 @@ struct Shared {
     view: usize,
     pending: String,
     polls: u64,
+    input_events: u64,
+    ansi_events: u64,
     started: std::time::Instant,
 }
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("record") {
@@ -60,16 +64,15 @@ fn main() {
         }
         return;
     }
-    let port: u16 = args
-        .get(1)
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(8080);
+    let (bind_ip, port) = parse_bind_args(&args);
     let state = Arc::new(Mutex::new(Shared {
         shell: PocketShell::new(),
         replay: Replay::empty(24, 54),
         view: 0,
         pending: String::new(),
         polls: 0,
+        input_events: 0,
+        ansi_events: 0,
         started: std::time::Instant::now(),
     }));
 
@@ -101,30 +104,45 @@ fn main() {
         }
     });
 
-    let listener = TcpListener::bind(("0.0.0.0", port)).expect("bind 0.0.0.0");
-    println!("PocketShell Dev Host started");
-    println!("http://127.0.0.1:{port}");
-    for address in local_addresses() {
-        println!("http://{address}:{port}");
-    }
+    let listener = TcpListener::bind(SocketAddr::new(bind_ip, port)).expect("bind address");
+    println!("PocketShell Dev Center started on {bind_ip}:{port}");
+    println!("http://{bind_ip}:{port}");
     println!("physical 720x480  logical 360x240  scale 2x");
-
+    for address in local_addresses() { println!("http://{address}:{port}"); }
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
         let state = state.clone();
-        std::thread::spawn(move || {
-            let _ = handle(stream, state);
-        });
+        std::thread::spawn(move || { let _ = handle(stream, state); });
     }
 }
 
+fn parse_bind_args(args: &[String]) -> (IpAddr, u16) {
+    let mut ip: IpAddr = "0.0.0.0".parse().unwrap();
+    let mut port = 8080;
+    let mut allow_public = false;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--bind" if i + 1 < args.len() => { ip = args[i + 1].parse().unwrap_or_else(|_| { eprintln!("invalid --bind address"); std::process::exit(2) }); i += 1; }
+            "--port" if i + 1 < args.len() => { port = args[i + 1].parse().unwrap_or_else(|_| { eprintln!("invalid --port"); std::process::exit(2) }); i += 1; }
+            "--allow-public" => allow_public = true,
+            value if !value.starts_with('-') => { port = value.parse().unwrap_or_else(|_| { eprintln!("invalid port"); std::process::exit(2) }); }
+            _ => { eprintln!("usage: pocketshell-dev [--bind IP] [--port PORT] [--allow-public]"); std::process::exit(2); }
+        }
+        i += 1;
+    }
+    if !ip.is_loopback() && !is_private_or_link_local(ip) && !allow_public { eprintln!("public bind refused; pass --allow-public to override"); std::process::exit(2); }
+    (ip, port)
+}
+
+fn is_private_or_link_local(ip: IpAddr) -> bool {
+    match ip { IpAddr::V4(v) => v.is_private() || v.is_link_local(), IpAddr::V6(v) => v.is_unique_local() || v.is_unicast_link_local() }
+}
 fn local_addresses() -> Vec<String> {
     let mut out = Vec::new();
     if let Ok(output) = std::process::Command::new("hostname").arg("-I").output() {
         for token in String::from_utf8_lossy(&output.stdout).split_whitespace() {
-            if !token.starts_with("127.") && token.parse::<std::net::Ipv4Addr>().is_ok() {
-                out.push(token.to_string());
-            }
+            if token.parse::<IpAddr>().is_ok() && token != "127.0.0.1" { out.push(token.to_string()); }
         }
     }
     out
@@ -162,16 +180,13 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
     let mut content_length = 0usize;
     for line in lines {
         let lower = line.to_ascii_lowercase();
-        if let Some(value) = lower.strip_prefix("content-length:") {
-            content_length = value.trim().parse().unwrap_or(0);
-        }
+        if let Some(value) = lower.strip_prefix("content-length:") { content_length = value.trim().parse().unwrap_or(0); }
     }
+    if content_length > 1024 * 1024 { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "body too large")); }
     let mut body = buffer[header_end..].to_vec();
     while body.len() < content_length {
         let count = stream.read(&mut chunk)?;
-        if count == 0 {
-            break;
-        }
+        if count == 0 { break; }
         body.extend_from_slice(&chunk[..count]);
     }
     body.truncate(content_length);
@@ -193,6 +208,11 @@ fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8]
 }
 
 fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<()> {
+    let mut peek = [0u8; 128];
+    let n = stream.peek(&mut peek)?;
+    if String::from_utf8_lossy(&peek[..n]).starts_with("GET /ws ") {
+        return websocket(stream, state);
+    }
     let request = match read_request(&mut stream) {
         Ok(request) => request,
         Err(_) => return Ok(()),
@@ -333,6 +353,118 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
     }
     Ok(())
 }
+fn websocket(stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<()> {
+    use tungstenite::protocol::Message;
+    let mut socket = match tungstenite::accept_hdr(stream, |req: &tungstenite::handshake::server::Request, response: tungstenite::handshake::server::Response| {
+        let origin_ok = req.headers().get("origin").and_then(|v| v.to_str().ok()).map(|origin| origin.starts_with("http://") && !origin.contains('@')).unwrap_or(true);
+        if !origin_ok { return Err(tungstenite::handshake::server::ErrorResponse::new(Some("origin denied".into()))); }
+        Ok(response)
+    }) {
+        Ok(socket) => socket,
+        Err(error) => { eprintln!("websocket handshake error: {error}"); return Err(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, error.to_string())); }
+    };
+    socket.get_mut().set_read_timeout(Some(Duration::from_millis(100)))?;
+    let mut seq = 0u64;
+    let mut subscribed = false;
+    let mut previous_state = String::new();
+    let mut previous_logs = String::new();
+    let mut previous_metrics = String::new();
+    let mut last_uptime = u64::MAX;
+    let mut frame_requested = true;
+    loop {
+        match socket.read() {
+            Ok(Message::Text(text)) => {
+                if text.len() > 8192 { send_ws(&mut socket, remote::message_error(seq, "message_too_large", "message exceeds 8 KiB"))?; continue; }
+                match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(ClientMessage::Hello { version, .. }) if version == VERSION => subscribed = true,
+                    Ok(ClientMessage::Hello { .. }) => send_ws(&mut socket, remote::message_error(seq, "version_mismatch", "supported version is 1"))?,
+                    Ok(ClientMessage::Snapshot) => { subscribed = true; previous_state.clear(); previous_logs.clear(); frame_requested = true; }
+                    Ok(ClientMessage::FrameMirror { enabled }) => send_ws(&mut socket, remote::envelope(seq, "frame_mirror_status", json!({"enabled":false,"reason": if enabled {"DRM capture backend unavailable in this build"} else {"disabled"}})))?,
+                    Ok(ClientMessage::SwitchWorkspace { workspace }) if workspace < 6 => {
+                        let mut shared = state.lock().unwrap(); shared.view = workspace;
+                        if workspace < 5 { shared.shell.command(&format!("ACTIVATE\t{workspace}")); shared.shell.command(&format!("REPAINT\t{workspace}")); } else { shared.replay.restart(); shared.replay.playing = true; }
+                        frame_requested = true; previous_state.clear();
+                    }
+                    Ok(ClientMessage::SwitchWorkspace { .. }) => send_ws(&mut socket, remote::message_error(seq, "invalid_workspace", "workspace must be 0..5"))?,
+                    Ok(ClientMessage::Input { workspace, key, text }) => {
+                        if let Err(message) = remote::validate_input(workspace, key.as_deref(), text.as_deref()) {
+                            state.lock().unwrap().input_events += 1;
+                            send_ws(&mut socket, remote::message_error(seq, "invalid_input", message))?;
+                            continue;
+                        }
+                        let mut shared = state.lock().unwrap();
+                        shared.input_events += 1;
+                        if let Some(key) = key.as_deref() { if let Some(command) = remote::key_command(key) { shared.shell.command(&format!("{workspace}\t{command}")); } }
+                        if let Some(text) = text { shared.shell.command(&format!("{workspace}\tTEXT {text}")); }
+                        shared.shell.command("LOG\tRemote input accepted");
+                    }
+                    Err(_) => send_ws(&mut socket, remote::message_error(seq, "invalid_message", "unknown or malformed message"))?,
+                }
+            }
+            Ok(Message::Close(_)) => break,
+            Ok(Message::Ping(data)) => { socket.send(Message::Pong(data)).map_err(ws_io)?; }
+            Ok(_) => send_ws(&mut socket, remote::message_error(seq, "unsupported_frame", "text JSON frames required"))?,
+            Err(tungstenite::Error::Io(error)) if error.kind() == std::io::ErrorKind::WouldBlock || error.kind() == std::io::ErrorKind::TimedOut => {},
+            Err(tungstenite::Error::ConnectionClosed) | Err(tungstenite::Error::AlreadyClosed) => break,
+            Err(_) => break,
+        }
+        if subscribed {
+            let (snapshot, frame, logs, uptime) = {
+                let mut shared = state.lock().unwrap();
+                let frame = if previous_state.is_empty() || frame_requested { full_terminal_snapshot(&mut shared) } else { std::mem::take(&mut shared.pending) };
+                if !frame.is_empty() { shared.ansi_events += 1; }
+                let mut value: Value = serde_json::from_str(&shared.shell.inspector_json()).unwrap_or_else(|_| json!({}));
+                if let Some(obj) = value.as_object_mut() { obj.insert("view".into(), json!(shared.view)); obj.insert("replay".into(), serde_json::from_str(&shared.replay.meta_json()).unwrap_or(json!({}))); obj.insert("inputEvents".into(), json!(shared.input_events)); obj.insert("ansiEvents".into(), json!(shared.ansi_events)); }
+                (value, frame, serde_json::from_str::<Value>(&shared.shell.log_json()).unwrap_or(json!([])), shared.started.elapsed().as_secs())
+            };
+            if snapshot.to_string() != previous_state {
+                seq += 1;
+                send_ws(&mut socket, remote::envelope(seq, "workspace_state", json!({"state":snapshot,"full_snapshot":previous_state.is_empty()})))?;
+                previous_state = snapshot.to_string();
+            }
+            if !frame.is_empty() {
+                seq += 1;
+                send_ws(&mut socket, remote::envelope(seq, "terminal_buffer", json!({"data":frame,"full_snapshot":frame_requested})))?;
+                frame_requested = false;
+            }
+            if logs.to_string() != previous_logs {
+                seq += 1;
+                send_ws(&mut socket, remote::envelope(seq, "logs", json!({"entries":logs})))?;
+                previous_logs = logs.to_string();
+            }
+            if uptime != last_uptime {
+                seq += 1;
+                send_ws(&mut socket, remote::envelope(seq, "runtime_state", json!({"uptime_s":uptime})))?;
+                last_uptime = uptime;
+            }
+            let metrics=json!({"fps":snapshot["fps"],"frame_ms":snapshot["frameMs"],"workspace_count":snapshot["workspaces"].as_array().map_or(0,Vec::len),"ansi_events":snapshot["ansiEvents"],"input_events":snapshot["inputEvents"],"cpu_estimate":null,"memory_bytes":null,"network_bytes":null});
+            if metrics.to_string() != previous_metrics {
+                seq += 1;
+                send_ws(&mut socket, remote::envelope(seq, "metrics", metrics.clone()))?;
+                previous_metrics = metrics.to_string();
+            }
+        }
+    }
+    let _ = socket.close(None);
+    Ok(())
+}
+
+fn send_ws(socket: &mut tungstenite::WebSocket<TcpStream>, value: Value) -> std::io::Result<()> {
+    socket.send(tungstenite::protocol::Message::Text(value.to_string().into())).map_err(ws_io)
+}
+
+fn full_terminal_snapshot(shared: &mut Shared) -> String {
+    if shared.view == REPLAY_VIEW {
+        shared.replay.repaint();
+        shared.replay.frame()
+    } else {
+        shared.shell.command(&format!("REPAINT\t{}", shared.view));
+        let _ = shared.shell.frame();
+        shared.shell.command(&format!("SNAP\t{}", shared.view))
+    }
+}
+
+fn ws_io(error: tungstenite::Error) -> std::io::Error { std::io::Error::new(std::io::ErrorKind::ConnectionAborted, error.to_string()) }
 
 fn decode_escapes(source: &str) -> Vec<u8> {
     let bytes = source.as_bytes();

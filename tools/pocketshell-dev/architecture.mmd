@@ -1,0 +1,8 @@
+flowchart LR
+  PTY[PTY sessions] --> VT[Shared PocketShell ANSI parser + ScreenBuffer]
+  VT --> HOST[Dev Center Rust host]
+  HOST -->|HTTP UI + WebSocket /ws| BROWSER[Browser cell/run renderer + inspectors]
+  BROWSER -->|validated Input / workspace switch| HOST
+  HOST -->|sequenced state, buffer, runtime, metrics, logs| BROWSER
+  KMS[H700 DRM/KMS active scanout] -. optional bounded capture .-> MIRROR[Frame mirror encoder]
+  MIRROR -. JPEG/WebP frames .-> HOST

@@ -12,10 +12,11 @@ row() {
     http.enabled) echo "http.service|" ;;
     rsyncd.enabled) echo "rsyncd.service|" ;;
     telnet.enabled) echo "telnet.socket|" ;;
+    pocketshell-dev.enabled) echo "pocketshell-dev.service|" ;;
   esac
 }
 
-for setting in adbusb.enabled avahi.enabled ftp.enabled http.enabled rsyncd.enabled telnet.enabled
+for setting in adbusb.enabled avahi.enabled ftp.enabled http.enabled rsyncd.enabled telnet.enabled pocketshell-dev.enabled
 do
   [ "$(get_setting "${setting}")" = "1" ] || continue
   row=$(row "${setting}")

@@ -2,9 +2,10 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>PocketShell Developer Host</title>
+<title>PocketShell Dev Center</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2334d399'/><text x='4' y='12' font-size='11' fill='%2305130c'>&gt;</text></svg>">
 <style>
+  .session { display:flex; gap:12px; padding:8px 20px; align-items:center; }
   :root { --bg:#0b1220; --panel:#111a2b; --line:#1e293b; --ink:#e2e8f0; --dim:#94a3b8; --accent:#34d399; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -52,7 +53,7 @@
 </head>
 <body>
 <header>
-  <h1>PocketShell Developer Host</h1>
+  <h1>PocketShell Dev Center</h1>
   <span class="meta">physical 720×480 · logical 360×240 · scale 2×</span>
   <span class="meta" id="link">connecting…</span>
 </header>
@@ -60,11 +61,13 @@
 <div id="tabs">
   <button class="tab on" data-panel="buffer">Terminal Buffer</button>
   <button class="tab" data-panel="workspaces">Workspace Inspector</button>
-  <button class="tab" data-panel="log">Runtime Log</button>
-  <button class="tab" data-panel="perf">Performance</button>
-  <button class="tab" data-panel="ansi">ANSI Playground</button>
+  <button class="tab" data-panel="log">Logs</button>
+  <button class="tab" data-panel="perf">Metrics</button>
+  <button class="tab" data-panel="ansi">ANSI Inspector</button>
+  <button class="tab" data-panel="pty">PTY Inspector</button>
 </div>
 
+<div class="session"><button id="sessionDownload" class="go">Save session.json</button><label>Replay session <input id="sessionFile" type="file" accept="application/json"></label><button id="mirrorToggle" class="tab">Frame Mirror PoC</button></div>
 <main>
   <section class="device">
     <div id="wsbar"></div>
@@ -96,6 +99,7 @@
       <button class="go" id="ansiRun">Parse</button>
       <div id="ansiOut"></div>
     </div>
+    <div id="panel-pty" class="hidden"><h2>PTY Inspector</h2><pre id="ptyOut">Awaiting workspace state</pre></div>
   </aside>
 </main>
 
@@ -106,11 +110,47 @@
   const canvas = document.getElementById('screen');
   const ctx = canvas.getContext('2d');
 
+  let socket;
+  let protocolSeq = 0;
+  let inputEvents = 0;
+  let sessionEvents=[];
+  let sessionStarted=Date.now();
   let active = 0;
   let rows = Array.from({ length: ROWS }, () => []);
   let cursor = { row: 0, col: 0, visible: false };
   let state = null;
   let link = document.getElementById('link');
+  function connect() {
+    socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', version: 1 }));
+    socket.onmessage = (event) => {
+      try {
+        const msg=JSON.parse(event.data);
+        if(msg.version!==1||msg.seq<=protocolSeq)return;
+        protocolSeq=msg.seq;
+        if(msg.type==='workspace_state'){state=msg.state;active=state.view??state.visible;recordEvent({type:'workspace_state',workspace_state:state});renderPanels();draw();}
+        else if(msg.type==='terminal_buffer'){if(msg.full_snapshot)rows=Array.from({length:ROWS},()=>[]);applyFrame(msg.data||'');recordEvent({type:'terminal_buffer',terminal_buffer:msg.data,full_snapshot:msg.full_snapshot});renderPanels();draw();}
+        else if(msg.type==='logs'&&state){state.log=msg.entries;recordEvent({type:'logs',entries:msg.entries});renderPanels();}
+        else if(msg.type==='metrics'&&state){state.fps=msg.fps;state.frameMs=msg.frame_ms;state.runs=msg.ansi_events;state.ansiEvents=msg.ansi_events;state.inputEvents=msg.input_events;recordEvent({type:'metrics',metrics:msg});renderPanels();}
+        else if(msg.type==='runtime_state')recordEvent({type:'runtime_state',runtime:msg});
+        else if(msg.type==='frame_mirror_status')link.textContent=msg.enabled?'frame mirror active':'mirror unavailable · '+msg.reason;
+        else if(msg.type==='error')link.textContent=msg.code+': '+msg.message;
+        link.textContent='live · seq '+protocolSeq+' · '+location.host;link.className='meta ok';
+      } catch(error) { link.textContent='renderer error · '+error.message;link.className='meta bad';console.error(error); }
+    };
+
+
+    socket.onclose = () => { link.textContent = 'disconnected · reconnecting'; link.className = 'meta bad'; setTimeout(connect, 1000); };
+  }
+  function sendProtocol(message) { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
+  function sendKey(key) { inputEvents++; const message={type:'input',workspace:active,key}; recordEvent({type:'input',message}); sendProtocol(message); }
+  function sendText(text) { if(text&&text.length<=4096&&!/[\\x00-\\x1f\\x7f]/.test(text)){inputEvents++;const message={type:'input',workspace:active,text};recordEvent({type:'input',message});sendProtocol(message);} }
+  function recordEvent(event){sessionEvents.push({at_ms:Date.now()-sessionStarted,...event});}
+  function downloadSession(){const blob=new Blob([JSON.stringify({protocol_version:1,events:sessionEvents},null,2)],{type:'application/json'});const anchor=document.createElement('a');anchor.href=URL.createObjectURL(blob);anchor.download='session.json';anchor.click();URL.revokeObjectURL(anchor.href);}
+  function loadSession(file){const reader=new FileReader();reader.onload=()=>{const events=JSON.parse(reader.result).events||[];let i=0;let prior=0;function next(){if(i>=events.length)return;const item=events[i++];const delay=Math.max(0,item.at_ms-prior);prior=item.at_ms;setTimeout(()=>{if(item.type==='workspace_state'){state=item.workspace_state;active=state.view??state.visible;renderPanels();}else if(item.type==='terminal_buffer'){if(item.full_snapshot)rows=Array.from({length:ROWS},()=>[]);applyFrame(item.terminal_buffer||'');draw();}else if(item.type==='logs'&&state){state.log=item.entries;renderPanels();}else if(item.type==='metrics'&&state){state.fps=item.metrics.fps;state.frameMs=item.metrics.frame_ms;renderPanels();}next();},delay);}next();};reader.readAsText(file);}
+  document.getElementById('sessionDownload').onclick=downloadSession;
+  document.getElementById('sessionFile').onchange=e=>{if(e.target.files[0])loadSession(e.target.files[0]);};
+  document.getElementById('mirrorToggle').onclick=()=>sendProtocol({type:'frame_mirror',enabled:true});
 
   const hex = (v) => '#' + v.toString(16).padStart(6, '0');
   const abgrToRgb = (v) => v & 0xffffff;
@@ -193,124 +233,50 @@
     }
   }
 
-  async function poll() {
-    try {
-      const res = await fetch('/api/frame', { cache: 'no-store' });
-      applyFrame(await res.text());
-      link.textContent = 'live · ' + location.host;
-      link.className = 'meta ok';
-    } catch (e) {
-      link.textContent = 'disconnected';
-      link.className = 'meta bad';
-    }
-    draw();
-  }
-
-  async function refreshState() {
-    try {
-      state = await (await fetch('/api/state', { cache: 'no-store' })).json();
-      renderPanels();
-    } catch (e) { /* keep last */ }
-  }
-
-  let synced = false;
   function renderPanels() {
     if (!state) return;
-    // Follow the host's selected view on first attach (it may be the replay buffer).
-    if (!synced) {
-      active = state.view ?? state.visible;
-      synced = true;
-      if (active === 5) fetch('/api/replay/control', { method: 'POST', body: 'repaint' });
-    }
     const viewIdx = state.view ?? state.visible;
-    const ws = viewIdx === 5
-      ? { name: 'REPLAY', state: state.replay.playing ? 'playing' : 'paused', pid: 0, pty: '-', cells: 0, idle: 0, bytesIn: 0, bytesOut: 0, altScreen: false }
-      : (state.workspaces[viewIdx] || state.workspaces[0]);
-    document.getElementById('bufferKv').innerHTML = [
-      ['Rows', state.rows], ['Cols', state.cols],
-      ['Cursor', 'row ' + cursor.row + ', col ' + cursor.col + (cursor.visible ? '' : ' (hidden)')],
-      ['Visible cells', (viewIdx === 5 ? (state.replay.chunks + ' replay chunks') : state.cells + ' / ' + (state.rows * state.cols))],
-      ['Runs rendered', viewIdx === 5 ? 'replay buffer' : state.runs],
-      ['Active', 'WS' + (viewIdx + 1) + ' ' + ws.name + ' (' + ws.state + ')'],
-      ['Alt screen', ws.altScreen ? 'yes' : 'no'],
-      ['Bytes in/out', ws.bytesIn + ' / ' + ws.bytesOut]
-    ].map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
-
-    const tbody = document.querySelector('#wsTable tbody');
-    tbody.innerHTML = state.workspaces.map((w, i) =>
-      '<tr><td' + (i === viewIdx ? ' class="ok"' : '') + '>WS' + (w.id + 1) + '</td>' +
-      '<td class="' + (w.state === 'running' ? 'ok' : w.state === 'exited' ? 'bad' : 'warn') + '">' + w.state + '</td>' +
-      '<td>' + (w.pid || '-') + '</td><td>' + w.pty + '</td><td>' + w.cells + '</td>' +
-      '<td>' + (w.idle ? w.idle.toFixed(1) + 's' : '-') + '</td></tr>').join('');
-
-    document.getElementById('logLines').innerHTML = state.log.length
-      ? state.log.map((line, i) => '<div class="logline' + (i % 2 ? ' alt' : '') + '">' + escapeHtml(line) + '</div>').join('')
-      : '<pre>(empty)</pre>';
-
-    document.getElementById('perfKv').innerHTML = [
-      ['FPS', state.fps.toFixed(1)],
-      ['Frame time', state.frameMs.toFixed(2) + ' ms'],
-      ['Rendered cells', viewIdx === 5 ? 'replay buffer' : state.cells],
-      ['Rendered lines/runs', viewIdx === 5 ? 'replay buffer' : state.runs],
-      ['Buffer size', state.cols + ' × ' + state.rows],
-      ['Workspace count', state.workspaces.length],
-      ['Visible workspace', 'WS' + ((state.view ?? state.visible) + 1)],
-      ['Replay', (state.replay && state.replay.name !== '-')
-        ? state.replay.name + ' · ' + state.replay.elapsedMs + '/' + state.replay.durationMs + 'ms · ' + state.replay.chunks + ' chunks'
-        : 'not loaded']
-    ].map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
-
-    document.querySelectorAll('#wsbar .ws').forEach((el, i) => el.classList.toggle('on', i === active));
+    const ws = viewIdx === 5 ? { name: 'REPLAY', state: state.replay.playing ? 'playing' : 'paused', pid: 0, pty: '-', cells: 0, idle: 0, bytesIn: 0, bytesOut: 0, altScreen: false } : (state.workspaces[viewIdx] || state.workspaces[0]);
+    document.getElementById('bufferKv').innerHTML = [['Rows',state.rows],['Cols',state.cols],['Cursor','row '+cursor.row+', col '+cursor.col+(cursor.visible?'':' (hidden)')],['Visible cells',viewIdx===5?(state.replay.chunks+' replay chunks'):state.cells+' / '+(state.rows*state.cols)],['Active','WS'+(viewIdx+1)+' '+ws.name+' ('+ws.state+')'],['Alt screen',ws.altScreen?'yes':'no'],['Bytes in/out',ws.bytesIn+' / '+ws.bytesOut]].map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
+    document.querySelector('#wsTable tbody').innerHTML = state.workspaces.map((w,i)=>'<tr><td'+(i===viewIdx?' class="ok"':'')+'>WS'+(w.id+1)+'</td><td class="'+(w.state==='running'?'ok':w.state==='exited'?'bad':'warn')+'">'+w.state+'</td><td>'+(w.pid||'-')+'</td><td>'+escapeHtml(w.pty)+'</td><td>'+w.cells+'</td><td>'+(w.idle?w.idle.toFixed(1)+'s':'-')+'</td></tr>').join('');
+    document.getElementById('logLines').innerHTML = state.log.length ? state.log.map((line,i)=>'<div class="logline'+(i%2?' alt':'')+'">'+escapeHtml(line)+'</div>').join('') : '<pre>(empty)</pre>';
+    document.getElementById('perfKv').innerHTML = [['FPS',state.fps.toFixed(1)],['Frame time',state.frameMs.toFixed(2)+' ms'],['Workspace count',state.workspaces.length],['ANSI events',state.ansiEvents??state.runs],['Input events',state.inputEvents??inputEvents],['Buffer size',state.cols+' × '+state.rows],['CPU',state.cpuEstimate||'estimate: host process unavailable'],['Memory',state.memoryEstimate||'estimate: unavailable'],['Network',state.networkEstimate||'estimate: unavailable']].map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
+    document.getElementById('ptyOut').textContent = JSON.stringify(ws,null,2);
+    document.querySelectorAll('#wsbar .ws').forEach((el,i)=>el.classList.toggle('on',i===active));
   }
 
-  const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-  async function switchTo(id) {
+
+  function switchTo(id) {
     if (id === active && id !== 5) return;
-    active = id;
-    rows = Array.from({ length: ROWS }, () => []);
-    cursor = { row: 0, col: 0, visible: false };
-    await fetch('/api/input', { method: 'POST', body: 'ACTIVATE\t' + id });
-    if (id === 5) {
-      await fetch('/api/replay/control', { method: 'POST', body: 'repaint' });
-    } else {
-      await fetch('/api/input', { method: 'POST', body: 'REPAINT\t' + id });
-    }
-    draw();
-    document.querySelectorAll('#wsbar .ws').forEach((el, i) => el.classList.toggle('on', i === active));
+    active=id; rows=Array.from({length:ROWS},()=>[]); cursor={row:0,col:0,visible:false};
+    const message={type:'switch_workspace',workspace:id}; recordEvent({type:'switch_workspace',workspace:id}); sendProtocol(message); draw();
   }
+  const key = (k) => sendKey(k);
+  const text = (t) => sendText(t);
 
-  async function send(command) {
-    await fetch('/api/input', { method: 'POST', body: command });
-  }
 
-  const key = (k) => send(active + '\tKEY ' + k);
-  const text = (t) => send(active + '\tTEXT ' + t);
-
-  window.addEventListener('keydown', async (e) => {
-    if (e.target.tagName === 'TEXTAREA') return;
+  window.addEventListener('keydown',(e)=>{
+    if (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
     let handled = true;
-    switch (e.key) {
-      case 'q': case 'Q': await switchTo((active + 5) % 6); break;
-      case 'e': case 'E': await switchTo((active + 1) % 6); break;
-      case '1': await key('PGUP'); break;
-      case '2': await key('PGDN'); break;
-      case 'Enter': await key('ENTER'); break;
-      case 'Backspace': await key('ESC'); await switchTo(0); break;
-      case 'Tab': await switchTo((active + 1) % 6); break;
-      case '`': await switchTo(0); break;
-      case 'ArrowUp': await key('UP'); break;
-      case 'ArrowDown': await key('DOWN'); break;
-      case 'ArrowLeft': await key('LEFT'); break;
-      case 'ArrowRight': await key('RIGHT'); break;
-      case 'Escape': await key('ESC'); break;
-      default:
-        if (e.ctrlKey && e.key === 'c') { await key('CTRL_C'); }
-        else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { await text(e.key); }
-        else handled = false;
+    switch(e.key) {
+      case 'q': case 'Q': key('L'); break;
+      case 'e': case 'E': key('R'); break;
+      case '1': key('L1'); break; case '2': key('R1'); break;
+      case 'Enter': key('ENTER'); break;
+      case 'Backspace': key('ESC'); break;
+      case 'Tab': key('START'); break;
+      case '`': key('SELECT'); break;
+      case 'ArrowUp': key('UP'); break; case 'ArrowDown': key('DOWN'); break;
+      case 'ArrowLeft': key('LEFT'); break; case 'ArrowRight': key('RIGHT'); break;
+      case 'Escape': key('ESC'); break;
+      case 'x': case 'X': key('X'); break; case 'y': case 'Y': key('Y'); break;
+      default: if(e.ctrlKey&&e.key.toLowerCase()==='c') key('CTRL_C'); else if(e.key.length===1&&!e.ctrlKey&&!e.metaKey) text(e.key); else handled=false;
     }
-    if (handled) e.preventDefault();
+    if(handled)e.preventDefault();
   });
+
 
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -364,13 +330,8 @@
     bar.appendChild(el);
   });
 
-  fetch('/api/input', { method: 'POST', body: 'REPAINT\t0' });
-
   draw();
-  poll();
-  setInterval(poll, 100);
-  refreshState();
-  setInterval(refreshState, 700);
+  connect();
 })();
 </script>
 </body>
