@@ -2,9 +2,31 @@
 
 - 设备：Anbernic RG34XX（Rockchip H700，DDR4），hostname `H700`，内核 `7.2.0 aarch64`，LAN `192.168.3.57`
 - 构建机：HX90（`192.168.3.188` / `hx90`），NixOS
-- 本机仓库：`/home/tetsuya/development/rocknix`，分支 `main`，HEAD `174727d4a4`
+- 本机仓库：`/home/tetsuya/development/rocknix`，分支 `main`，起点 HEAD `174727d4a4`（本次验收与修复提交见 `git log`）
 - 截图通道：`http://192.168.3.57:8080/device/frame.rgb` → RGB24 720×480（1,036,800 字节）
 - 截图纪律：每张图由本次测试当场产生；设备类=LCD 真实扫描输出；浏览器类=真实浏览器渲染；命名 `NN-<项>-<步骤>-<状态>.png`。
+
+## 为什么这次要重测（三会话教训，J8）
+
+三个旧会话（S1/S2/S3）在同一 `rocknix` 工作树上并行改文件，留下三类问题，本次逐条重测：
+1. 并行改同一工作树 → `git status` 互相污染。**本次单写入者执行**。
+2. "编译通过/主机测试通过就宣布完成"，而用户要**实机可用**。
+3. 证据只停在会话文本里，仓库无图。**本次证据必须进仓库、只看图即可判断**。
+4. 措辞必须严格区分：**已实机验证 / 已实现未验证 / 仅静态检查**（下文每个 J 项均标注）。
+
+## 旧会话遗留核对（J1–J7）
+
+| 项 | 来源 | 结论 |
+|---|---|---|
+| J1 字体/启动包"应显示"未经用户视角验收 | `01a1802f` (S1) | 已在 A 组用当前设备帧截图（A01/A02/A04）；中文字形由用户目视。不再引用旧 PID。 |
+| J2 完整 SYSTEM 重建卡在 rquickjs-sys | `01a1802f` (S1) | P3：前提证伪，rquickjs-sys v0.12.0 实际编译通过，构建成功（P3-evidence.txt）。 |
+| J3 文档与实现矛盾 | `01a182cb` (S2) | 已核对代码并改 README/REMOTE_DEV（frame.rgb 已实现 / frame_mirror 仍 stub / mirror 独立），见 DOC_TRUTH_AUDIT.md。 |
+| J4 对他人方案独立判断 + 硬编码脆弱点 | `01a182cb` (S2) | 已论证并修复：event3/card1 改为动态探测（server.py 实机验证；main.rs/capture.c 编译验证、设备待重建）。见 DOC_TRUTH_AUDIT.md。 |
+| J5 B 组证据只在会话文本 | `01a182cb` (S2) | B1–B6 已全部重测并逐张截图入库（B01–B14）。 |
+| J6 ADB 修复从未上真机 | `01a182f4` (S3) | E1–E5 已完成（手工部署运行期验证，已标注；镜像部署验证待构建）。 |
+| J7 S3 checkout 是否冲掉他人改动 | `01a182f4` (S3) | 已核查：build_distro 与 HEAD 一致、26 文件 patch + .buildlog 完整留档，无不可恢复丢失（HX90_TREE_AUDIT.md）。 |
+
+> 详细：`DOC_TRUTH_AUDIT.md`（J3/J4）、`HX90_TREE_AUDIT.md`（J7）。
 
 ## 总表
 
@@ -416,7 +438,7 @@
 - `M projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketshell-terminal.rs`
 - `M projects/ROCKNIX/packages/utils/adbd/package.mk`
 - `M projects/ROCKNIX/packages/utils/adbd/system.d/adbd.service`
-- `M tools/pocketshell-mirror/server.py`
+- ~~`M tools/pocketshell-mirror/server.py`~~ → 已在 J4 提交（含用户 A/B 键码修正 + event3/card1 动态探测）
 - `?? .playwright-mcp/`、`?? origin/`
 - `?? docs/heya-core-minimal/ADB_RECOVERY_2026-10-28.md`
 - `?? projects/.../pocketjs-runtime/hello/launcher-catalog.ts`
