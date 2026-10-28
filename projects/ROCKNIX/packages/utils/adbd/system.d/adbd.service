@@ -8,9 +8,13 @@ Environment=ADB_PORT=5555
 Environment=ADBD_LISTEN=tcp:5555
 Environment=ADBD_PORT=5555
 Environment=HOME=/storage
+# Free TCP 5555 from any stale adbd (e.g. one spawned outside systemd by
+# usbgadget) so the new instance can bind after a restart.
+ExecStartPre=/usr/bin/adbd-free-port
 ExecStart=/usr/sbin/adbd
 Restart=always
 RestartSec=3
+TimeoutStopSec=10
 
 [Install]
 WantedBy=rocknix.target

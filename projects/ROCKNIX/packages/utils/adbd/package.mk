@@ -18,8 +18,12 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/usr/sbin ${INSTALL}/usr/bin ${INSTALL}/usr/lib
   cp -a ${PKG_DIR}/bin/adbd ${INSTALL}/usr/sbin/adbd
   ln -sf /usr/sbin/adbd ${INSTALL}/usr/bin/adbd
+  # adbd links against the bundled brotli/lz4/xxhash; without these it fails to start.
   cp -d ${PKG_DIR}/lib/* ${INSTALL}/usr/lib/
   chmod +x ${INSTALL}/usr/sbin/adbd
+  cp -a ${PKG_DIR}/bin/adbd-free-port ${INSTALL}/usr/bin/
+  cp -a ${PKG_DIR}/bin/adbd-repair ${INSTALL}/usr/bin/
+  chmod +x ${INSTALL}/usr/bin/adbd-free-port ${INSTALL}/usr/bin/adbd-repair
 }
 
 post_install() {

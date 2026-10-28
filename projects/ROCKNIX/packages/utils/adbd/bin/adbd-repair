@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Repair the ADB daemon when the USB cable is (re)plugged: ensure exactly one
+# adbd owns TCP 5555 so 'adb connect <ip>:5555' works.
+#
+# Skips when USB ADB gadget mode is active (usbgadget owns adbd there), and is
+# a no-op when the systemd-managed adbd is already the port listener. This
+# recovers the offline-after-restart failure where an orphaned adbd (spawned
+# outside systemd, e.g. by usbgadget) keeps holding the port.
+
+USB_MODE="$(usbgadget 2>/dev/null)"
+case "$USB_MODE" in
+  adb) exit 0 ;;
+esac
+
+MAINPID="$(systemctl show -p MainPID --value adbd.service 2>/dev/null)"
+LISTENPID="$(netstat -lntp 2>/dev/null | awk '/:5555 / { n=split($7,a,"/"); if (n>0) print a[1]; exit }')"
+
+if [ -n "$LISTENPID" ] && [ "$LISTENPID" = "$MAINPID" ]; then
+  exit 0
+fi
+
+/usr/bin/adbd-free-port
+systemctl restart adbd.service
+
+for _ in 1 2 3 4 5 6 7 8; do
+  if netstat -lntp 2>/dev/null | grep -q ':5555 '; then
+    exit 0
+  fi
+  sleep 1
+done
+exit 1

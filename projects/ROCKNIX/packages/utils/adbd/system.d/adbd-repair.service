@@ -1,0 +1,8 @@
+[Unit]
+Description=ADB Daemon Repair (USB plug)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/adbd-repair
+TimeoutSec=30
