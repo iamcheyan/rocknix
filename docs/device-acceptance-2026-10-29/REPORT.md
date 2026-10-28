@@ -54,6 +54,14 @@
 | I1 | 连续使用场景 | PENDING | - | - | |
 | I2 | 无残留异常 | PENDING | - | - | |
 | I3 | 已知限制清单 | PENDING | - | - | |
+| K1 | 屏幕休眠守护进程 | PASS | K02-default.png | f0821e95fa | is-active=active，进程在跑 |
+| K2 | 默认 30m | PASS | K02-default.png | - | 无 [sleep]→timeout=1800s |
+| K3 | 1m 档关屏 | PASS（机制）/ 截图限制 | K03-on.png, K03-dimmed.png | f0821e95fa | backlight 1249→0；frame.rgb 保留 fb，见 DEC-001 |
+| K4 | 按键唤醒 | PASS | K04-woken.png | - | 唤醒→backlight=1249 |
+| K5 | ≥3 档实测 | PASS | K05-10s-dimmed.png, K03-dimmed.png, K08-never-stays-on.png | - | 10s / 1m / never |
+| K6 | 不影响其它服务 | PASS | K06-services-ok.png | - | kms/dev/adbd active；仅 2 个既有失败，见 DEC-002 |
+| K7 | 重启后记忆 | PASS | K07-after-reboot.png | - | 重启后 active + timeout=60s |
+| K8 | never 不暗 | PASS | K08-never-stays-on.png | - | 静置 15s 仍 2499 |
 
 ## 详细记录
 
@@ -164,3 +172,71 @@
 - 截图：![](./C06-commands.png) ![](./C06-phrases.png) ![](./C06-sessions.png) ![](./C06-agent.png) ![](./C06-preset-selected.png)
 - 问题与根因：无。
 - 未验证/限制：History 页当前为空（本会话尚未产生提交历史），属正常初始状态；预置来源 Commands/Phrases/Sessions/Agent 均可用。
+### K1 屏幕休眠守护进程
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 01:50
+- 设备状态：H700；`pocketjs-sleep` 以 `/storage/.config/system.d/pocketjs-sleep.service` 手工部署（根 fs 只读 squashfs，`/storage/.config/system.d` 在 systemd UnitPath 中）。
+- 操作步骤：`systemctl is-active pocketjs-sleep`；`journalctl -u pocketjs-sleep -o cat | grep timeout=`。
+- 预期 / 实测：`is-active=active`；日志 `pocketjs-sleep: timeout=1800s backlight=/sys/class/backlight/backlight cur=2499 max=2499 devices=[event0..3]` —— 进程真实在跑（非 dead），且监控到 4 个输入设备。
+- 截图：![](./K02-default.png)
+- 问题与根因：首次部署即发现守护进程**崩溃**（`configparser.MissingSectionHeaderError`，因 runtime.conf 为 `POCKETJS_APP=...` 非 INI）。已修复（commit `f0821e95fa`）。
+- 未验证/限制：本次为手工部署（`/storage`），非镜像内验证；P3 构建完成后将随 SYSTEM 进镜像。
+
+### K2 默认 30m
+- 状态：PASS
+- 操作步骤：runtime.conf 仅含 `POCKETJS_APP=...`（无 `[sleep]`），重启守护进程，读日志 timeout。
+- 预期 / 实测：无 `[sleep]` 段 → 默认 30m。实测日志 `timeout=1800s`（=30 分钟），`backlight` 保持 2499 不暗。
+- 截图：![](./K02-default.png)
+- 问题与根因：原始 `load_config` 用 configparser 且未知值回退 300s(5m)；修复后无段/非法值均回退 1800s(30m)。
+- 未验证/限制：未实测“静置 30 分钟”的全过程（用日志 timeout=1800s + 1m 档快速实测 K3 代替）。
+
+### K3 1m 档关屏
+- 状态：PASS（机制）/ 截图限制（见 DEC-001）
+- 操作步骤：runtime.conf 写 `[sleep] timeout = 1m`；亮度设 1249；重启守护进程；静置 65s。
+- 预期 / 实测：1 分钟无输入后 backlight 1249→**0**（`cat /sys/class/backlight/backlight/brightness` = 0），日志 `screen dimmed`。
+- 截图：![](./K03-on.png)（1249，屏亮）/ ![](./K03-dimmed.png)（backlight=0；**注意**：frame.rgb 读 framebuffer，关背光不清 fb，故画面非全黑——这是“只写 backlight”约束的必然结果，物理面板已熄灭）
+- 问题与根因：J10 期望“frame.rgb 抓全黑”，但 frame.rgb 是 KMS framebuffer 回读，`backlight=0` 不清空 fb，二者矛盾。已记 DEC-001 待用户决策。
+- 未验证/限制：无法远程拍摄物理屏幕确认真黑；以 backlight=0 为关屏的客观证据。
+
+### K4 任意按键唤醒
+- 状态：PASS
+- 操作步骤：关屏后 `curl -X POST /device/key --data RIGHT`（向 /dev/input 注入输入事件），读亮度与日志。
+- 预期 / 实测：输入事件到达后立即恢复亮度到原值：backlight 0→**1249**，日志 `screen restored`。守护进程用 `select()` 阻塞等待输入（非轮询）。
+- 截图：![](./K04-woken.png)
+- 问题与根因：无。
+- 未验证/限制：用 `/device/key` 注入模拟物理按键；与物理手柄走同一 evdev 路径。
+
+### K5 各档位实测（≥3）
+- 状态：PASS
+- 操作步骤：分别设 `timeout = 10s` / `1m` / `never`，静置观察。
+- 预期 / 实测：
+  - `10s`：静置 12s → backlight 1249→0（日志 `dimmed`）。
+  - `1m`：静置 65s → backlight 1249→0（见 K3）。
+  - `never`：静置 15s → backlight 保持 2499（不暗）。
+- 截图：![](./K05-10s-dimmed.png) / ![](./K03-dimmed.png) / ![](./K08-never-stays-on.png)
+- 问题与根因：无。
+- 未验证/限制：30s/5m/15m/1h 未逐一实测（同一 TIMEOUTS 映射表，行为一致）。
+
+### K6 不影响其它服务
+- 状态：PASS（详见说明）
+- 操作步骤：关屏/唤醒前后 `systemctl is-active pocketjs-kms pocketshell-dev adbd`；`systemctl --failed`。
+- 预期 / 实测：三服务在关屏/唤醒过程中始终 `active`；`systemctl --failed` 仅剩 2 个**预先存在**的失败单元 `rocknix-report-stats.service`、`rocknix-usbgadget.service`（会话开始前即失败，与 sleep 无关）。除此之外无新增失败。
+- 截图：![](./K06-services-ok.png)
+- 问题与根因：2 个既有失败归入 E/F 处理；`pocketshell-dev` 重启后不自启（`disabled`）为既有配置问题，记 DEC-002。
+- 未验证/限制：未逐个验证所有服务的运行时行为，仅验证 active 状态与 --failed。
+
+### K7 重启后记忆仍生效
+- 状态：PASS
+- 操作步骤：runtime.conf 设 `timeout = 1m`，`systemctl reboot`；开机后读 `is-active`、`runtime.conf`、日志 timeout、亮度。
+- 预期 / 实测：重启后 `is-active=active`、`is-enabled=enabled`；`runtime.conf` 仍含 `timeout = 1m`；守护进程日志 `timeout=60s`（**非**默认 1800s，证明记忆生效）；亮度恢复 1249。
+- 截图：![](./K07-after-reboot.png)
+- 问题与根因：重启后 `pocketshell-dev` 为 inactive（disabled），需手动 start 才能抓帧——非 sleep 引起，记 DEC-002。
+- 未验证/限制：手工部署下验证；镜像版需在 SYSTEM 含 unit 后复验。
+
+### K8 never 档不暗
+- 状态：PASS
+- 操作步骤：设 `timeout = never`，亮度 2499，静置 15s。
+- 预期 / 实测：backlight 保持 **2499**（不暗）；日志 `timeout=never`。
+- 截图：![](./K08-never-stays-on.png)
+- 问题与根因：无。
+- 未验证/限制：未静置更长时间；`never` 分支 `poll=None` 阻塞等待输入，不触发 dim。

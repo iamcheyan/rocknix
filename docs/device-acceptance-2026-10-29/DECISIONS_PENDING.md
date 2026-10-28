@@ -1,0 +1,29 @@
+# DECISIONS_PENDING — 需用户决定的事项
+
+## DEC-001 | K3「全黑截图」与「只写 backlight、不许动 fb/DRM」约束冲突
+- 现状：`pocketjs-sleep` 关屏仅写 `/sys/class/backlight/backlight/brightness=0`（严格按 J10 约束）。实测 backlight 1249→0 成功、物理面板背光熄灭。但 `/device/frame.rgb` 只是跑 `/storage/pocketshell-dev/capture` 读取 KMS framebuffer，**backlight=0 不会清空 framebuffer**，故抓到的仍是旧画面（实测 mean≈18.5，非全黑）。
+- 风险：若为了「全黑截图」而去 DPMS/fb blanking，违反 J10「关屏只能通过写 backlight，不许改 DRM/KMS、不许改内核 fb」。
+- 选项：
+  - A（推荐）：接受 `backlight=0` 作为关屏证据，截图保留 framebuffer 现状并注明；符合约束。
+  - B：允许加一次 DRM DPMS off / fb blanking，以获得真正的全黑帧；需放宽约束。
+  - C：改 `/device/frame.rgb` 端点，在 backlight=0 时返回全黑（改的是 Dev Center 采集工具，非 DRM/KMS/fb 驱动）；需重建 pocketshell-dev。
+- 影响范围：K3 截图证据；B 组镜像在关屏时的显示。
+- 状态: WAITING
+
+## DEC-002 | pocketshell-dev 未设为开机自启
+- 现状：`systemctl is-enabled pocketshell-dev` = `disabled`。设备重启后 pocketshell-dev 不自启，`:8080` Dev Center 不可用（K7 重启后实测 inactive，需手动 `systemctl start`）。此为既有配置，非本次 sleep 改动引入。
+- 风险：冷启动后 Dev Center / 远程开发入口不可用；D6/F4 冷启动相关验收受影响。
+- 选项：
+  - A（推荐）：在镜像里 `systemctl enable pocketshell-dev`（或加 WantedBy=multi-user.target 的 enable 逻辑）。
+  - B：保持手动启动，文档注明需手动起。
+- 影响范围：D6、F4、E、I 的冷启动验收；日常使用。
+- 状态: WAITING
+
+## DEC-003 | P3「rquickjs-sys 编译失败」前提与实测不符
+- 现状：目标文档称 `make H700` 因 `rquickjs-sys` C 编译失败而失败。实测 HX90 `.buildlog/*` 显示 `rquickjs-sys v0.12.0` 编译通过、pocketjs-runtime 产物生成、integration-20261028 已成功出 `ROCKNIX-H700.aarch64-20261028-DDR4.img`。当前重建（`make docker-package PACKAGE=pocketjs-runtime`）仍在跑（编译 LLVM/工具链阶段），尚未到 rquickjs-sys。
+- 风险：若按错误前提去改代码，可能引入不必要改动。
+- 选项：
+  - A（推荐）：等本次重建跑完，以实际日志为准；若通过则记录「前提不成立、构建正常」。
+  - B：若确实在干净构建下失败，再按真实报错修复。
+- 影响范围：P3/P4/G 结论。
+- 状态: WAITING
