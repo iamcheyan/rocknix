@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""PocketJS screen auto-sleep daemon.
+
+Listens to /dev/input/event* and dims the backlight to 0 after a period of
+no input. Restores the previous brightness on the next input event.
+
+Config: /storage/.config/pocketjs/runtime.conf
+  sleep.timeout = never | 10s | 30s | 1m | 5m | 15m | 30m | 1h
+
+The daemon must run as root to read /dev/input and write /sys/class/backlight.
+"""
+import os
+import sys
+import time
+import select
+import configparser
+
+BACKLIGHT_DIR = "/sys/class/backlight"
+CONFIG_PATH = "/storage/.config/pocketjs/runtime.conf"
+STATE_PATH = "/storage/.config/pocketjs/sleep-state"
+
+TIMEOUTS = {
+    "never": None,
+    "10s": 10,
+    "30s": 30,
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+}
+
+
+def read_brightness():
+    for entry in os.listdir(BACKLIGHT_DIR):
+        path = os.path.join(BACKLIGHT_DIR, entry)
+        try:
+            cur = int(open(os.path.join(path, "brightness")).read().strip())
+            mx = int(open(os.path.join(path, "max_brightness")).read().strip())
+            if mx > 0:
+                return path, cur, mx
+        except (OSError, ValueError):
+            continue
+    return None, None, None
+
+
+def set_brightness(path, value):
+    if not path:
+        return False
+    try:
+        open(os.path.join(path, "brightness"), "w").write(str(value))
+        return True
+    except OSError:
+        return False
+
+
+def load_config():
+    cfg = configparser.ConfigParser()
+    cfg.read(CONFIG_PATH)
+    raw = cfg.get("sleep", "timeout", fallback="30m")
+    return TIMEOUTS.get(raw, 300)
+
+
+def load_saved_brightness():
+    try:
+        return int(open(STATE_PATH).read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def save_brightness(value):
+    try:
+        os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+        open(STATE_PATH, "w").write(str(value))
+    except OSError:
+        pass
+
+
+def find_input_devices():
+    devices = []
+    for name in sorted(os.listdir("/dev/input")):
+        if name.startswith("event") and os.path.exists(os.path.join("/dev/input", name)):
+            devices.append(os.path.join("/dev/input", name))
+    return devices
+
+
+def main():
+    timeout = load_config()
+    bl_path, cur, mx = read_brightness()
+    if not bl_path:
+        print("pocketjs-sleep: no backlight device found", file=sys.stderr)
+        sys.exit(1)
+
+    saved = load_saved_brightness()
+    if saved is not None and saved != cur:
+        # Restore from a previous session.
+        set_brightness(bl_path, saved)
+        cur = saved
+    elif saved is None:
+        save_brightness(cur)
+
+    devices = find_input_devices()
+    if not devices:
+        print("pocketjs-sleep: no /dev/input/event* devices", file=sys.stderr)
+        sys.exit(1)
+
+    fds = {}
+    for dev in devices:
+        try:
+            fd = os.open(dev, os.O_RDONLY | os.O_NONBLOCK)
+            fds[fd] = dev
+        except OSError:
+            pass
+    if not fds:
+        print("pocketjs-sleep: cannot open any input device", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"pocketjs-sleep: timeout={timeout}s backlight={bl_path} cur={cur} max={mx} devices={list(fds.values())}")
+    last_input = time.monotonic()
+    dimmed = False
+
+    while True:
+        remaining = None if timeout is None else max(0.0, timeout - (time.monotonic() - last_input))
+        if timeout is not None and remaining == 0 and not dimmed:
+            set_brightness(bl_path, 0)
+            dimmed = True
+            print("pocketjs-sleep: screen dimmed")
+        poll = 1.0 if timeout is None else min(1.0, remaining if remaining > 0 else 0.05)
+        r, _, _ = select.select(list(fds), [], [], poll)
+        if r:
+            for fd in r:
+                try:
+                    os.read(fd, 64)
+                except OSError:
+                    pass
+            last_input = time.monotonic()
+            if dimmed:
+                if set_brightness(bl_path, cur):
+                    dimmed = False
+                    print("pocketjs-sleep: screen restored")
+
+
+if __name__ == "__main__":
+    main()

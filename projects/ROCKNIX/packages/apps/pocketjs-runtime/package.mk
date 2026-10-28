@@ -88,4 +88,6 @@ makeinstall_target() {
   install -D -m 0755 "${CARGO_TARGET_DIR}/${TARGET_NAME}/release/pocketshell-dev" "${INSTALL}/usr/libexec/pocketshell-dev"
   install -D -m 0755 "${PKG_DIR}/scripts/pocketshell-dev" "${INSTALL}/usr/bin/pocketshell-dev"
   install -D -m 0644 "${PKG_DIR}/system.d/pocketshell-dev.service" "${INSTALL}/usr/lib/systemd/system/pocketshell-dev.service"
+  install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-sleep" "${INSTALL}/usr/libexec/pocketjs-sleep"
+  install -D -m 0644 "${PKG_DIR}/system.d/pocketjs-sleep.service" "${INSTALL}/usr/lib/systemd/system/pocketjs-sleep.service"
 }

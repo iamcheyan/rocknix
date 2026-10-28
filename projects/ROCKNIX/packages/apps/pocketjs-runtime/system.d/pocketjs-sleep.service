@@ -1,0 +1,15 @@
+[Unit]
+Description=ROCKNIX PocketJS screen auto-sleep
+After=pocketjs-kms.service
+Before=graphical.target
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+Environment=HOME=/storage
+ExecStart=/usr/libexec/pocketjs-sleep
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
