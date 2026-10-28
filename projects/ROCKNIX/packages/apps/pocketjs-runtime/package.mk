@@ -37,6 +37,7 @@ make_target() {
   export LIBCLANG_PATH="${TOOLCHAIN}/lib"
   export LD_LIBRARY_PATH="${TOOLCHAIN}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
   export BINDGEN_EXTRA_CLANG_ARGS="--target=${TARGET_NAME} --sysroot=${SYSROOT_PREFIX} -isystem ${SYSROOT_PREFIX}/usr/include"
+  python3 "${PKG_DIR}/scripts/patch-runtime.py" "${PKG_BUILD}"
   python3 "${PKG_DIR}/scripts/prepare-workspace.py" "${PKG_BUILD}" "${TOOLCHAIN}/bin/cargo"
   POCKETJS_PROFILE_RS="${TOOLCHAIN}/share/pocketjs/h700/pocket_profile.rs" \
     "${TOOLCHAIN}/bin/cargo" build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
@@ -49,6 +50,7 @@ makeinstall_target() {
   install -D -m 0755 "${PKG_DIR}/scripts/pocket" "${INSTALL}/usr/bin/pocket"
   install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-session" "${INSTALL}/usr/libexec/pocketjs-session"
   install -D -m 0755 "${PKG_DIR}/scripts/pocket-session-run" "${INSTALL}/usr/bin/pocket-session-run"
+  install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-native-launch" "${INSTALL}/usr/bin/pocketjs-native-launch"
   install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/boot.pocket" \
     "${INSTALL}/usr/share/pocketjs/apps/boot.pocket"
   install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/pocket-profile.json" \

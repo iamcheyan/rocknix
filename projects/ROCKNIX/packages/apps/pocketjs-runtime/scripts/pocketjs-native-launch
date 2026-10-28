@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+app=${1:-}
+case "$app" in
+  disk) set -- /usr/bin/disk-browser ;;
+  terminal) set -- /usr/bin/heya-tool terminal ;;
+  xmplayer) set -- /usr/bin/xmplayer ;;
+  audio-mixer|clean-mac-files|cloud-backup|cloud-restore|file-manager-text|gamepad|input-info|kernel-log|monitor|network-info|notes|processes|storage-info|system-info|system-log|usb-info)
+    set -- /usr/bin/heya-tool "$app" ;;
+  *) echo "Unknown KoroOS app: $app" >&2; exit 2 ;;
+esac
+
+exec /usr/bin/pocket-session-run "$@"
