@@ -98,3 +98,18 @@ The remote canonical checkout has unrelated uncommitted work and a separate imag
 build. This task uses a remote Git worktree and its own copy of the build cache,
 mounted at the original `/work` toolchain prefix. Sources are reused read-only in
 meaning; outputs go to this task's worktree, not the canonical `target/`.
+
+## Latest mainline integration check
+
+The PocketJS migration was merged in a dedicated worktree based on main
+`c96ffa107b40f9e913bdaa7c993f822eaf3ef4ef`; integration commit:
+`530f52747ced0597b856f847eda616ed6fd21e59`. The H700 resolved image plan has
+281 steps and passed `tools/check-pocketjs-plan.py` with no Wayland/Sway packages.
+The existing `996755c2049abb4abcd77f855ab54bf918daea89` image rootfs passed
+`tools/check-mini-rootfs.py --frontend pocketjs`. Its ARM64 runtime and Hello
+package passed qemu package admission and five 720x480 headless ticks.
+
+These checks do not constitute a new image build from integration commit
+`530f52747c`, nor a physical RG34XX display/controller test. The existing image
+and runtime artifacts predate the latest-main merge; rebuild from this commit
+and test on the device before deploying it.
