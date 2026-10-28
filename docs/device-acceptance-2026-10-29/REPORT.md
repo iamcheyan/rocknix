@@ -23,7 +23,7 @@
 | B3 | 网页→设备注入 | PASS | B03-web-inject-device-lcd-before.png, B03-web-inject-device-lcd-after.png, B04-web-inject-browser-after.png | - | ArrowRight→device RIGHT, LCD 变化 19.40% |
 | B4 | 设备→网页跟随 | PASS | B05-web-follow-device-before.png, B06-web-follow-device-after.png, B07-web-follow-browser-before.png, B08-web-follow-browser-after.png, B09-device-after.png, B10-web-canvas-after.png | - | 设备 LCD 变化 19.40%，浏览器同步 |
 | B5 | 刷新率/撕帧限制 | PASS | B11-mirror-rate-limit.png | - | 实测 4fps 轮询；空闲帧稳定无撕裂 |
-| B6 | 断线恢复 | PENDING | - | - | |
+| B6 | 断线恢复 | PASS | B12-recovery-mirror-live.png, B13-recovery-stopped.png, B14-recovery-recovered.png | - | 停服→unavailable，重启→自动 LCD live |
 | C1 | 输入工作区开关 | PENDING | - | - | |
 | C2 | 布局切换 | PENDING | - | - | |
 | C3 | 功能页切换 | PENDING | - | - | |
@@ -104,3 +104,17 @@
 - 截图：![](./B11-mirror-rate-limit.png)
 - 问题与根因：非缺陷——这是单帧拉取式镜像的设计取舍（每 250ms 拉一次 `/device/frame.rgb`），不是逐帧同步。
 - 未验证/限制：动态画面会有约 250ms 跟随延迟；运动瞬间存在单帧抓取恰逢扫描中途的理论可能，但空闲稳定性实测证明 KMS 呈现为整帧，未观察到撕裂。
+### B6 断线恢复 + SupplementaryGroups 校验
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 01:01
+- 设备状态：H700 / pocketshell-dev（运行 `/storage/pocketshell-dev.new --bind 192.168.3.57 --port 8080`）
+- 操作步骤：浏览器保持打开；`systemctl stop pocketshell-dev` → 等待 → 截图；`systemctl start pocketshell-dev` → 等待 8s → 截图。并用 `systemctl show pocketshell-dev -p SupplementaryGroups` 校验权限组。
+- 预期 / 实测：页面应能自恢复。实测 DOM `#link` 文本：
+  - 停服前：`handheld LCD live · 192.168.3.57:8080`
+  - 停服后：`handheld unavailable · Failed to fetch`
+  - 重启后：`handheld LCD live · 192.168.3.57:8080`，且 `systemctl is-active pocketshell-dev` = `active`
+  → 浏览器侧 WebSocket 断线后自动重连、frame 轮询恢复，页面自恢复成功。`OnFailure=` 为空，停服未触发 recovery 抢占 tty7。
+- SupplementaryGroups 校验：`systemctl show pocketshell-dev -p SupplementaryGroups` → `SupplementaryGroups=video input`；单元文件第 27 行 `SupplementaryGroups=video input`。证明读 DRM/写输入设备的权限组由 systemd 单元提供，而非手动 export。
+- 截图：![](./B12-recovery-mirror-live.png) / ![](./B13-recovery-stopped.png) / ![](./B14-recovery-recovered.png)
+- 问题与根因：无。
+- 未验证/限制：仅验证了 Dev Center 页面的 TCP/WS 自恢复；未模拟网络物理断开后重连的更长超时路径。
