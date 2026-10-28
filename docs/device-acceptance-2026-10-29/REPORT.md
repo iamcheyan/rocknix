@@ -20,7 +20,7 @@
 | A4 | 全页面巡检 | PENDING | - | - | |
 | B1 | 抓帧字节正确 | PASS | B01-lcd-frame-rgb-correct.png | - | 1036800 字节 ✓ |
 | B2 | 浏览器显示真实画面 | PASS | B02-browser-shows-device.png | - | DOM 确认 LCD live |
-| B3 | 网页→设备注入 | PENDING | - | - | |
+| B3 | 网页→设备注入 | PASS | B03-web-inject-device-lcd-before.png, B03-web-inject-device-lcd-after.png, B04-web-inject-browser-after.png | - | ArrowRight→device RIGHT, LCD 变化 19.40% |
 | B4 | 设备→网页跟随 | PENDING | - | - | |
 | B5 | 刷新率/撕帧限制 | PENDING | - | - | |
 | B6 | 断线恢复 | PENDING | - | - | |
@@ -77,3 +77,12 @@
 - 截图：![](./B02-browser-shows-device.png)
 - 问题与根因：无。
 - 未验证/限制：浏览器侧画面为设备 LCD 的 RGB 镜像（约 4fps，见 B5），非原生逐帧同步。
+### B3 网页→设备注入
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 00:52
+- 设备状态：H700 / pocketshell-dev active
+- 操作步骤：在浏览器 Dev Center 页面（deviceLive 模式）调用 `page.keyboard.press('ArrowRight')`。页面 `keydown` 处理器（deviceLive 分支）将 `ArrowRight` 映射为设备键 `RIGHT` 并 `POST /device/key`。在按键前后各抓一次 `/device/frame.rgb` 做像素差。
+- 预期 / 实测：网页按键应使设备 LCD 出现可见变化。实测前后帧像素差 = **19.40%**（前后帧 sum_std 118.7→75.0，内容确已改变）。证明网页→设备的按键注入链路（`/device/key`）真实生效。
+- 截图：![](./B03-web-inject-device-lcd-before.png) / ![](./B03-web-inject-device-lcd-after.png) / 浏览器侧 ![](./B04-web-inject-browser-after.png)
+- 问题与根因：无。
+- 未验证/限制：该按键映射是 Dev Center 的 Web 层映射（ArrowRight→RIGHT），并非物理手柄；物理手柄走同一 `/device/key` 后端，本次未接物理手柄实按（设备无实体按键可远程按）。逻辑链路已通过 HTTP 端点证明。
