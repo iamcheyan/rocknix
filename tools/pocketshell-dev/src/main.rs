@@ -254,6 +254,21 @@ fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &[u8]
     let _ = stream.write_all(body);
     let _ = stream.flush();
 }
+fn gamepad_event() -> String {
+    if let Ok(entries) = std::fs::read_dir("/sys/class/input") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with("event") { continue; }
+            let p = entry.path().join("device/name");
+            if let Ok(n) = std::fs::read_to_string(&p) {
+                if n.contains("Gamepad") {
+                    return format!("/dev/input/{}", name);
+                }
+            }
+        }
+    }
+    "/dev/input/event3".to_string()
+}
 
 fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<()> {
     let mut peek = [0u8; 128];
@@ -293,8 +308,9 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
                     return Ok(());
                 }
             };
+            let event = gamepad_event();
             let result = Command::new("/storage/pocketshell-dev/capture")
-                .args(["key", "/dev/input/event3", code]).output();
+                .args(["key", event.as_str(), code]).output();
             match result {
                 Ok(output) if output.status.success() => respond(&mut stream, "200 OK", "text/plain", b"ok"),
                 Ok(output) => respond(&mut stream, "503 Service Unavailable", "text/plain", &output.stderr),

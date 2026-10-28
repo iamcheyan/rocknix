@@ -95,10 +95,14 @@ original harness remains available for byte-level ANSI parser demonstrations.
 
 ## Frame mirror
 
-Frame mirror is a bounded fallback for programs outside PocketShell. The host
-harness reports capture unavailable; no H700 frame capture is claimed or
-bundled. See `REMOTE_DEV.md` for the recommended DRM/KMS approach and its
-limitations.
+`GET /device/frame.rgb` is implemented: the device host runs the `capture`
+helper and returns the live 720×480×3 DRM scanout. `POST /device/key` injects
+the requested controller key into the gamepad input device. The WebSocket
+`frame_mirror` message is still a **status stub** — it only replies
+`frame_mirror_status` and streams no frames; the browser gets live frames by
+polling `/device/frame.rgb` (≈4 fps). `tools/pocketshell-mirror` is a
+**separate** JPEG relay. See `REMOTE_DEV.md` and
+`docs/device-acceptance-2026-10-29/DOC_TRUTH_AUDIT.md`.
 
 ## Keys
 
@@ -121,8 +125,8 @@ limitations.
 - 24 rows is the panel limit; `top` output longer than that scrolls, exactly as
   it will on hardware.
 - Mouse reporting and bracketed paste are not implemented anywhere yet.
-- Frame mirror capture is not implemented in this host build; only the protocol
-  status response exists.
+- `/device/frame.rgb` and `/device/key` are implemented on the device host; the
+  WS `frame_mirror` message remains a status stub (no frame streaming).
 
 These are model-level limitations, not host-level ones, so the host does not
 hide them.

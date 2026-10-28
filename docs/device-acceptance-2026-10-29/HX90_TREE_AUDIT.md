@@ -47,3 +47,14 @@ AGENTS.md、docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md、devices/H700
 - `git stash@{0}`（"P2 pre-ff tracked changes 2026-10-29"）保留未丢弃；完整 diff 亦存档于 `attachments/hx90-rocknix-20261029T003343.patch`。
 - ff 后残留未跟踪（不与 main 冲突、构建会重新生成）：`.buildlog/`、`linux-splash`、`main_linux.c`、`pocketjs-runtime/{README,browser-preview.html,fixtures,fonts,fonts.json,launcher-*,library-*,main.tsx,pocket.json,pocket.runtime-config.ts,profile.ts,scripts/pocketjs-legacy-settings}` 等。不影响后续构建。
 - 结论：HX90 已与 origin/main 基线对齐，可开始 P3 构建修复。
+
+## J7 核查：S3 曾对 HX90 `git checkout build_distro` 是否冲掉他人改动
+
+- 方法：比对 `scripts/build_distro` 是否与 HEAD 一致；查已导出的未提交改动 patch 是否含该文件；确认 `.buildlog/` 与 26 文件 patch 是否完整留档。
+- 结果：
+  - `git diff HEAD -- scripts/build_distro` 为空、`git status` 干净 → 当前 `build_distro` 即 HEAD 版本。
+  - 存档 patch `/tmp/hx90-rocknix-20261029T003343.patch` 含 **26 个 `diff --git`**，其中**不含** `scripts/build_distro`。
+  - `.buildlog/` 仍有 12 个日志文件。
+  - 26 个未提交改动全部保存于 `attachments/hx90-rocknix-20261029T003343.patch`，并另有 `git stash@{0}` 备份。
+- 结论：S3 的 `git checkout build_distro` 只把该文件还原到 HEAD；没有证据表明它冲掉了其他 agent 对 `build_distro` 的未提交改动（该文件不在 26 文件存档内，且现与 HEAD 一致）。其他 26 个未提交文件均已完整留档，**无不可恢复丢失**。
+- 残留风险/限制：无法从会话 JSONL 逐字节还原 S3 checkout 前的 `build_distro` 瞬时状态；但当前树该文件与 origin/main 一致，功能完整（`OS_BASE_CLEAN` 等开关仍在，见 G 组）。
