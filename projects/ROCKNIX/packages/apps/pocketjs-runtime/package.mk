@@ -25,6 +25,16 @@ make_host() {
   bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
     --target rocknix-h700-kms --manifest apps/rocknix-h700/pocket.json \
     --output "${PKG_BUILD}/generated/boot.pocket"
+  bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
+    --target rocknix-h700-kms --manifest apps/rocknix-h700/showcase/pocket.json
+  bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
+    --target rocknix-h700-kms --manifest apps/rocknix-h700/showcase/pocket.json \
+    --output "${PKG_BUILD}/generated/showcase.pocket"
+  bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
+    --target rocknix-h700-kms --manifest apps/rocknix-h700/library-pocket.json
+  bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
+    --target rocknix-h700-kms --manifest apps/rocknix-h700/library-pocket.json \
+    --output "${PKG_BUILD}/generated/library.pocket"
 }
 
 makeinstall_host() {
@@ -54,6 +64,10 @@ makeinstall_target() {
   install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-native-launch" "${INSTALL}/usr/bin/pocketjs-native-launch"
   install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/boot.pocket" \
     "${INSTALL}/usr/share/pocketjs/apps/boot.pocket"
+  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/showcase.pocket" \
+    "${INSTALL}/usr/share/pocketjs/apps/showcase.pocket"
+  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/library.pocket" \
+    "${INSTALL}/usr/share/pocketjs/apps/library.pocket"
   install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/pocket-profile.json" \
     "${INSTALL}/usr/share/pocketjs/pocket-profile.json"
   install -D -m 0644 "${PKG_BUILD}/LICENSE" "${INSTALL}/usr/share/licenses/pocketjs-runtime/LICENSE"

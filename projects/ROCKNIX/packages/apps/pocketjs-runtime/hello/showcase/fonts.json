@@ -1,0 +1,4 @@
+{
+  "fallback": ["../fonts/NotoSansCJK-Demo.otf"],
+  "characterFiles": ["../launcher-characters.txt"]
+}
