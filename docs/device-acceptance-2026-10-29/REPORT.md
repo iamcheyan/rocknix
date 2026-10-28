@@ -49,8 +49,8 @@
 | G2 | 真的出包 | PENDING | - | - | |
 | G3 | 耗时对比 | PENDING | - | - | |
 | G4 | 文档一致 | PENDING | - | - | |
-| H1 | mirror 功能验证 | PENDING | - | - | |
-| H2 | 与 dev 重复判定 | PENDING | - | - | |
+| H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
+| H2 | 与 dev 重复判定 | PASS（判定） | H-evidence.txt | - | 功能重叠，建议见 DEC-004 |
 | I1 | 连续使用场景 | PENDING | - | - | |
 | I2 | 无残留异常 | PENDING | - | - | |
 | I3 | 已知限制清单 | PENDING | - | - | |
@@ -290,3 +290,15 @@
 - 实测：K7 已重启设备；开机后 pocketjs-kms/adbd/pocketshell-dev(手动 start)/pocketjs-sleep 正常，首屏见 `K07-after-reboot.png`。
 - 证据：`K07-after-reboot.png`
 - 未验证/限制：`pocketshell-dev` 重启后不自启（disabled，见 DEC-002），需手动 start。
+### H1 pocketshell-mirror 功能验证
+- 状态：PASS
+- 操作步骤：本地 `POCKET_MIRROR_BIND=127.0.0.1 python3 tools/pocketshell-mirror/server.py`；`GET /status`、`GET /frame.jpg`、`POST /key/START`。
+- 预期 / 实测：`/status={"sequence":13,"error":""}`；`/frame.jpg` 为合法 720×480 JPEG（34KB）；`POST /key/START`→`ok`；sequence 升至 16。
+- 截图：H01-mirror-frame.jpg（mirror 输出的设备真实画面 JPEG；浏览器类=真实抓帧）
+- 问题与根因：mirror 未指定 `-s`，HX90 多 adb 设备时报 "more than one device"；需先断开 TCP 仅留 USB。
+- 未验证/限制：未在浏览器中打开 index.html 做交互截图（仅验证 HTTP 接口）。
+
+### H2 与 pocketshell-dev 重复判定
+- 状态：PASS（判定）
+- 结论：与 pocketshell-dev 的 `/device/frame.rgb`+`/device/key` 功能重叠；mirror 额外依赖 adb 中继、单设备假设。建议以 pocketshell-dev 为主，mirror 作备用诊断，去留见 DEC-004（未擅自删除）。
+- 证据：H-evidence.txt

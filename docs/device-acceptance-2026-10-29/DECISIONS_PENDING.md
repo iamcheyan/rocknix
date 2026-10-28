@@ -27,3 +27,13 @@
   - B：若确实在干净构建下失败，再按真实报错修复。
 - 影响范围：P3/P4/G 结论。
 - 状态: WAITING
+
+## DEC-004 | pocketshell-mirror 去留
+- 现状：`tools/pocketshell-mirror` 已实测可用（H1：JPEG 720×480 抓帧 + 经 HX90 adb 注入真实 Gamepad evdev）。但与 pocketshell-dev 的 `/device/frame.rgb` + `/device/key` 功能重叠；mirror 额外依赖 HX90 adb 中继、且未指定 `-s`，多 adb 设备时会报错。
+- 风险：维护两套镜像/注入通道，易不一致。
+- 选项：
+  - A（推荐）：以 pocketshell-dev 为主通道；mirror 保留为“adb 中继 + 真实 gamepad 注入”诊断备用，不删。
+  - B：退役 mirror（从 tools 移除 README/server）。
+  - C：增强 mirror 指定 `-s <serial>` 以支持多设备，作为正式备用。
+- 影响范围：工具目录、文档。
+- 状态: WAITING

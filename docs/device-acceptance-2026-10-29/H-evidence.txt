@@ -1,0 +1,18 @@
+# H 组证据（pocketshell-mirror）— 2026-10-29
+
+## H1 功能验证（实际启动 server.py）
+```
+$ POCKET_MIRROR_BIND=127.0.0.1 python3 tools/pocketshell-mirror/server.py
+GET /status  -> {"sequence": 13, "error": ""}
+GET /frame.jpg -> JPEG 720x480, 34,001 bytes (JFIF)
+POST /key/START -> ok
+GET /status (after) -> {"sequence": 16, "error": ""}
+```
+- 抓帧：真实 720x480 JPEG；按键注入：经 `adb shell capture key /dev/input/event3 <code>` 注入真实 Gamepad evdev，返回 ok。H1 PASS。
+- 前置条件：HX90 需恰好 1 个 adb 设备（mirror 未指定 `-s`，多设备时报 "more than one device"）；本次先 `adb disconnect 192.168.3.57:5555` 保留 USB 设备后成功。
+
+## H2 与 pocketshell-dev 重复判定
+- pocketshell-dev 已提供 `GET /device/frame.rgb`（raw RGB，直连设备 HTTP）+ `POST /device/key`（注入）。
+- mirror 提供 JPEG 版 + 经 adb 注入真实 event3。
+- 重叠：两者都能看画面+注入按键。差异：mirror 依赖 HX90 adb 中继、单设备假设、JPEG；dev 直连 HTTP、raw、无需 adb。
+- 建议：以 pocketshell-dev 为主；mirror 作为「adb 中继+真实 gamepad 注入」备用诊断工具保留或退役——见 DECISIONS_PENDING DEC-004（待用户决定，未擅自删除）。
