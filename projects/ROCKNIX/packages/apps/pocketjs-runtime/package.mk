@@ -16,6 +16,10 @@ make_host() {
   export XDG_CACHE_HOME="${PKG_BUILD}/.cache"
   mkdir -p "${XDG_CACHE_HOME}/pocket-nexus/transforms"
   cd "${PKG_BUILD}"
+  export POCKETJS_FONT_REGULAR="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
+  export POCKETJS_FONT_BOLD="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
+  export POCKETJS_FONT_MONO="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
+  python3 "${PKG_DIR}/scripts/patch-build-fonts.py" "${PKG_BUILD}"
   mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
   cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"
   cp -a "${PKG_DIR}/hello/." "${PKG_BUILD}/apps/rocknix-h700/"
@@ -58,6 +62,7 @@ make_target() {
 }
 
 makeinstall_target() {
+  install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-legacy-settings" "${INSTALL}/usr/libexec/pocketjs-legacy-settings"
   install -D -m 0755 "${CARGO_TARGET_DIR}/${TARGET_NAME}/release/pocket-linux-kms" \
     "${INSTALL}/usr/libexec/pocket-linux-kms"
   install -D -m 0755 "${PKG_DIR}/scripts/pocket" "${INSTALL}/usr/bin/pocket"

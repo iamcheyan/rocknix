@@ -1,4 +1,4 @@
 {
-  "fallback": ["../fonts/NotoSansCJK-Demo.otf"],
-  "characterFiles": ["../launcher-characters.txt"]
+  "characterFiles": ["../launcher-characters.txt"],
+  "fallback": ["../fonts/SymbolsNerdFontMono-Regular.ttf"]
 }
