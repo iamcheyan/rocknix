@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 ExecStart=/usr/bin/pocketshell-dev
 Environment=HOME=/storage
+SupplementaryGroups=video input
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=yes

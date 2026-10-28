@@ -29,6 +29,7 @@ use replay::Replay;
 use remote::{ClientMessage, VERSION};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
+use std::process::Command;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -265,6 +266,41 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
         Err(_) => return Ok(()),
     };
     match (request.method.as_str(), request.path.as_str()) {
+        ("GET", "/device/frame.rgb") => {
+            let output = Command::new("/storage/pocketshell-dev/capture").output();
+            match output {
+                Ok(frame) if frame.status.success() => {
+                    let ppm = &frame.stdout;
+                    let header = b"P6\n720 480\n255\n";
+                    if let Some(offset) = ppm.windows(header.len()).position(|window| window == header) {
+                        respond(&mut stream, "200 OK", "application/octet-stream", &ppm[offset + header.len()..]);
+                    } else {
+                        respond(&mut stream, "502 Bad Gateway", "text/plain", b"invalid handheld frame");
+                    }
+                }
+                Ok(frame) => respond(&mut stream, "503 Service Unavailable", "text/plain", &frame.stderr),
+                Err(error) => respond(&mut stream, "503 Service Unavailable", "text/plain", error.to_string().as_bytes()),
+            }
+        }
+        ("POST", "/device/key") => {
+            let key = String::from_utf8_lossy(&request.body);
+            let code = match key.trim() {
+                "UP" => "544", "DOWN" => "545", "LEFT" => "546", "RIGHT" => "547",
+                "A" => "305", "B" => "304", "X" => "307", "Y" => "308",
+                "L" => "310", "R" => "311", "L1" => "312", "R1" => "313",
+                "START" => "315", "SELECT" => "314", _ => {
+                    respond(&mut stream, "400 Bad Request", "text/plain", b"unknown key");
+                    return Ok(());
+                }
+            };
+            let result = Command::new("/storage/pocketshell-dev/capture")
+                .args(["key", "/dev/input/event3", code]).output();
+            match result {
+                Ok(output) if output.status.success() => respond(&mut stream, "200 OK", "text/plain", b"ok"),
+                Ok(output) => respond(&mut stream, "503 Service Unavailable", "text/plain", &output.stderr),
+                Err(error) => respond(&mut stream, "503 Service Unavailable", "text/plain", error.to_string().as_bytes()),
+            }
+        }
         ("GET", "/") | ("GET", "/index.html") => {
             respond(&mut stream, "200 OK", "text/html; charset=utf-8", INDEX_HTML.as_bytes());
         }

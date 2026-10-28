@@ -33,8 +33,11 @@ cargo run --release -- --bind 192.168.1.42 --port 8080   # LAN access
 cargo run --release -- --bind 127.0.0.1 --port 8080    # loopback only
 ```
 
-Open `http://<device-ip>:8080` in a browser on the same LAN. The host serves the
-Dev Center UI and a versioned WebSocket endpoint at `/ws`. Public IPv4/IPv6
+For RG34XX LAN access, enable the device `pocketshell-dev` service. The page
+shows the active LCD scanout and forwards its direction, confirm, back,
+shoulder, and START/SELECT controls to the handheld input device.
+Open `http://<device-ip>:8080` in a browser on the same LAN. The service exposes
+the live LCD frame and a versioned WebSocket endpoint at `/ws`. Public IPv4/IPv6
 binds are refused unless `--allow-public` is passed explicitly.
 
 On the H700 device the same binary ships as a systemd service

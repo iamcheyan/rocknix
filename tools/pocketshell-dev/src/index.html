@@ -21,7 +21,7 @@
 
   .device { background:#05080f; border:1px solid var(--line); border-radius:14px; padding:14px; }
   .bezel { background:#000; border-radius:8px; padding:6px; box-shadow:inset 0 0 0 1px #1f2937; }
-  #screen { display:block; width:100%; height:auto; image-rendering:pixelated; border-radius:4px; background:#0f172a; }
+  #screen { display:block; width:100%; height:auto; image-rendering:auto; border-radius:4px; background:#0f172a; cursor:crosshair; touch-action:none; }
   .device .brand { display:flex; justify-content:space-between; color:#64748b; font-size:11px;
                    font-family:ui-monospace,monospace; padding:8px 4px 0; }
   #wsbar { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
@@ -91,7 +91,7 @@
     <div id="wsbar"></div>
     <div class="bezel"><canvas id="screen" width="720" height="480"></canvas></div>
     <div class="brand"><span>ANBERNIC</span><span>RG34XX</span></div>
-    <div class="hint">Q/E = L/R · 1/2 = L1/R1 · Enter = A · Backspace = B · Tab = START · ` = SELECT · ↑↓←→ = 方向键</div>
+    <div class="hint">掌机 LCD 实时画面。网页按键与掌机实体操作同步。</div>
   </section>
 
   <aside>
@@ -169,7 +169,7 @@
         else if(msg.type==='runtime_state')recordEvent({type:'runtime_state',runtime:msg});
         else if(msg.type==='frame_mirror_status')link.textContent=msg.enabled?'frame mirror active':'mirror unavailable · '+msg.reason;
         else if(msg.type==='error')link.textContent=msg.code+': '+msg.message;
-        link.textContent='live · seq '+protocolSeq+' · '+location.host;link.className='meta ok';
+        if (!deviceLive) { link.textContent='live · seq '+protocolSeq+' · '+location.host;link.className='meta ok'; }
       } catch(error) { link.textContent='renderer error · '+error.message;link.className='meta bad';console.error(error); }
     };
 
@@ -186,10 +186,52 @@
   document.getElementById('sessionFile').onchange=e=>{if(e.target.files[0])loadSession(e.target.files[0]);};
   document.getElementById('mirrorToggle').onclick=()=>sendProtocol({type:'frame_mirror',enabled:true});
 
+  let deviceLive = false;
+  async function sendDeviceKey(key) {
+    const response = await fetch('/device/key', { method: 'POST', body: key });
+    if (!response.ok) throw new Error(await response.text());
+  }
+  function reportDeviceError(error) {
+    link.textContent = 'handheld unavailable · ' + error.message;
+    link.className = 'meta bad';
+  }
+  async function refreshDeviceFrame() {
+    try {
+      const response = await fetch('/device/frame.rgb?t=' + Date.now(), { cache: 'no-store' });
+      if (!response.ok) throw new Error('capture HTTP ' + response.status);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length !== 720 * 480 * 3) throw new Error('invalid frame size ' + bytes.length);
+      const image = ctx.createImageData(720, 480);
+      for (let src = 0, dst = 0; src < bytes.length; src += 3, dst += 4) {
+        image.data[dst] = bytes[src]; image.data[dst + 1] = bytes[src + 1]; image.data[dst + 2] = bytes[src + 2]; image.data[dst + 3] = 255;
+      }
+      ctx.putImageData(image, 0, 0);
+      deviceLive = true;
+      link.textContent = 'handheld LCD live · ' + location.host;
+      link.className = 'meta ok';
+    } catch (error) {
+      deviceLive = false;
+      reportDeviceError(error);
+    }
+    setTimeout(refreshDeviceFrame, 250);
+  }
+  canvas.addEventListener('pointerdown', async event => {
+    if (!deviceLive) return;
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    const key = y < 0.32 ? (x < 0.35 ? 'UP' : x > 0.65 ? 'RIGHT' : 'A')
+      : y > 0.68 ? (x < 0.35 ? 'LEFT' : x > 0.65 ? 'DOWN' : 'B')
+      : (x < 0.25 ? 'L' : x > 0.75 ? 'R' : 'A');
+    try { await sendDeviceKey(key); } catch (error) { reportDeviceError(error); }
+  });
+  refreshDeviceFrame();
   const hex = (v) => '#' + v.toString(16).padStart(6, '0');
   const abgrToRgb = (v) => v & 0xffffff;
 
   function draw() {
+    if (deviceLive) return;
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.textBaseline = 'top';
@@ -292,6 +334,14 @@
 
 
   window.addEventListener('keydown',(e)=>{
+    if (deviceLive) {
+      const keys = { ArrowUp:'UP', ArrowDown:'DOWN', ArrowLeft:'LEFT', ArrowRight:'RIGHT', Enter:'A', Escape:'B', Backspace:'B', Tab:'START', q:'L', Q:'L', e:'R', E:'R', '1':'L1', '2':'R1', x:'X', X:'X', y:'Y', Y:'Y', '`':'SELECT' };
+      if (keys[e.key]) {
+        if (!e.repeat) sendDeviceKey(keys[e.key]).catch(reportDeviceError);
+        e.preventDefault();
+      }
+      return;
+    }
     if (inputState.entered || e.key === 'F2' || e.key === '`') return;
     if (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
     let handled = true;
@@ -312,14 +362,6 @@
     if(handled)e.preventDefault();
   });
 
-
-  canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const col = Math.floor((x - OX) / CELL_W), row = Math.floor((y - OY) / CELL_H);
-    link.textContent = 'click row ' + row + ' col ' + col;
-  });
 
   document.querySelectorAll('#tabs .tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -401,7 +443,7 @@
   let inputState = { entered:false, previousView:0, buffer:'', layout:'ABC', function:'Keyboard', history:[] };
   async function refreshState() { state = await (await fetch("/api/state")).json(); renderPanels(); }
   const postInput = (action) => fetch('/api/input', { method:'POST', body:'INPUT\t'+action });
-  async function enterInput() { await postInput('ENTER'); inputState.entered=true; renderInputWorkspace(); }
+  async function enterInput() { if (deviceLive) return; await postInput('ENTER'); inputState.entered=true; renderInputWorkspace(); }
   async function exitInput() { await postInput('EXIT'); inputState.entered=false; document.getElementById('inputWorkspace').classList.remove('open'); draw(); refreshState(); }
   function setInputBuffer(value) { inputState.buffer=value; postInput('BUFFER '+value); document.getElementById('iwText').textContent=value; }
   function chooseInput(value) { setInputBuffer(value); inputState.function='Keyboard'; postInput('FUNCTION Keyboard'); renderInputWorkspace(); }

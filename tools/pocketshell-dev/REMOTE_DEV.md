@@ -53,6 +53,39 @@ State Sync is the primary mode. Browser rasterizes the same terminal run records
 
 Frame Mirror is a fallback for programs outside PocketShell. Research recommends H700 DRM/KMS primary-plane capture when the driver permits readback, otherwise render interception inside the owning SDL/RetroArch process. The target budget is 720×480 JPEG/WebP at no more than 5 fps, one replaceable latest-frame slot, and a 1 MiB encoded-frame cap. The host harness implements only the protocol/status response and reports capture unavailable; it does not produce image frames. DRM scanout planes, overlays, protected content, and driver restrictions can prevent readback. No X11, Wayland, VNC, or RDP dependencies are used. No H700 frame capture is claimed.
 
+## RG34XX live LCD synchronization issue
+
+Observed 2026-10-28 on the running RG34XX service at `192.168.3.57:8080`:
+
+- `/api/state` and `/ws` describe the Dev Center's host-side PTY model; that model is not the handheld UI.
+- `/device/frame.rgb` returns the 720×480 RGB scanout and `/device/key` injects
+  mapped controller events into `/dev/input/event3`. The deployed
+  `/storage/pocketshell-dev.new` serves both routes; the service needs
+  `SupplementaryGroups=video input` to read DRM and write the input device.
+- `frame_mirror` remains a status stub. `frame_mirror_status` still reports
+  `DRM capture backend unavailable in this build`.
+- The browser polls `/device/frame.rgb` every 250 ms, paints it over the
+  canvas, and stops terminal-model redraws while capture succeeds. It labels
+  the link `handheld LCD live` only after a successful capture.
+
+### Resolution
+
+- Rebuilt the H700 binary on HX90 with the ROCKNIX toolchain and deployed it to
+  `/storage/pocketshell-dev.new`; the running service was restarted.
+- Added `SupplementaryGroups=video input` through
+  `/storage/.config/system.d/pocketshell-dev.service.d/device-access.conf` so
+  the service can read DRM and write the controller device.
+- Verified `/device/frame.rgb` returns exactly 1,036,800 bytes (720×480×3) and
+  `/device/key` returns 200 with mapped controller events.
+- Verified browser → handheld: a canvas click posted `A` and the device shell
+  printed a new prompt in the next frames.
+- Verified handheld → browser: a device-local START injection changed the
+  active workspace and the browser canvas followed without any browser input.
+
+Capture reads the active DRM plane, so a frame sampled mid-repaint can show a
+partial line. Capture cadence is four frames per second, so updates are
+periodic rather than instantaneous.
+
 ## Session recording and replay
 
 Browser **Save session.json** stores timed WorkspaceState, TerminalBuffer, Input and workspace-switch events. Replay consumes those same state/buffer messages through the normal browser renderer; it does not need a recording server or screenshots. Host PTY recording/replay from the original harness remains available for byte-level ANSI parser demonstrations.
