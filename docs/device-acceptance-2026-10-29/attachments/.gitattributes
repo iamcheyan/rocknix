@@ -1,0 +1,4 @@
+# Preserved build artifacts / audit exports: original bytes, no whitespace lint
+*.patch -whitespace
+*.txt -whitespace
+*.tar.gz -whitespace -text

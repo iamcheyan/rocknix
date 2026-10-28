@@ -1,0 +1,1458 @@
+diff --git i/AGENTS.md w/AGENTS.md
+index 55650e631c..819837a89c 100644
+--- i/AGENTS.md
++++ w/AGENTS.md
+@@ -40,6 +40,7 @@ Before outputting code or finalizing a PR description, you **MUST** run your out
+ ## 3. HX90 / RG34XX Build and Flash Notes
+ 
+ * `hx90` is the remote build host. Build and flash artifacts are under `~/development/rocknix/target/`.
++* All compilation and builds MUST run on `hx90`, including package/image builds, cross-compilation, helper binaries, and tests that compile code (for example `cargo test`, `go test`, or Bun/PocketJS compilation). NEVER compile on the Debian control machine. Debian is for source editing, orchestration, read-only inspection, and browser/device access only.
+ * The handheld for this project is an Anbernic RG34XX and its known-good memory variant is DDR4. Prefer the matching `ROCKNIX-H700.*-DDR4.img.gz` artifact. Do not infer the RAM type from a stale card's device-tree overlay alone: an older card showed a DDR3 overlay, while `~/Downloads/ROCKNIX-H700.aarch64-20261001-DDR4.img.gz` records the known DDR4 variant.
+ * The RG34XX boot device tree is `sun50i-h700-anbernic-rg34xx.dtb`. In `projects/ROCKNIX/config.xml`, the DDR4 image uses that FDT without the DDR3-only `sun50i-h700-anbernic-rg35xx-2024-ddr3.dtbo` overlay. Keep device-tree selection and RAM/U-Boot variant as separate checks.
+ * Before flashing, identify the TF card by `lsblk` (removable flag, capacity, model, and current partitions), ensure it is not mounted, and confirm it is not a host disk. Write the decompressed image to the whole card device (for example `/dev/sdX`, not a partition), wait for `conv=fsync` to finish, then read back and compare the image bytes before ejecting.
+diff --git i/docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md w/docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md
+index 7456a045b9..7a6a90126d 100644
+--- i/docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md
++++ w/docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md
+@@ -1,6 +1,9 @@
+ # CPR77 Phase 3 implementation log
+ 
+-Status: partial PoC; hardware launch and release image acceptance blocked.
++Historical PoC report. Current H700 migration work is tracked in
++[H700_POCKETJS_MIGRATION.md](H700_POCKETJS_MIGRATION.md).
++
++Status at the time of this report: partial PoC; hardware launch and release image acceptance blocked.
+ 
+ ## Source and upstream behavior
+ 
+diff --git i/projects/ROCKNIX/devices/H700/options w/projects/ROCKNIX/devices/H700/options
+index 689ec2bf93..1f51a0c45e 100644
+--- i/projects/ROCKNIX/devices/H700/options
++++ w/projects/ROCKNIX/devices/H700/options
+@@ -47,15 +47,16 @@
+ 
+   # For maximum cross compatbility
+     PREFER_GLES="yes"
++    OPENGL="no"
+ 
+   # Batteryplus voltage-based battery percentage daemon (yes / no)
+     BATTERYPLUS_SUPPORT="yes"
+ 
+   # Displayserver to use (wl / no)
+-    DISPLAYSERVER="wl"
++    DISPLAYSERVER="no"
+ 
+   # Windowmanager to use (weston / swaywm-env / no)
+-    WINDOWMANAGER="swaywm-env"
++    WINDOWMANAGER="none"
+ 
+   # Additional drivers to install:
+   # for a list of additional drivers see packages/linux-drivers
+@@ -77,17 +78,18 @@
+     NFS_SUPPORT="no"
+     SAMBA_SERVER="no"
+     SFTP_SERVER="yes"
++    LOCAL_LOGIN="yes"
+     SIMPLE_HTTP_SERVER="yes"
+     ZEROTIER_SUPPORT="no"
+     WIREGUARD_SUPPORT="no"
+-    MODULES_PKG="yes"
++    MODULES_PKG="no"
+     DEBUG_PACKAGES="no"
+     HTOP_TOOL="yes"
+     BTOP_TOOL="yes"
+     NANO_EDITOR="yes"
+ 
+   # Additional packages to install
+-    ADDITIONAL_PACKAGES="heya xmplayer umtprd adbd"
++    ADDITIONAL_PACKAGES="pocketjs-runtime heya xmplayer commander umtprd adbd"
+ 
+   # Debug tty path
+     DEBUG_TTY="/dev/ttyS0"
+diff --git i/projects/ROCKNIX/packages/apps/heya/integrations/rocknix/README.md w/projects/ROCKNIX/packages/apps/heya/integrations/rocknix/README.md
+index 561ae5a4ff..39b285293d 100644
+--- i/projects/ROCKNIX/packages/apps/heya/integrations/rocknix/README.md
++++ w/projects/ROCKNIX/packages/apps/heya/integrations/rocknix/README.md
+@@ -5,7 +5,9 @@ H700 frontend quirk live in [iamcheyan/rocknix](https://github.com/iamcheyan/roc
+ ROCKNIX downloads a pinned heya source archive and builds it with its ARM64 Go/SDL2
+ toolchain. The local desktop preview builds the sibling heya checkout instead.
+ 
+-The boot sequence is rocknix-autostart → H700 quirks → app seeder → sway + heya.
++On the H700 KMS image, the boot sequence is rocknix-autostart → H700 quirks →
++app seeder → PocketJS. The heya package installs its ROCKNIX service from the
++authoritative package recipe; this directory contains integration assets only.
+ 
+ When `DEVELOPER_MODE=true` (or `PROJECT_DEVELOPER_MODE=true`) is set for the
+ ROCKNIX build, the package builds and installs `/usr/bin/devexec` and rewrites
+diff --git i/projects/ROCKNIX/packages/apps/heya/package.mk w/projects/ROCKNIX/packages/apps/heya/package.mk
+index eb90dd1fa6..38766ae243 100644
+--- i/projects/ROCKNIX/packages/apps/heya/package.mk
++++ w/projects/ROCKNIX/packages/apps/heya/package.mk
+@@ -8,7 +8,7 @@ PKG_ARCH="any"
+ PKG_LICENSE="MIT"
+ PKG_SITE="https://github.com/iamcheyan/heya"
+ PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
+-PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb commander foot rocknix-hotkey"
++PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb commander rocknix-hotkey"
+ PKG_LONGDESC="Lightweight JSON-driven launcher shell for Linux handhelds"
+ PKG_TOOLCHAIN="manual"
+ 
+@@ -25,7 +25,7 @@ make_target() {
+   export CGO_CFLAGS="${CFLAGS}"
+   export CGO_LDFLAGS="${LDFLAGS} -lSDL2 -lSDL2_ttf"
+   export GOCACHE="${PKG_BUILD}/.gocache"
+-  export GOPATH="${PKG_BUILD}/.gopath"
++  export GOPATH="${BUILD}/.gopath-heya"
+   export GOFLAGS="-mod=readonly"
+   export GOTOOLCHAIN=local
+ 
+@@ -67,6 +67,9 @@ makeinstall_target() {
+   mkdir -p "${INSTALL}/usr/share/heya"
+   install -m 0644 "${PKG_DIR}/config/removed-apps" \
+     "${INSTALL}/usr/share/heya/removed-apps"
++  if [ "${DISPLAYSERVER}" != "wl" ]; then
++    echo terminal >> "${INSTALL}/usr/share/heya/removed-apps"
++  fi
+   if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+     install -m 0755 "${PKG_BUILD}/devexec" "${INSTALL}/usr/bin/devexec"
+   fi
+@@ -80,14 +83,18 @@ makeinstall_target() {
+   install -m 0644 "${PKG_BUILD}/themes/default/theme.json" \
+     "${INSTALL}/usr/share/heya/themes/default/theme.json"
+ 
+-  mkdir -p "${INSTALL}/usr/lib/systemd/system"
+-  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+-    sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
+-      "${PKG_DIR}/integrations/rocknix/heya.service" \
+-      > "${INSTALL}/usr/lib/systemd/system/heya.service"
+-  else
+-    install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
+-      "${INSTALL}/usr/lib/systemd/system/heya.service"
++  if [ "${DISPLAYSERVER}" = "wl" ]; then
++  if [ "${DISPLAYSERVER}" = "wl" ]; then
++    mkdir -p "${INSTALL}/usr/lib/systemd/system"
++    if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
++      sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
++        "${PKG_DIR}/integrations/rocknix/heya.service" \
++        > "${INSTALL}/usr/lib/systemd/system/heya.service"
++    else
++      install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
++        "${INSTALL}/usr/lib/systemd/system/heya.service"
++    fi
++    fi
+   fi
+ 
+   mkdir -p "${INSTALL}/usr/lib/autostart/common"
+@@ -96,5 +103,5 @@ makeinstall_target() {
+ }
+ 
+ post_install() {
+-  enable_service heya.service
++  [ "${DISPLAYSERVER}" = "wl" ] && enable_service heya.service || true
+ }
+diff --git i/projects/ROCKNIX/packages/apps/heya/scripts/disk-browser w/projects/ROCKNIX/packages/apps/heya/scripts/disk-browser
+index 0e6205ff54..8e9722b791 100755
+--- i/projects/ROCKNIX/packages/apps/heya/scripts/disk-browser
++++ w/projects/ROCKNIX/packages/apps/heya/scripts/disk-browser
+@@ -10,6 +10,37 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/usr/conf
+ cd /storage
+ 
+ if [ -f /usr/share/commander/commander.cfg ]; then
+-  exec /usr/bin/commander --config-prelude /usr/share/commander/commander.cfg
++  commander_args=(--config-prelude /usr/share/commander/commander.cfg)
++else
++  commander_args=()
+ fi
+-exec /usr/bin/commander
++mapper_pid=
++cleanup() {
++  if [ -n "${mapper_pid}" ]; then
++    kill "${mapper_pid}" 2>/dev/null || true
++    wait "${mapper_pid}" 2>/dev/null || true
++  fi
++}
++trap cleanup EXIT
++trap 'exit 143' HUP INT TERM
++
++export MC_DISK_ROOT=/storage/disk
++mkdir -p "${MC_DISK_ROOT}"
++for mount in /storage /storage/games-external /media/* /run/media/*
++do
++  [ -d "${mount}" ] || continue
++  [ "$(mountpoint -q "${mount}" && echo mounted)" = mounted ] || continue
++  [ "${mount}" = /storage ] || ln -sfn "${mount}" "${MC_DISK_ROOT}/$(basename "${mount}")"
++done
++
++if [ "${SDL_VIDEODRIVER:-}" = kmsdrm ]; then
++  cd "${MC_DISK_ROOT}"
++  exec /usr/bin/commander "${commander_args[@]}"
++fi
++
++if command -v gptokeyb >/dev/null 2>&1; then
++  gptokeyb disk -c /usr/share/xmplayer/config/disk.gptk &
++  mapper_pid=$!
++fi
++
++foot -a disk -e mc --nomouse "${MC_DISK_ROOT}"
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/README.md w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/README.md
+index 1f06b1df9c..3d703f0c38 100644
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/README.md
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/README.md
+@@ -1,5 +1,24 @@
+-# Hello PocketJS for ROCKNIX H700
++# PocketShell Library
+ 
+-Built from the PocketJS `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f` workspace with `pocket compile` against the H700 Linux-KMS profile. The exact `.pocket` output is copied here by the package preparation step; it embeds no host binary or profile asset.
++PocketShell Library is the content consumption workspace for TXT, Markdown, LOG, README, Agent reports, and technical documents on the 720×480 RG34XX panel. It uses PocketJS-native Solid UI and the native filesystem bridge. It does not launch a Linux reader process.
+ 
+-The app uses the native logical viewport selected by the runtime profile. A confirms the input binding; B is the runtime exit action when supported by the host.
++## Architecture
++
++- `library-model.ts`: pure document/state types, lazy section extraction, progress, search, and UTF-8 chunk helpers behind `FileSystem`.
++- `library.tsx`: PocketJS Solid Library UI, controller state machine, OSK search, reading, bookmarks, and settings.
++- `pocketshell-library.rs`: host bridge with roots `/storage/docs`, `/storage/books`, `/storage/reports`, `/storage/library`; each read window is capped at 16 KiB.
++- Persistence: `/storage/pocketshell/library/{progress,bookmarks,history,settings}.json`.
++
++Markdown headings become lazy chapter entries. Paragraphs, lists, code fences, quotes and links remain readable plain text. A/B navigate and select, D-pad scrolls lines, left/right jump, L1/R1 page, L/R chapter navigation, X bookmarks, long X opens bookmarks, Y opens search, START opens settings. The PocketJS system `TextField` provides keyboard input. Agent actions remain placeholders.
++
++## Build
++
++`package.mk` copies the app into the pinned PocketJS scratch build tree, checks/compiles `pocket.json` to `library.pocket`, and compiles `boot-pocket.json` to the immutable boot package. `patch-runtime.py` installs `pocketshell-library.rs` into the guest host and exposes `ui.__library(command)`.
++
++## Data and OTA
++
++The native state root defaults to `/storage/pocketshell/library`. Host checks may override it with `POCKETSHELL_LIBRARY_DATA_ROOT`; content roots can be overridden with `POCKETSHELL_LIBRARY_ROOTS` (platform path list). State writes use temp-file rename; invalid JSON uses in-memory defaults without overwriting the corrupt source. The data directory is on persistent `/storage`, outside OS packages, slot trees, and OTA staging. See `docs/heya-core-minimal/POCKETSHELL_LIBRARY.md` for the snapshot contract and local OTA/Remote Dev boundaries.
++
++## Host harness
++
++Use `node tools/pocketshell-dev/library-harness.js` from the repo root after compiling `library.pocket` with the same pinned PocketJS web compiler. It serves the same PocketJS browser host assets and app bundle, synthetic fixture roots, and a temporary in-memory data root. Fixtures are under `fixtures/`; they do not represent real user history.
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/main.tsx w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/main.tsx
+index df96be1712..17bd066d7f 100644
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/main.tsx
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/main.tsx
+@@ -1,12 +1,344 @@
+-// @title Hello PocketJS on ROCKNIX H700
++import { LAUNCHER_APPS } from "./launcher-catalog";
++import { createSignal, Index, onMount } from "solid-js";
+ import { mount } from "@pocketjs/framework/solid";
+-import { ActionHandler, Text, View } from "@pocketjs/framework/solid/components";
+-import { BTN } from "@pocketjs/framework/input";
++import { Text, View } from "@pocketjs/framework/solid/components";
++import { BTN, onTextEvent, type TextEvent } from "@pocketjs/framework/input";
++import { onFrame } from "@pocketjs/framework/lifecycle";
+ 
+-mount(() => (
+-  <View class="w-full h-full bg-slate-950 p-8 flex-col">
+-    <Text class="text-2xl font-bold text-white">Hello PocketJS on ROCKNIX H700</Text>
+-    <Text class="text-lg text-emerald-300">A: confirm · B: return</Text>
+-    <ActionHandler button={BTN.CONFIRM} onPress={() => {}} />
+-  </View>
+-));
++type HostUI = { __launcher?: (command: string) => string; __pocketshell?: (command: string) => string };
++type Run = { text: string; fg: number; bg: number; flags: number };
++
++const NAMES = ["APPS", "FILES", "VIM", "TOP", "LOG"];
++const LOG_WORKSPACE = 4;
++// 360×240 logical pixels scale 2× to the LCD; 12px text appears at 24px.
++const ROWS = 12;
++
++const abgr = (rgb: number) => {
++  const r = rgb & 0xff;
++  const g = (rgb >> 8) & 0xff;
++  const b = (rgb >> 16) & 0xff;
++  return (((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0);
++};
++
++const emptyRow = (): Run[] => [];
++
++mount(() => {
++  const global = globalThis as typeof globalThis & { ui?: HostUI; __pocketshellOutput?: string };
++  const host = global.ui;
++  const [active, setActive] = createSignal(0);
++  const [launcherOpen, setLauncherOpen] = createSignal(true);
++  const [launcherPage, setLauncherPage] = createSignal("apps");
++  const [launcherSelection, setLauncherSelection] = createSignal(0);
++  const [launcherNotice, setLauncherNotice] = createSignal("");
++  const [volume, setVolume] = createSignal(50);
++  const [brightness, setBrightness] = createSignal(80);
++  const serviceKeys = ["adbusb", "ssh", "avahi", "ftp", "http", "rsyncd", "samba", "syncthing", "telnet", "pocketshell-dev"];
++  const settings = ["Volume -", "Volume +", "Brightness -", "Brightness +", "Wi-Fi on", "Wi-Fi off", "Bluetooth on", "Bluetooth off", ...serviceKeys.map((s) => `Toggle ${s}`), "Network / USB settings"];
++  const launcherRows = () => launcherPage() === "settings" ? settings : [...LAUNCHER_APPS.map((a) => a.name), "Settings"];
++  const moveLauncher = (step: number) => setLauncherSelection((launcherSelection() + step + launcherRows().length) % launcherRows().length);
++  const launcherCommand = (value: string) => setLauncherNotice(host?.__launcher?.(value) ?? "Launcher bridge unavailable");
++  const openLauncherEntry = () => {
++    const selected = launcherSelection();
++    if (launcherPage() === "settings") {
++      if (selected < 4) {
++        const control = selected < 2 ? "volume" : "brightness";
++        const value = Math.max(control === "brightness" ? 5 : 0, Math.min(100, Number(host?.__launcher?.(`LEVEL\t${control}`) ?? "NaN") + (selected % 2 ? 5 : -5)));
++        if (!Number.isFinite(value)) { setLauncherNotice("Current level unavailable"); return; }
++        if (control === "volume") setVolume(value); else setBrightness(value);
++        launcherCommand(`CONTROL\t${control}\t${value}`);
++      } else if (selected < 8) launcherCommand(`CONTROL\t${selected < 6 ? "wifi" : "bluetooth"}\t${selected % 2 ? "off" : "on"}`);
++      else if (selected < 8 + serviceKeys.length) launcherCommand(`SERVICE\t${serviceKeys[selected - 8]}.enabled`);
++      else { setLauncherOpen(false); send("RESET\t0"); send("0\tTEXT /usr/libexec/pocketjs-legacy-settings"); send("0\tKEY ENTER"); }
++      return;
++    }
++    if (selected === LAUNCHER_APPS.length) { setLauncherPage("settings"); setLauncherSelection(0); return; }
++    const app = LAUNCHER_APPS[selected];
++    if (app.kind === "native") { launcherCommand(`LAUNCH\t${app.id}`); return; }
++    setLauncherOpen(false);
++    send("RESET\t0");
++    if (app.id !== "terminal") { send(`0\tTEXT ${app.id === "gamepad" ? "/usr/bin/evtest /dev/input/event3" : `/usr/bin/heya-tool ${app.id} --inside`}`); send("0\tKEY ENTER"); }
++  };
++  const launcherKey = (key: string) => {
++    if (key === "ArrowUp") moveLauncher(-1);
++    else if (key === "ArrowDown") moveLauncher(1);
++    else if (key === "Enter") openLauncherEntry();
++    else if (key === "Escape") { setLauncherPage("apps"); setLauncherSelection(0); }
++  };
++  const [lines, setLines] = createSignal<Run[][]>(Array.from({ length: ROWS }, emptyRow));
++  const [cursor, setCursor] = createSignal({ row: 0, col: 0, visible: false });
++  const [input, setInput] = createSignal("");
++  const [commandOpen, setCommandOpen] = createSignal(false);
++  const [inputOpen, setInputOpen] = createSignal(false);
++  const [inputLayout, setInputLayout] = createSignal(0);
++  const [inputFunction, setInputFunction] = createSignal(0);
++  const [inputHistory, setInputHistory] = createSignal<string[]>([]);
++  const [inputSelection, setInputSelection] = createSignal(0);
++  const INPUT_TABS = ["Keyboard", "History", "Commands", "Phrases", "Sessions", "Agent"];
++  const INPUT_LAYOUTS = [
++    ["A B C D E F G", "H I J K L M N", "O P Q R S T U", "V W X Y Z"],
++    ["1 2 3 4 5", "6 7 8 9 0", ". , : ;", "/ - _ @"],
++    ["! ? # $ %", "& * + =", "( ) [ ]", "{ } < >", "| \\ ~ ^"],
++    ["/ ~ . .. - _ : @", "root home storage roms", "mnt tmp config logs", "usr bin"],
++  ];
++  const INPUT_ENTRIES: string[][][] = [[], [],
++    [["Open Shell", ""], ["Connect NAS", "ssh nas"], ["Restart WiFi", "sudo systemctl restart NetworkManager"], ["Mount USB", "udisksctl mount -b"], ["Check Logs", "journalctl -f"], ["Update ROMs", "/usr/bin/rocknix-roms-update"], ["Shutdown", "sudo poweroff"], ["Reboot", "sudo reboot"], ["System Info", "uname -a"]],
++    [["SSH", "ssh user@host"], ["Git Clone", "git clone"], ["Git Pull", "git pull"], ["Rsync", "rsync -av"], ["Journal", "journalctl -f"], ["tmux", "tmux attach"]],
++    [["PVE", "ssh pve"], ["DEVBOX", "ssh devbox"], ["NAS", "ssh nas"], ["CLAUDE", "tmux attach -t claude"], ["AIDER", "tmux attach -t aider"], ["CODEX", "tmux attach -t codex"], ["Remote Agent", "ssh agent"]],
++    ["查看日志", "查看异常", "分析系统状态", "检查存储空间", "检查网络连接", "更新 ROM 库", "生成 SSH 配置", "管理 Workspace", "生成脚本", "生成命令"].map((label) => [label, `请${label}，检查当前系统并给出结论。`]),
++  ];
++  const inputEntries = () => inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
++  const moveInputSelection = (direction: number) => {
++    const count = inputFunction() === 0 ? INPUT_LAYOUTS[inputLayout()].flatMap((row) => row.split(" ")).length + 3 : inputEntries().length;
++    setInputSelection((index) => count ? (index + direction + count) % count : 0);
++  };
++  const inputListStart = () => Math.max(0, inputSelection() - 7);
++  let armed = false;
++  let previousButtons = 0;
++  const send = (command: string) => host?.__pocketshell?.(command) ?? "";
++  const log = (entry: string) => send(`LOG\t${entry.replace(/[\t\r\n]/g, " ").slice(0, 120)}`);
++
++  const applyRows = (payload: string) => {
++    if (!payload) return;
++    const changed = new Map<number, Run[]>();
++    let nextCursor: { row: number; col: number; visible: boolean } | null = null;
++    for (const record of payload.split("\n")) {
++      if (!record) continue;
++      const fields = record.split("\t");
++      if (fields[0] === "C") {
++        nextCursor = { row: Number(fields[1]) || 0, col: Number(fields[2]) || 0, visible: fields[3] === "1" };
++        continue;
++      }
++      if (fields[0] !== "L") continue;
++      const row = Number(fields[1]);
++      if (!Number.isInteger(row) || row < 0 || row >= ROWS) continue;
++      const runs: Run[] = [];
++      for (const field of fields.slice(2)) {
++        const parts = field.split(":");
++        if (parts.length < 4) continue;
++        const fg = parseInt(parts[0], 16);
++        const bg = parseInt(parts[1], 16);
++        const flags = Number(parts[2]) || 0;
++        const text = parts.slice(3).join(":").replace(/\\t/g, "    ").replace(/\\n/g, "").replace(/\\\\/g, "\\");
++        if (!text) continue;
++        runs.push({ text, fg, bg, flags });
++      }
++      changed.set(row, runs);
++    }
++    if (changed.size > 0) {
++      setLines((old) => old.map((runs, index) => changed.get(index) ?? runs));
++    }
++    if (nextCursor) setCursor(nextCursor);
++  };
++
++  const switchTo = (id: number) => {
++    const next = (id + NAMES.length) % NAMES.length;
++    if (next === active()) return;
++    setActive(next);
++    setLines(Array.from({ length: ROWS }, emptyRow));
++    setCursor({ row: 0, col: 0, visible: false });
++    send(`ACTIVATE\t${next}`);
++    applyRows(send(`SNAP\t${next}`));
++    log(`Workspace Activated WS${next + 1}`);
++  };
++
++  const sendKey = (key: string) => send(`${active()}\tKEY ${key}`);
++  const submitInput = () => {
++    const value = input().trim();
++    if (value) setInputHistory((items) => [value, ...items.filter((item) => item !== value)]);
++    if (value) { send(`${active()}\tTEXT ${value}`); send(`${active()}\tKEY ENTER`); }
++    setInput(""); setInputOpen(false);
++  };
++  const selectInputEntry = (index: number) => {
++    if (inputFunction() === 0) {
++      const chars = [...INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")), "SPACE", "BACKSPACE", "ENTER"];
++      const value = chars[index];
++      if (value === "SPACE") setInput((text) => text + " ");
++      else if (value === "BACKSPACE") setInput((text) => text.slice(0, -1));
++      else if (value === "ENTER") submitInput();
++      else if (value) setInput((text) => text + value);
++      return;
++    }
++    const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
++    if (inputFunction() === 2 && index >= 6) return;
++    if (entries[index]) setInput(entries[index][1]);
++  };
++  const deleteInput = (index: number) => {
++    if (inputFunction() === 1) setInputHistory((items) => items.filter((_, i) => i !== index));
++  };
++
++  onMount(() => {
++    send("RESIZE\t12x46");
++    for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
++    log("Workspace Created WS1..WS5");
++    onTextEvent((event: TextEvent) => {
++      if (active() === 0 && launcherOpen()) { if (event.kind === "key" && event.pressed) launcherKey(event.key); return true; }
++      if (event.kind === "commit") {
++        if (inputOpen()) setInput((value) => value + event.text);
++        else if (commandOpen()) setInput((value) => value + event.text);
++        else if (active() < LOG_WORKSPACE) send(`${active()}\tTEXT ${event.text}`);
++        return true;
++      }
++      if (event.kind !== "key" || !event.pressed) return false;
++      if (inputOpen()) {
++        if (event.key === "Escape") setInputOpen(false);
++        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
++        else if (event.key === "Enter") submitInput();
++        return true;
++      }
++      if (commandOpen()) {
++        if (event.key === "Escape") { setCommandOpen(false); setInput(""); }
++        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
++        else if (event.key === "Enter") {
++          const value = input(); setInput(""); setCommandOpen(false); switchTo(0);
++          if (value) send(`0\tTEXT ${value}`); send("0\tKEY ENTER"); log("Process Input WS1");
++        }
++        return true;
++      }
++      const key = event.key.replace(/^Control\+/, "CTRL_").toUpperCase();
++      if (["ENTER", "BACKSPACE", "ARROWUP", "ARROWDOWN", "ARROWLEFT", "ARROWRIGHT", "TAB", "ESC", "CTRL_C", "CTRL_D", "CTRL_L", "HOME", "END"].includes(key)) sendKey(key.replace("ARROW", ""));
++      return true;
++    });
++  });
++
++  onFrame((buttons: number) => {
++    if (buttons === 0) armed = true;
++    const payload = global.__pocketshellOutput ?? "";
++    if (payload) { delete global.__pocketshellOutput; applyRows(payload); }
++    if (active() === LOG_WORKSPACE && armed && !inputOpen()) applyRows(send(`SNAP\t${LOG_WORKSPACE}`));
++    if (!armed) { previousButtons = buttons; return; }
++    const pressed = buttons & ~previousButtons;
++    previousButtons = buttons;
++    if (active() === 0 && launcherOpen()) {
++      if (pressed & BTN.UP) moveLauncher(-1);
++      if (pressed & BTN.DOWN) moveLauncher(1);
++      if (pressed & BTN.CIRCLE) openLauncherEntry();
++      if (pressed & BTN.CROSS) { setLauncherPage("apps"); setLauncherSelection(0); }
++      if (pressed & BTN.LEFT) switchTo(active() - 1);
++      if (pressed & BTN.RIGHT || pressed & BTN.START) switchTo(active() + 1);
++      return;
++    }
++    if (inputOpen()) {
++      const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
++      const selectionCount = inputFunction() === 0
++        ? INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + 3
++        : entries.length;
++      if (pressed & BTN.LEFT) setInputLayout((inputLayout() + 3) % 4);
++      if (pressed & BTN.RIGHT) setInputLayout((inputLayout() + 1) % 4);
++      if (pressed & BTN.LTRIGGER) setInputFunction((inputFunction() + 5) % 6);
++      if (pressed & BTN.RTRIGGER) setInputFunction((inputFunction() + 1) % 6);
++      if (pressed & BTN.UP) setInputSelection((inputSelection() + Math.max(1, selectionCount) - 1) % Math.max(1, selectionCount));
++      if (pressed & BTN.DOWN) setInputSelection((inputSelection() + 1) % Math.max(1, selectionCount));
++      if (pressed & BTN.CIRCLE) selectInputEntry(inputSelection());
++      if (pressed & BTN.CROSS) setInputOpen(false);
++      if (pressed & BTN.START) setInputFunction((inputFunction() + 1) % 6);
++      if (pressed & BTN.SELECT) submitInput();
++      return;
++    }
++    if (pressed & BTN.LEFT) switchTo(active() - 1);
++    if (pressed & BTN.RIGHT) switchTo(active() + 1);
++    if (pressed & BTN.LTRIGGER) sendKey("PGUP");
++    if (pressed & BTN.RTRIGGER) sendKey("PGDN");
++    if (pressed & BTN.UP) sendKey("UP");
++    if (pressed & BTN.DOWN) sendKey("DOWN");
++    if (pressed & BTN.CIRCLE) { sendKey("ENTER"); log(`Process Input WS${active() + 1}`); }
++    if (pressed & BTN.CROSS) { sendKey("ESC"); switchTo(0); setLauncherOpen(true); }
++    if (pressed & BTN.START) switchTo(active() + 1);
++    if (pressed & BTN.SELECT) { setInput(""); setInputOpen(true); setInputFunction(0); }
++  });
++
++  const runColor = (run: Run) =>
++    (run.flags & 2) !== 0
++      ? { textColor: abgr(run.bg), bgColor: abgr(run.fg) }
++      : { textColor: abgr(run.fg), bgColor: abgr(run.bg) };
++
++  // The panel has no block cursor primitive, so the cursor is drawn as an
++  // inverted cell inside the row's runs.
++  const withCursor = (runs: Run[], row: number): Run[] => {
++    const c = cursor();
++    if (!c.visible || c.row !== row) return runs;
++    const out: Run[] = [];
++    let col = 0;
++    for (const run of runs) {
++      const chars = [...run.text];
++      const start = col;
++      const end = col + chars.length;
++      col = end;
++      if (c.col < start || c.col >= end) { out.push(run); continue; }
++      const offset = c.col - start;
++      if (offset > 0) out.push({ ...run, text: chars.slice(0, offset).join("") });
++      out.push({ ...run, text: chars[offset], flags: run.flags ^ 2 });
++      if (offset + 1 < chars.length) out.push({ ...run, text: chars.slice(offset + 1).join("") });
++    }
++    if (c.col >= col) out.push({ text: " ", fg: 0xe5e5e5, bg: 0xe5e5e5, flags: 0 });
++    return out;
++  };
++
++  return (
++    <View class="w-[360px] h-[240px] bg-slate-950">
++      <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center">
++        <Text class="text-2xl font-bold text-emerald-300">◀ WS{active() + 1}:{active() === 0 && !launcherOpen() ? "TERMINAL" : NAMES[active()]} ▶</Text>
++        <View class="absolute left-[326px] top-[4px] w-[24px] h-[16px] items-center"><Text class="text-base text-emerald-300">{"\uf240"}</Text></View>
++      </View>
++
++      {active() === 0 && launcherOpen() ? (
++        <View class="absolute left-[10px] top-[28px] w-[340px] h-[192px] flex-col">
++          <Text class="text-xs text-emerald-300">{launcherPage() === "settings" ? "Settings" : "Applications"} · {launcherSelection() + 1}/{launcherRows().length}</Text>
++          <Index each={launcherRows().slice(Math.floor(launcherSelection() / 8) * 8, Math.floor(launcherSelection() / 8) * 8 + 8)}>{(name, i) => (
++            <View class={Math.floor(launcherSelection() / 8) * 8 + i === launcherSelection() ? "w-[340px] h-[19px] bg-slate-700" : "w-[340px] h-[19px]"}><Text class="text-xs font-mono text-white">{Math.floor(launcherSelection() / 8) * 8 + i === launcherSelection() ? "> " : "  "}{name()}</Text></View>
++          )}</Index>
++          <Text class="text-2xs text-emerald-300">{launcherNotice()}</Text>
++        </View>
++      ) : (
++      <View class="absolute left-[10px] top-[28px] w-[340px] h-[192px] flex-col">
++        <Index each={lines()}>
++          {(runs, rowIndex) => (
++            <View class="w-[340px] h-[16px] flex-row">
++              <Index each={withCursor(runs(), rowIndex)}>
++                {(run) => {
++                  const c = runColor(run());
++                  return (
++                    <Text class="text-xs font-mono" style={{ textColor: c.textColor, bgColor: c.bgColor }}>
++                      {run().text}
++                    </Text>
++                  );
++                }}
++              </Index>
++            </View>
++          )}
++        </Index>
++        {commandOpen() ? (
++          <View class="absolute left-0 top-[176px] w-[340px] h-[16px] bg-slate-800">
++            <Text class="text-xs font-mono text-white">: {input()}█</Text>
++          </View>
++        ) : <View class="w-[0px] h-[0px]" />}
++      </View>
++      )}
++      {inputOpen() ? (
++        <View class="absolute left-0 top-0 w-[360px] h-[240px] bg-slate-950 flex-col">
++          <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center"><Text class="text-2xl font-bold text-emerald-300">INPUT</Text></View>
++          <View class="absolute left-[10px] top-[28px] w-[340px] h-[16px] bg-slate-800"><Text class="text-xs font-mono text-white">{">"} {input()}█</Text></View>
++          <View class="absolute left-[10px] top-[48px] w-[340px] h-[152px] flex-col">
++            {inputFunction() === 0 ? (
++              <>
++                <View class="w-[340px] h-[16px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
++                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[340px] h-[22px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].slice(0, row).reduce((count, line) => count + line.split(" ").length, 0) + col ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
++                <View class="w-[340px] h-[20px] flex-row"><Index each={["SPACE", "BACKSPACE", "ENTER"]}>{(label, i) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{label()}　</Text>}</Index></View>
++              </>
++            ) : (
++              <Index each={inputEntries().slice(inputListStart(), inputListStart() + 8)}>
++                {(entry, i) => <View class={inputSelection() === i + inputListStart() ? "w-[340px] h-[18px] bg-emerald-300" : "w-[340px] h-[18px] bg-slate-800"}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
++              </Index>
++            )}
++          </View>
++          <View class="absolute left-[5px] top-[202px] w-[350px] h-[16px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
++          <View class="absolute left-[10px] top-[220px] w-[340px] h-[16px]"><Text class="text-xs text-slate-500">L/R布局 · L1/R1功能 · A选择 · B退出</Text></View>
++        </View>
++      ) : <View class="w-[0px] h-[0px]" />}
++
++      {!inputOpen() ? <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
++        <Text class="text-xs text-slate-500">START 切换 · SELECT 输入 · A 确认 · B 返回</Text>
++      </View> : null}
++
++    </View>
++  );
++});
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/pocket.json w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/pocket.json
+index d2209c1ebf..0746cac7e3 100644
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/pocket.json
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/pocket.json
+@@ -1,9 +1,9 @@
+ {
+   "$schema": "https://pocketjs.dev/schema/pocket-2.json",
+   "pocket": 2,
+-  "id": "org.rocknix.hello-pocketjs",
+-  "name": "hello-pocketjs",
+-  "title": "Hello PocketJS",
++  "id": "org.rocknix.pocketjs-boot",
++  "name": "rocknix-pocketjs-boot",
++  "title": "KoroOS PocketJS",
+   "version": "0.1.0",
+   "engine": {
+     "capabilities": {
+@@ -15,15 +15,15 @@
+   },
+   "app": {
+     "entry": "main.tsx",
+-    "output": "hello-pocketjs",
++    "output": "rocknix-pocketjs-boot",
+     "framework": "solid",
+     "viewport": {
+       "fixed": {
+         "logical": [
+-          800,
+-          600
++          360,
++          240
+         ],
+-        "presentation": "native"
++        "presentation": "integer-fit"
+       }
+     }
+   }
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/package.mk w/projects/ROCKNIX/packages/apps/pocketjs-runtime/package.mk
+index 23fdfbaf64..f68338a175 100644
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/package.mk
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/package.mk
+@@ -1,35 +1,91 @@
+ # SPDX-License-Identifier: GPL-2.0
+ PKG_NAME="pocketjs-runtime"
+ PKG_VERSION="e6770376626a4de5c93eaa6fb048e7e9ffb81f9f"
++PKG_ARCH="aarch64"
+ PKG_LICENSE="MIT"
+ PKG_SITE="https://github.com/pocket-nexus/pocketjs"
+ PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
+-PKG_SHA256=""
+-PKG_DEPENDS_TARGET="toolchain rust:host libdrm"
+-PKG_NEED_UNPACK="$(get_pkg_directory rust)"
+-PKG_GIT_CLONE_BRANCH="main"
++PKG_SHA256="8b33c1f710323f384ecef63a85fae9a329aac11c7d8747d99c01bbdb538d2a87"
++PKG_DEPENDS_HOST="toolchain:host bun:host"
++PKG_DEPENDS_TARGET="toolchain cargo:host rust:host llvm:host pocketjs-runtime:host"
+ PKG_LONGDESC="PocketJS Linux DRM/KMS and fbdev JavaScript UI runtime"
+ PKG_TOOLCHAIN="manual"
+ PKG_BUILD_FLAGS="parallel"
+ 
+-make_profile() {
+-  mkdir -p "${PKG_BUILD}/generated"
+-  cp "${PKG_DIR}/config/h700-profile.rs" "${PKG_BUILD}/generated/pocket_profile.rs"
++make_host() {
++  export XDG_CACHE_HOME="${PKG_BUILD}/.cache"
++  mkdir -p "${XDG_CACHE_HOME}/pocket-nexus/transforms"
++  cd "${PKG_BUILD}"
++  export POCKETJS_FONT_REGULAR="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
++  export POCKETJS_FONT_BOLD="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
++  export POCKETJS_FONT_MONO="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
++  python3 "${PKG_DIR}/scripts/patch-build-fonts.py" "${PKG_BUILD}"
++  mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
++  cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"
++  cp -a "${PKG_DIR}/hello/." "${PKG_BUILD}/apps/rocknix-h700/"
++  bun install --frozen-lockfile --ignore-scripts
++  bun tools/pocket.ts profile export --config programs/rocknix-h700/pocket.runtime-config.ts \
++    --out "${PKG_BUILD}/generated"
++  bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/pocket.json
++  bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/pocket.json \
++    --output "${PKG_BUILD}/generated/boot.pocket"
++  bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/showcase/pocket.json
++  bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/showcase/pocket.json \
++    --output "${PKG_BUILD}/generated/showcase.pocket"
++  bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/library-pocket.json
++  bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
++    --target rocknix-h700-kms --manifest apps/rocknix-h700/library-pocket.json \
++    --output "${PKG_BUILD}/generated/library.pocket"
++}
++
++makeinstall_host() {
++  mkdir -p "${TOOLCHAIN}/share/pocketjs/h700"
++  install -m 0644 "${PKG_BUILD}/generated/"* "${TOOLCHAIN}/share/pocketjs/h700/"
+ }
+ 
+ make_target() {
+-  make_profile
+-  POCKETJS_PROFILE_RS="${PKG_BUILD}/generated/pocket_profile.rs" \
+-    cargo build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
+-      --package pocket-linux-kms --target "${TARGET_NAME}"
++  export RUSTC="${TOOLCHAIN}/bin/rustc"
++  export LIBCLANG_PATH="${TOOLCHAIN}/lib"
++  export LD_LIBRARY_PATH="${TOOLCHAIN}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
++  export BINDGEN_EXTRA_CLANG_ARGS="--target=${TARGET_NAME} --sysroot=${SYSROOT_PREFIX} -isystem ${SYSROOT_PREFIX}/usr/include"
++  python3 "${PKG_DIR}/scripts/patch-runtime.py" "${PKG_BUILD}"
++  python3 "${PKG_DIR}/scripts/prepare-workspace.py" "${PKG_BUILD}" "${TOOLCHAIN}/bin/cargo"
++  POCKETJS_PROFILE_RS="${TOOLCHAIN}/share/pocketjs/h700/pocket_profile.rs" \
++    "${TOOLCHAIN}/bin/cargo" build --manifest-path "${PKG_BUILD}/Cargo.toml" --locked --release \
++      --package pocket-linux-kms --package rocknix-pocketjs-bindings --target "${TARGET_NAME}"
++  "${TOOLCHAIN}/bin/cargo" build --manifest-path "${ROOT}/tools/pocketshell-dev/Cargo.toml" --locked --release --target "${TARGET_NAME}"
+ }
+ 
+ makeinstall_target() {
+-  install -D -m 0755 "${PKG_BUILD}/target/${TARGET_NAME}/release/pocket-linux-kms" \
++  install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-legacy-settings" "${INSTALL}/usr/libexec/pocketjs-legacy-settings"
++  install -D -m 0755 "${CARGO_TARGET_DIR}/${TARGET_NAME}/release/pocket-linux-kms" \
+     "${INSTALL}/usr/libexec/pocket-linux-kms"
+   install -D -m 0755 "${PKG_DIR}/scripts/pocket" "${INSTALL}/usr/bin/pocket"
+   install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-session" "${INSTALL}/usr/libexec/pocketjs-session"
+-  install -D -m 0644 "${PKG_DIR}/hello/README.md" "${INSTALL}/usr/share/pocketjs/apps/README.md"
++  install -D -m 0755 "${PKG_DIR}/scripts/pocket-session-run" "${INSTALL}/usr/bin/pocket-session-run"
++  install -D -m 0755 "${PKG_DIR}/scripts/pocketjs-native-launch" "${INSTALL}/usr/bin/pocketjs-native-launch"
++  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/boot.pocket" \
++    "${INSTALL}/usr/share/pocketjs/apps/boot.pocket"
++  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/showcase.pocket" \
++    "${INSTALL}/usr/share/pocketjs/apps/showcase.pocket"
++  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/library.pocket" \
++    "${INSTALL}/usr/share/pocketjs/apps/library.pocket"
++  install -D -m 0644 "${TOOLCHAIN}/share/pocketjs/h700/pocket-profile.json" \
++    "${INSTALL}/usr/share/pocketjs/pocket-profile.json"
++  install -D -m 0644 "${PKG_BUILD}/LICENSE" "${INSTALL}/usr/share/licenses/pocketjs-runtime/LICENSE"
+   install -D -m 0644 "${PKG_DIR}/system.d/pocketjs-kms.service" \
+     "${INSTALL}/usr/lib/systemd/system/pocketjs-kms.service"
++  install -D -m 0644 "${PKG_DIR}/system.d/pocketjs-recovery.service" \
++    "${INSTALL}/usr/lib/systemd/system/pocketjs-recovery.service"
++  install -D -m 0755 "${PKG_DIR}/scripts/rocknix-hotkeys" \
++    "${INSTALL}/usr/bin/rocknix-hotkeys"
++  install -D -m 0644 "${PKG_DIR}/system.d/rocknix-hotkeys.service" "${INSTALL}/usr/lib/systemd/system/rocknix-hotkeys.service"
++  install -D -m 0755 "${CARGO_TARGET_DIR}/${TARGET_NAME}/release/pocketshell-dev" "${INSTALL}/usr/libexec/pocketshell-dev"
++  install -D -m 0755 "${PKG_DIR}/scripts/pocketshell-dev" "${INSTALL}/usr/bin/pocketshell-dev"
++  install -D -m 0644 "${PKG_DIR}/system.d/pocketshell-dev.service" "${INSTALL}/usr/lib/systemd/system/pocketshell-dev.service"
+ }
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocket w/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocket
+index 9a5e31a5a1..e0ad93a6c6 100755
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocket
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocket
+@@ -1,10 +1,9 @@
+ #!/bin/sh
+ set -eu
+-/usr/bin/mkdir -p /storage/pocketjs/apps /storage/pocketjs/data /storage/pocketjs/cache /storage/pocketjs/logs
+-if [ "$#" -gt 0 ]; then
++mkdir -p /storage/pocketjs/apps /storage/pocketjs/data /storage/pocketjs/cache /storage/pocketjs/logs
++app=${POCKETJS_APP:-/usr/share/pocketjs/apps/boot.pocket}
++if [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
+   app=$1
+   shift
+-else
+-  app=/storage/pocketjs/apps/hello.pocket
+ fi
+ exec /usr/libexec/pocket-linux-kms --package "$app" "$@"
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketjs-session w/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketjs-session
+index fcc9efb52c..62d23901c6 100755
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketjs-session
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketjs-session
+@@ -1,5 +1,27 @@
+ #!/bin/sh
+ set -eu
+-/usr/bin/systemctl stop heya.service
+-/usr/bin/systemctl stop sway.service
+-/usr/libexec/pocket-linux-kms --package "${POCKETJS_APP:-/storage/pocketjs/apps/hello.pocket}"
++
++default=/usr/share/pocketjs/apps/boot.pocket
++app=${POCKETJS_APP:-$default}
++runtime=/usr/libexec/pocket-linux-kms
++mkdir -p /storage/pocketjs/apps /storage/pocketjs/data /storage/pocketjs/cache /storage/pocketjs/logs
++
++if ! "$runtime" --package "$app" --check; then
++  [ "$app" != "$default" ] || exit 1
++  echo "PocketJS: selected app rejected; starting the packaged boot app" >&2
++  app=$default
++  "$runtime" --package "$app" --check
++fi
++
++card=${POCKETJS_CARD:-}
++if [ -z "$card" ]; then
++  for status in /sys/class/drm/card*-*/status; do
++    [ -f "$status" ] || continue
++    [ "$(cat "$status")" = connected ] || continue
++    connector=${status%/status}
++    connector=${connector##*/}
++    card=/dev/dri/${connector%%-*}
++    break
++  done
++fi
++exec "$runtime" --package "$app" --card "${card:-/dev/dri/card0}"
+diff --git i/projects/ROCKNIX/packages/apps/pocketjs-runtime/system.d/pocketjs-kms.service w/projects/ROCKNIX/packages/apps/pocketjs-runtime/system.d/pocketjs-kms.service
+index bd296e532f..e87c6c20d1 100644
+--- i/projects/ROCKNIX/packages/apps/pocketjs-runtime/system.d/pocketjs-kms.service
++++ w/projects/ROCKNIX/packages/apps/pocketjs-runtime/system.d/pocketjs-kms.service
+@@ -1,16 +1,25 @@
+ [Unit]
+-Description=PocketJS Linux KMS foreground UI
++Description=ROCKNIX PocketJS direct KMS interface
+ After=local-fs.target systemd-user-sessions.service
+-Conflicts=sway.service
++Conflicts=pocketjs-recovery.service
+ Before=graphical.target
++OnFailure=pocketjs-recovery.service
++StartLimitIntervalSec=60
++StartLimitBurst=5
+ 
+ [Service]
+-Type=oneshot
+-RemainAfterExit=no
++Type=simple
++Environment=HOME=/storage
++EnvironmentFile=-/storage/.config/pocketjs/runtime.conf
++TTYPath=/dev/tty7
++StandardInput=tty
++TTYReset=yes
++TTYVHangup=yes
++ExecStartPre=/usr/bin/chvt 7
+ ExecStart=/usr/libexec/pocketjs-session
+-ExecStartPost=/usr/bin/systemctl start sway.service
+-ExecStopPost=/usr/bin/systemctl start sway.service
+-TimeoutStartSec=0
++Restart=always
++RestartSec=3
++TimeoutStopSec=5
+ KillMode=control-group
+ 
+ [Install]
+diff --git i/projects/ROCKNIX/packages/graphics/SDL2/package.mk w/projects/ROCKNIX/packages/graphics/SDL2/package.mk
+index fd045fdbc0..3d63f10770 100644
+--- i/projects/ROCKNIX/packages/graphics/SDL2/package.mk
++++ w/projects/ROCKNIX/packages/graphics/SDL2/package.mk
+@@ -10,6 +10,7 @@ PKG_SITE="https://www.libsdl.org/"
+ PKG_URL="https://www.libsdl.org/release/SDL2-${PKG_VERSION}.tar.gz"
+ PKG_DEPENDS_HOST="toolchain:host"
+ PKG_DEPENDS_TARGET="toolchain alsa-lib systemd dbus pulseaudio libdrm"
++PKG_STAMP="${DISPLAYSERVER} ${WINDOWMANAGER} ${OPENGL} ${OPENGLES} ${VULKAN}"
+ PKG_LONGDESC="Simple DirectMedia Layer is a cross-platform development library designed to provide low level access to audio, keyboard, mouse, joystick, and graphics hardware."
+ 
+ if [ ! "${OPENGL_SUPPORT}" = "no" ]; then
+@@ -61,7 +62,8 @@ if [ "${DISPLAYSERVER}" = "wl" ]; then
+                            -DVIDEO_X11=OFF \
+                            -DSDL_X11=OFF"
+ else
+-  PKG_CMAKE_OPTS_TARGET+=" -DVIDEO_WAYLAND=OFF \
++  PKG_CMAKE_OPTS_TARGET+=" -DSDL_WAYLAND=OFF \
++                           -DVIDEO_WAYLAND=OFF \
+                            -DVIDEO_WAYLAND_QT_TOUCH=ON \
+                            -DWAYLAND_SHARED=OFF \
+                            -DVIDEO_X11=OFF \
+diff --git i/projects/ROCKNIX/packages/graphics/cairo/package.mk w/projects/ROCKNIX/packages/graphics/cairo/package.mk
+index 5b90bbb3bd..f626f6dcbc 100644
+--- i/projects/ROCKNIX/packages/graphics/cairo/package.mk
++++ w/projects/ROCKNIX/packages/graphics/cairo/package.mk
+@@ -2,6 +2,7 @@
+ # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
+ 
+ . ${ROOT}/packages/graphics/cairo/package.mk
++PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
+ 
+ configure_package() {
+   if [ "${OPENGL}" != "no" ]; then
+diff --git i/projects/ROCKNIX/packages/graphics/mesa/package.mk w/projects/ROCKNIX/packages/graphics/mesa/package.mk
+index b18d2f26e7..24fb2af56e 100644
+--- i/projects/ROCKNIX/packages/graphics/mesa/package.mk
++++ w/projects/ROCKNIX/packages/graphics/mesa/package.mk
+@@ -1,5 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0-or-later
+-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
++# Copyright (C) 2009-2016 Stephan Raue
+ # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+ 
+ PKG_NAME="mesa"
+@@ -12,6 +12,8 @@ PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Ma
+ PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
+ PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
+ PKG_PATCH_DIRS+=" ${DEVICE}"
++# Reconfigure Mesa when the selected display or graphics backends change.
++PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
+ 
+ get_graphicdrivers
+ 
+@@ -70,7 +72,6 @@ elif [ "${DISPLAYSERVER}" = "wl" ]; then
+   export X11_INCLUDES=
+ else
+   PKG_MESON_OPTS_TARGET+="	-Dplatforms="" \
+-				-Dgallium-nine=false \
+ 				-Dglx=disabled \
+ 				-Dglvnd=disabled"
+ fi
+diff --git i/projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service w/projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service
+index 2dace17b47..e01d9e272f 100755
+--- i/projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service
++++ w/projects/ROCKNIX/packages/hardware/quirks/platforms/H700/090-ui_service
+@@ -5,5 +5,7 @@
+ 
+ ### Set the default device configuration
+ cat <<EOF >/storage/.config/profile.d/090-ui_service
+-UI_SERVICE="sway.service heya.service"
++UI_SERVICE="pocketjs-kms.service"
++export SDL_VIDEODRIVER=kmsdrm
++unset WAYLAND_DISPLAY DISPLAY
+ EOF
+diff --git i/projects/ROCKNIX/packages/multimedia/mpv/package.mk w/projects/ROCKNIX/packages/multimedia/mpv/package.mk
+index 3efdd2c254..f1f10b151a 100644
+--- i/projects/ROCKNIX/packages/multimedia/mpv/package.mk
++++ w/projects/ROCKNIX/packages/multimedia/mpv/package.mk
+@@ -10,6 +10,7 @@ PKG_LICENSE="GPLv2+"
+ PKG_SITE="https://github.com/mpv-player/mpv"
+ PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
+ PKG_DEPENDS_TARGET="toolchain ffmpeg SDL2 luajit libass libplacebo libdrm"
++PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
+ PKG_LONGDESC="Video player based on MPlayer/mplayer2 https://mpv.io"
+ 
+ if [ "${OPENGLES_SUPPORT}" = yes ]; then
+@@ -26,6 +27,14 @@ else
+   PKG_MESON_OPTS_TARGET+=" -Dwayland=disabled"
+ fi
+ 
++if [ "${DISPLAYSERVER}" = "x11" ]; then
++  PKG_MESON_OPTS_TARGET+=" -Dx11=enabled"
++  PKG_STAMP+=" x11"
++else
++  PKG_MESON_OPTS_TARGET+=" -Dx11=disabled -Dx11-clipboard=disabled"
++  PKG_STAMP+=" no-x11 no-x11-clipboard"
++fi
++
+ PKG_MESON_OPTS_TARGET+=" -Dsdl2-audio=enabled -Dsdl2-video=enabled -Dsdl2-gamepad=enabled"
+ 
+ if [ "${TARGET_ARCH}" = "x86_64" ]; then
+@@ -55,4 +64,11 @@ post_makeinstall_target() {
+       sed -i 's/^hwdec=.*/hwdec=v4l2m2m-copy,auto/' ${INSTALL}/etc/mpv/mpv.conf ${INSTALL}/usr/config/mpv/mpv.conf
+     ;;
+   esac
++
++  if [ "${DISPLAYSERVER}" = "no" ]; then
++    for config in "${INSTALL}/etc/mpv/mpv.conf" "${INSTALL}/usr/config/mpv/mpv.conf"; do
++      sed -i 's/^gpu-api=.*/gpu-api=opengl/' "$config"
++      echo 'gpu-context=drm' >> "$config"
++    done
++  fi
+ }
+diff --git i/projects/ROCKNIX/packages/rocknix/autostart/098-devservices w/projects/ROCKNIX/packages/rocknix/autostart/098-devservices
+index a2cbc9e5b5..d254de36c0 100755
+--- i/projects/ROCKNIX/packages/rocknix/autostart/098-devservices
++++ w/projects/ROCKNIX/packages/rocknix/autostart/098-devservices
+@@ -12,10 +12,11 @@ row() {
+     http.enabled) echo "http.service|" ;;
+     rsyncd.enabled) echo "rsyncd.service|" ;;
+     telnet.enabled) echo "telnet.socket|" ;;
++    pocketshell-dev.enabled) echo "pocketshell-dev.service|" ;;
+   esac
+ }
+ 
+-for setting in adbusb.enabled avahi.enabled ftp.enabled http.enabled rsyncd.enabled telnet.enabled
++for setting in adbusb.enabled avahi.enabled ftp.enabled http.enabled rsyncd.enabled telnet.enabled pocketshell-dev.enabled
+ do
+   [ "$(get_setting "${setting}")" = "1" ] || continue
+   row=$(row "${setting}")
+diff --git i/projects/ROCKNIX/packages/rocknix/config/system/configs/system.cfg w/projects/ROCKNIX/packages/rocknix/config/system/configs/system.cfg
+index dd6b9fc8ed..eb592c5713 100644
+--- i/projects/ROCKNIX/packages/rocknix/config/system/configs/system.cfg
++++ w/projects/ROCKNIX/packages/rocknix/config/system/configs/system.cfg
+@@ -156,6 +156,7 @@ psx.integerscale=0
+ psx.ratio=4/3
+ root.password=rocknix
+ rsyncd.enabled=0
++pocketshell-dev.enabled=0
+ samba.enabled=0
+ saturn.integerscale=0
+ saturn.ratio=4/3
+diff --git i/projects/ROCKNIX/packages/rocknix/sources/scripts/rocknix-services w/projects/ROCKNIX/packages/rocknix/sources/scripts/rocknix-services
+index 96e9968f09..c70c21a033 100755
+--- i/projects/ROCKNIX/packages/rocknix/sources/scripts/rocknix-services
++++ w/projects/ROCKNIX/packages/rocknix/sources/scripts/rocknix-services
+@@ -15,6 +15,7 @@ samba.enabled|smbd.service nmbd.service|
+ syncthing.enabled|syncthing.service|
+ telnet.enabled|telnet.socket|
+ ssh.enabled|sshd.service|
++pocketshell-dev.enabled|pocketshell-dev.service|
+ "
+ 
+ usage() {
+diff --git i/projects/ROCKNIX/packages/sysutils/system-utils/sources/scripts/input_sense w/projects/ROCKNIX/packages/sysutils/system-utils/sources/scripts/input_sense
+index 1749cc0863..0a4c257443 100755
+--- i/projects/ROCKNIX/packages/sysutils/system-utils/sources/scripts/input_sense
++++ w/projects/ROCKNIX/packages/sysutils/system-utils/sources/scripts/input_sense
+@@ -10,6 +10,12 @@
+ # set -e
+ set -o pipefail
+ 
++notify() {
++  if [ -x /usr/bin/mako-notify ]; then
++    /usr/bin/mako-notify "$@"
++  fi
++}
++
+ ### Summary
+ #   This script listens to input events and takes actions.
+ ###
+@@ -248,7 +254,7 @@ execute_action() {
+         ${FN_A_ACTION_UP}
+         if [ "${FN_A_ACTION_UP}" == "brightness up" ]; then
+           CUR_BRIGHTNESS=$(get_setting "display.brightness")
+-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
++          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+         fi
+         ;;
+       down)
+@@ -256,7 +262,7 @@ execute_action() {
+         ${FN_A_ACTION_DOWN}
+         if [ "${FN_A_ACTION_DOWN}" == "brightness down" ]; then
+           CUR_BRIGHTNESS=$(get_setting "display.brightness")
+-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
++          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+         fi
+         ;;
+     esac
+@@ -405,7 +411,7 @@ set +e
+           stop_volume_repeat
+           if [ "${FN_A_PRESSED}" = false ] && [ "${FN_B_PRESSED}" = false ]; then
+             CUR_VOLUME=$(get_setting "audio.volume")
+-            /usr/bin/mako-notify "Volume: ${CUR_VOLUME}%" -no-es
++            notify "Volume: ${CUR_VOLUME}%" -no-es
+           fi
+         fi
+       ;;
+@@ -426,7 +432,7 @@ set +e
+           stop_volume_repeat
+           if [ "${FN_A_PRESSED}" = false ] && [ "${FN_B_PRESSED}" = false ]; then
+             CUR_VOLUME=$(get_setting "audio.volume")
+-            /usr/bin/mako-notify "Volume: ${CUR_VOLUME}%" -no-es
++            notify "Volume: ${CUR_VOLUME}%" -no-es
+           fi
+         fi
+       ;;
+@@ -502,7 +508,7 @@ set +e
+           ${DEBUG} && log $0 "${FUNCTION_HOTKEY_DPAD_RIGHT_EVENT}${FUNCTION_HOTKEY_HAT_RIGHT_EVENT}: Brightness Up"
+           brightness up
+           CUR_BRIGHTNESS=$(get_setting "display.brightness")
+-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
++          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+         fi
+       ;;
+       (${FUNCTION_HOTKEY_DPAD_LEFT_EVENT}|${FUNCTION_HOTKEY_HAT_LEFT_EVENT})
+@@ -510,7 +516,7 @@ set +e
+           ${DEBUG} && log $0 "${FUNCTION_HOTKEY_DPAD_LEFT_EVENT}${FUNCTION_HOTKEY_HAT_LEFT_EVENT}: Brightness Down"
+           brightness down
+           CUR_BRIGHTNESS=$(get_setting "display.brightness")
+-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
++          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+         fi
+       ;;
+       (${FUNCTION_HOTKEY_TOUCH_EVENT})
+@@ -525,7 +531,7 @@ set +e
+           /usr/bin/rocknix-screenshot
+           # Display notification if 'success' exit code
+           SCREENSHOT_SUCCESS=$?
+-          [ "$SCREENSHOT_SUCCESS" -eq 0 ] && /usr/bin/mako-notify "Screenshot Saved" -no-ra
++          [ "$SCREENSHOT_SUCCESS" -eq 0 ] && notify "Screenshot Saved" -no-ra
+         fi
+       ;;
+      (${FUNCTION_HOTKEY_BTN_WEST_EVENT})
+@@ -545,7 +551,7 @@ set +e
+          ${DEBUG} && log $0 "${FUNCTION_HOTKEY_BTN_SOUTH_EVENT}: Toggling touchscreen"
+          /usr/bin/rocknix-touchscreen toggle
+          TOGGLE_SUCCESS=$?
+-         [ "$TOGGLE_SUCCESS" -eq 0 ] && /usr/bin/mako-notify "Touchscreen toggled" -no-es
++         [ "$TOGGLE_SUCCESS" -eq 0 ] && notify "Touchscreen toggled" -no-es
+        fi
+      ;;
+   esac
+diff --git i/projects/ROCKNIX/packages/sysutils/util-linux/package.mk w/projects/ROCKNIX/packages/sysutils/util-linux/package.mk
+index cf06fb4230..dd75ebc57d 100644
+--- i/projects/ROCKNIX/packages/sysutils/util-linux/package.mk
++++ w/projects/ROCKNIX/packages/sysutils/util-linux/package.mk
+@@ -1,5 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0-or-later
+-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
++# Copyright (C) 2009-2016 Stephan Raue
+ # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
+ # Copyright (C) 2023 JELOS (https://github.com/JustEnoughLinuxOS)
+ 
+@@ -12,6 +12,7 @@ PKG_DEPENDS_HOST="ccache:host autoconf:host automake:host intltool:host libtool:
+ PKG_DEPENDS_TARGET="toolchain"
+ PKG_DEPENDS_INIT="toolchain"
+ PKG_LONGDESC="A large variety of low-level system utilities that are necessary for a Linux system to function."
++PKG_STAMP="${LOCAL_LOGIN} ${SWAP_SUPPORT}"
+ PKG_TOOLCHAIN="autotools"
+ PKG_BUILD_FLAGS="+pic:host"
+ 
+@@ -68,6 +69,10 @@ if [ "${SWAP_SUPPORT}" = "yes" ]; then
+   PKG_CONFIGURE_OPTS_TARGET+=" --enable-zramctl"
+ fi
+ 
++if [ "${LOCAL_LOGIN}" = "yes" ]; then
++  PKG_CONFIGURE_OPTS_TARGET+=" --enable-agetty"
++fi
++
+ PKG_CONFIGURE_OPTS_HOST="--enable-shared \
+                          --disable-static \
+                          ${UTILLINUX_CONFIG_TARGET} \
+diff --git i/projects/ROCKNIX/packages/tools/rocknix-splash/patches/0001-retro-dot-matrix-rg34xx.patch w/projects/ROCKNIX/packages/tools/rocknix-splash/patches/0001-retro-dot-matrix-rg34xx.patch
+index 69ae45239f..b1a4a36f11 100644
+--- i/projects/ROCKNIX/packages/tools/rocknix-splash/patches/0001-retro-dot-matrix-rg34xx.patch
++++ w/projects/ROCKNIX/packages/tools/rocknix-splash/patches/0001-retro-dot-matrix-rg34xx.patch
+@@ -1,6 +1,6 @@
+ --- a/main.c
+ +++ b/main.c
+-@@ -3,119 +3,160 @@
++@@ -3,119 +3,169 @@
+  #include <unistd.h>
+  #include <errno.h>
+  #include <string.h>
+@@ -9,45 +9,9 @@
+ -#include "svg_parser.h"
+ -#include "svg_renderer.h"
+  #include "dt_rotation.h"
+-
++ 
+ -int z9(void);
+-+// 7 columns x 9 rows bold dot-matrix font for KOROOS
+-+static const uint8_t glyph_K[9] = {
+-+    0b1100011,
+-+    0b1100110,
+-+    0b1101100,
+-+    0b1111000,
+-+    0b1111000,
+-+    0b1101100,
+-+    0b1100110,
+-+    0b1100011,
+-+    0b1100011
+-+};
+-+
+-+static const uint8_t glyph_O[9] = {
+-+    0b0111110,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b0111110
+-+};
+-+
+-+static const uint8_t glyph_R[9] = {
+-+    0b1111110,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1100011,
+-+    0b1111110,
+-+    0b1111000,
+-+    0b1101100,
+-+    0b1100110,
+-+    0b1100011
+-+};
+-
++-
+ -/*
+ - * SVG path data for rendering the logo
+ - * Contains the path data for each component of the logo
+@@ -68,18 +32,19 @@
+ -    "M 821.944 140.106 L 821.944 359.628 L 849.084 359.628 L 849.084 186.006 L 960.038 359.628 L 987.178 359.628 L 987.178 140.106 L 960.038 140.106 L 960.038 313.861 L 849.084 140.106 L 821.944 140.106 Z",
+ -    "M 1034.814 140.106 L 1034.814 359.627 L 1061.955 359.627 L 1061.955 140.106 L 1034.814 140.106 Z",
+ -    "M 1116.9 359.628 L 1183.554 264.768 L 1250.208 359.628 L 1284 359.628 L 1200.45 241.219 L 1270.96 140.106 L 1238.369 140.106 L 1183.554 218.469 L 1128.74 140.106 L 1096.141 140.106 L 1166.658 241.219 L 1083.109 359.628 L 1116.9 359.628 Z"
+-+static const uint8_t glyph_S[9] = {
+-+    0b0111111,
+-+    0b1100000,
+-+    0b1100000,
+-+    0b0111110,
+-+    0b0000011,
+-+    0b0000011,
+-+    0b0000011,
+++// 7 columns x 9 rows bold dot-matrix font for KoroOS
+++static const uint8_t glyph_K[9] = {
+++    0b1100110,
+++    0b1101100,
+++    0b1111000,
+++    0b1110000,
+++    0b1111000,
+++    0b1101100,
+++    0b1100110,
+ +    0b1100011,
+-+    0b0111110
+++    0b1100011
+  };
+-
++ 
+ -/* Color definitions for each path component
+ - * First 4 paths are red (brand color)
+ - * Last 3 paths are gray (secondary color)
+@@ -92,11 +57,59 @@
+ -    "rgb(85,85,85)",   // Gray
+ -    "rgb(85,85,85)",   // Gray
+ -    "rgb(85,85,85)"    // Gray
+-+static const uint8_t *glyphs[6] = {
+-+    glyph_K, glyph_O, glyph_R, glyph_O, glyph_O, glyph_S
+++static const uint8_t glyph_o[9] = {
+++    0b0000000,
+++    0b0000000,
+++    0b0111110,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b0111110,
+++    0b0000000
+  };
+-
++ 
+ -#define NUM_PATHS (sizeof(svg_paths) / sizeof(svg_paths[0]))
+++static const uint8_t glyph_r[9] = {
+++    0b0000000,
+++    0b0000000,
+++    0b1101110,
+++    0b1111000,
+++    0b1100000,
+++    0b1100000,
+++    0b1100000,
+++    0b1100000,
+++    0b0000000
+++};
++ 
++-/*
++- * Main program entry point
++- */
+++static const uint8_t glyph_O[9] = {
+++    0b0111110,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b1100011,
+++    0b0111110
+++};
+++
+++static const uint8_t glyph_S[9] = {
+++    0b0111111,
+++    0b1100000,
+++    0b1100000,
+++    0b0111110,
+++    0b0000011,
+++    0b0000011,
+++    0b0000011,
+++    0b1100011,
+++    0b0111110
+++};
+++
+++
+ +static void draw_dot(Framebuffer *fb, int x, int y, int size, uint32_t color, int rotation) {
+ +    for (int dy = 0; dy < size; dy++) {
+ +        for (int dx = 0; dx < size; dx++) {
+@@ -124,29 +137,26 @@
+ +        }
+ +    }
+ +}
+-
+--/*
+-- * Main program entry point
+-- */
+++
+  int main(void) {
+      const char *fb_device = "/dev/fb0";
+ -
+ -    // Get rotation from device tree
+      int rotation = get_display_rotation();
+-
++ 
+ -    // Check framebuffer device accessibility
+      if (access(fb_device, R_OK | W_OK) != 0) {
+ -        fprintf(stderr, "Cannot access %s: %s\n", fb_device, strerror(errno));
+          return 1;
+      }
+-
++ 
+ -    // Initialize framebuffer
+      Framebuffer *fb = fb_init(fb_device);
+      if (!fb) {
+ -        fprintf(stderr, "Failed to initialize framebuffer\n");
+          return 1;
+      }
+-
++ 
+ -    // Calculate display parameters
+ -    DisplayInfo *display_info = calculate_display_info(fb);
+ -    if (!display_info) {
+@@ -159,7 +169,7 @@
+ +        w = fb->vinfo.yres;
+ +        h = fb->vinfo.xres;
+      }
+-
++ 
+ -    // Clear screen to black
+      for (uint32_t y = 0; y < fb->vinfo.yres; y++) {
+          for (uint32_t x = 0; x < fb->vinfo.xres; x++) {
+@@ -167,7 +177,7 @@
+ +            set_pixel(fb, x, y, 0xFF0A0A0E);
+          }
+      }
+-
++ 
+ -    // Process and render each path component
+ -    for (size_t i = 0; i < NUM_PATHS; i++) {
+ -        SVGPath *svg = parse_svg_path(svg_paths[i], svg_colors[i]);
+@@ -180,6 +190,7 @@
+ +    const int glyph_w = 7;
+ +    const int glyph_h = 9;
+ +    const int glyph_spacing = 2;
+++    const uint8_t *glyphs[] = {glyph_K, glyph_o, glyph_r, glyph_o, glyph_O, glyph_S};
+ +    const int num_chars = 6;
+ +
+ +    int total_units_x = num_chars * glyph_w + (num_chars - 1) * glyph_spacing;
+@@ -190,9 +201,8 @@
+ +    int start_y = (h - total_height_px) / 2;
+ +
+ +    uint32_t char_colors[6] = {
+-+        0xFFF1F5F9, 0xFFF1F5F9,
+-+        0xFFF1F5F9, 0xFFF1F5F9,
+-+        0xFFF59E0B, 0xFFF59E0B
+++        0xFFF59E0B, 0xFFF1F5F9, 0xFFF1F5F9,
+++        0xFFF1F5F9, 0xFFF1F5F9, 0xFFF59E0B
+ +    };
+ +
+ +    int cur_unit_x = 0;
+@@ -223,7 +233,7 @@
+ -        free_svg_path(svg);
+ +        cur_unit_x += glyph_w + glyph_spacing;
+      }
+-
++ 
+ -    // Flush changes to the framebuffer
+      fb_flush(fb);
+ -
+diff --git i/projects/ROCKNIX/packages/virtual/image/package.mk w/projects/ROCKNIX/packages/virtual/image/package.mk
+index 5169bf2548..68d8525306 100644
+--- i/projects/ROCKNIX/packages/virtual/image/package.mk
++++ w/projects/ROCKNIX/packages/virtual/image/package.mk
+@@ -12,8 +12,12 @@ PKG_DEPENDS_TARGET="toolchain squashfs-tools:host dosfstools:host fakeroot:host
+                     mtools:host populatefs:host libc gcc linux linux-drivers linux-firmware \
+                     ${BOOTLOADER} busybox lsof umtprd util-linux usb-modeswitch jq socat \
+                     p7zip file grep util-linux btrfs-progs zstd lz4 empty lzo libzip \
+-                    bash coreutils system-utils autostart quirks powerstate sdl2notify \
+-                    gzip six xmlstarlet pyudev dialog network mako-osd rocknix"
++                    bash coreutils system-utils autostart quirks powerstate \
++                    gzip six xmlstarlet pyudev dialog network rocknix"
++
++if [ "${DISPLAYSERVER}" = "wl" ]; then
++  PKG_DEPENDS_TARGET+=" sdl2notify mako-osd"
++fi
+ 
+ PKG_UI="emulationstation es-themes textviewer lowerdeck"
+ PKG_UI_TOOLS="fbgrab grim"
+@@ -52,13 +56,13 @@ else
+   PKG_DEPENDS_TARGET+=" ${PKG_TOOLS} ${PKG_FONTS} ${PKG_SOUND} ${PKG_SYNC} ${PKG_GRAPHICS} ${PKG_UI} ${PKG_UI_TOOLS} ${PKG_MULTIMEDIA} misc-packages"
+ 
+   # GL demos and tools
+-  [[ ! -z "${OPENGL_SUPPORT}" ]] && PKG_DEPENDS_TARGET+=" mesa-demos"
++  [[ "${MINI_DISTRO}" != "yes" && "${OPENGL_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" mesa-demos"
+ 
+   # GLmark2
+-  [[ ! -z "${OPENGLES_SUPPORT}" ]] && PKG_DEPENDS_TARGET+=" glmark2"
++  [[ "${MINI_DISTRO}" != "yes" && "${OPENGLES_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" glmark2"
+ 
+   # Vulkan demos and tools
+-  [ "${VULKAN_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" vkmark"
++  [[ "${MINI_DISTRO}" != "yes" && "${VULKAN_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" vkmark"
+ 
+   # Weston kiosk shell dpms support.
+   [ "${WINDOWMANAGER}" = "weston" ] && PKG_DEPENDS_TARGET+=" weston-kiosk-shell-dpms"
+diff --git i/tools/check-mini-rootfs.py w/tools/check-mini-rootfs.py
+index b8a80d1384..3721e89859 100755
+--- i/tools/check-mini-rootfs.py
++++ w/tools/check-mini-rootfs.py
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env python3
+ """Check the mini image's entrypoints and ELF library closure without running ARM code."""
+ import argparse
++import json
+ import os
+ from pathlib import Path
+ import re
+@@ -24,12 +25,15 @@ def resolve(root, path):
+     raise ValueError(f'symlink loop: {path}')
+ 
+ 
+-def check(root):
++def check(root, frontend=None):
++    if frontend is None:
++        frontend = 'pocketjs' if resolve(root, '/usr/share/pocketjs/pocket-profile.json').is_file() else 'heya'
+     commands = [
+         'heya', 'heya-control', 'xmplayer',
+-        'xmplayer-playback', 'mpv', 'foot', 'gptokeyb', 'nmcli', 'evtest',
++        'xmplayer-playback', 'mpv', 'gptokeyb', 'nmcli', 'evtest',
+         'disk-browser', 'mc', 'rocknix-services',
+     ]
++    commands += ['pocket', 'pocket-session-run', 'commander', 'chvt', 'flock', 'systemd-run', 'systemctl'] if frontend == 'pocketjs' else ['foot']
+     errors = []
+     for command in commands:
+         if not os.access(resolve(root, '/usr/bin/' + command), os.X_OK):
+@@ -38,7 +42,7 @@ def check(root):
+         errors.append('missing executable: /usr/sbin/rfkill')
+     for path in [
+         '/usr/lib/bluetooth/bluetoothd', '/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt',
+-        '/usr/lib/systemd/system/heya.service', '/usr/lib/autostart/common/050-heya-apps',
++        '/usr/lib/autostart/common/050-heya-apps',
+         '/usr/lib/udev/rules.d/99-automount.rules', '/usr/lib/tmpfiles.d/rocknix-dirs.conf',
+         '/usr/share/heya/apps/xmplayer/app.json', '/usr/share/heya/apps/disk/app.json',
+         '/usr/lib/autostart/daemons/003-avahi', '/usr/lib/autostart/daemons/028-telnet',
+@@ -47,10 +51,37 @@ def check(root):
+     ]:
+         if not resolve(root, path).is_file():
+             errors.append(f'missing runtime file: {path}')
++    if frontend == 'pocketjs':
++        for path in ['/usr/libexec/pocket-linux-kms', '/usr/libexec/pocketjs-session',
++                     '/usr/lib/systemd/system/pocketjs-kms.service',
++                     '/usr/lib/systemd/system/pocketjs-recovery.service',
++                     '/usr/share/pocketjs/apps/boot.pocket']:
++            if not resolve(root, path).is_file():
++                errors.append(f'missing PocketJS runtime file: {path}')
++        if not os.access(resolve(root, '/usr/sbin/agetty'), os.X_OK):
++            errors.append('missing recovery console executable: /usr/sbin/agetty')
++        quirk = resolve(root, '/usr/lib/autostart/quirks/platforms/H700/090-ui_service')
++        if not quirk.is_file() or 'UI_SERVICE="pocketjs-kms.service"' not in quirk.read_text():
++            errors.append('H700 does not select the PocketJS startup service')
++        for pattern in ['usr/bin/sway*', 'usr/bin/foot', 'usr/bin/weston*', 'usr/bin/Xwayland',
++                        'usr/bin/mako*', 'usr/lib/libwayland*', 'usr/lib/libwlroots*',
++                        'usr/lib/systemd/system/sway.service', 'usr/lib/systemd/system/heya.service']:
++            for path in root.glob(pattern):
++                errors.append(f'forbidden compositor runtime file: /{path.relative_to(root)}')
++        try:
++            profile = json.loads(resolve(root, '/usr/share/pocketjs/pocket-profile.json').read_text())['profile']
++            if profile['id'] != 'rocknix-h700-kms' or profile['display']['physicalViewport'] != [720, 480]:
++                errors.append('unexpected PocketJS profile or display geometry')
++        except (OSError, ValueError, KeyError, TypeError):
++            errors.append('missing or invalid PocketJS profile export')
++    elif not resolve(root, '/usr/lib/systemd/system/heya.service').is_file():
++        errors.append('missing runtime file: /usr/lib/systemd/system/heya.service')
+     for path in sorted((root / 'usr/share/xmplayer/bin').glob('*')):
+         if path.name == 'gptokeyb2':
+             errors.append('obsolete bundled gptokeyb2 still installed')
+     entries = ['/usr/bin/' + name for name in ('heya', 'mpv', 'gptokeyb')]
++    if frontend == 'pocketjs':
++        entries += ['/usr/libexec/pocket-linux-kms', '/usr/bin/commander']
+     entries += ['/usr/share/xmplayer/bin/' + name for name in ('love', 'ffmpeg', 'ffplay')]
+     visited = set()
+     for entry in entries:
+@@ -98,11 +129,12 @@ def check(root):
+ if __name__ == '__main__':
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument('rootfs', type=Path)
++    parser.add_argument('--frontend', choices=['heya', 'pocketjs'])
+     args = parser.parse_args()
+     root = args.rootfs.resolve()
+     if not (root / 'usr').is_dir():
+         parser.error('expected a built image/system root containing usr/')
+-    problems = check(root)
++    problems = check(root, args.frontend)
+     for problem in problems:
+         print(problem, file=sys.stderr)
+     if problems:
