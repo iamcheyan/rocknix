@@ -45,7 +45,7 @@ makeinstall_host() {
 }
 
 make_target() {
-  export RUSTC=
+  export RUSTC="${TOOLCHAIN}/bin/rustc"
   export LIBCLANG_PATH="${TOOLCHAIN}/lib"
   export LD_LIBRARY_PATH="${TOOLCHAIN}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
   export BINDGEN_EXTRA_CLANG_ARGS="--target=${TARGET_NAME} --sysroot=${SYSROOT_PREFIX} -isystem ${SYSROOT_PREFIX}/usr/include"
