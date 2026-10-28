@@ -12,8 +12,8 @@
 |---|---|---|---|---|---|
 | P1 | HX90 未提交改动盘点 | PENDING | - | - | |
 | P2 | HX90 对齐 origin/main | PENDING | - | - | |
-| P3 | rquickjs-sys 编译修复 | PENDING | - | - | |
-| P4 | 可重复构建命令文档 | PENDING | - | - | |
+| P3 | rquickjs-sys 编译修复 | PASS（前提证伪） | P3-evidence.txt | - | rquickjs-sys v0.12.0 编译通过；构建成功，无需修复 |
+| P4 | 可重复构建命令文档 | PASS | BUILD.md | - | 命令 + DEVICE gotcha + 计时说明 |
 | A1 | 启动器中文字体 | PASS（帧已产出，待目视） | A01-launcher-main.png | - | 设备主界面帧；中文字形由用户目视确认 |
 | A2 | 电池 Nerd 图标 | PASS（帧已产出，待目视） | A02-battery.png | - | 右上电池区裁剪(4x) |
 | A3 | 字体子集可复现 | PASS | - | - | patch-build-fonts.py 在；两份 license 在；boot.pocket 1.45MB |
@@ -45,10 +45,10 @@
 | F2 | 备份可回滚 | PASS | F-evidence.txt | - | 备份完整 + 回滚命令 |
 | F3 | 启动分区完整性 | PASS | F-evidence.txt | - | /flash 只读；FDT /dtb.img；KERNEL/dtb 未改 |
 | F4 | 重启回归 | PASS | K07-after-reboot.png | - | 重启后服务 active（复用 K7） |
-| G1 | 快速路径跳过 clean | PENDING | - | - | |
-| G2 | 真的出包 | PENDING | - | - | |
-| G3 | 耗时对比 | PENDING | - | - | |
-| G4 | 文档一致 | PENDING | - | - | |
+| G1 | 快速路径跳过 clean | PASS（静态） | BUILD.md | - | OS_BASE_CLEAN=no 跳过 8 组（build_distro:78） |
+| G2 | 真的出包 | PASS | P3-evidence.txt | - | integration 出 DDR4 镜像 |
+| G3 | 耗时对比 | PARTIAL | BUILD.md | - | 全量跨小时未测完；快速路径按文档几分钟 |
+| G4 | 文档一致 | PASS | BUILD.md | - | 与 build-iteration-fastpath.md 一致 |
 | H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
 | H2 | 与 dev 重复判定 | PASS（判定） | H-evidence.txt | - | 功能重叠，建议见 DEC-004 |
 | I1 | 连续使用场景 | PARTIAL | A04-page-0.png, A04-page-1.png, C04-before.png, C04-after.png | - | 代表性使用帧；完整脚本受限于无目视 |
@@ -376,3 +376,32 @@
   6. 输入工作区提交目标是 DevCenter 的 SHELL PTY，非设备 LCD 上 PocketShell 自身 PTY（C4）。
   7. `usbgadget disabled` 在本机挂起（E2）。
   8. mirror 未指定 adb `-s`，多设备时报错（H1）。
+### P3 rquickjs-sys 编译
+- 状态：PASS（前提证伪，无需修复）
+- 实测：HX90 `.buildlog/pocketjs-final.log` 显示 `Compiling rquickjs-sys v0.12.0` 成功，随后 rquickjs-core/rquickjs/pocket-guest-rquickjs/rocknix-pocketjs-bindings 均编译，`Finished release in 28.92s`；`integration-20261028` 已成功出 `ROCKNIX-H700.aarch64-20261028-DDR4.img`。故「rquickjs-sys C 编译错误导致 make H700 失败」不成立。
+- 证据：`P3-evidence.txt`
+- 未验证/限制：2026-10-29 重跑单包（正确 DEVICE=H700）仍在工具链阶段，未到 pocketjs-runtime；以上述既有日志为证。
+
+### P4 可重复构建命令
+- 状态：PASS
+- 交付：`BUILD.md`（全量 `make docker-H700`；单包须显式 `DEVICE=H700`；`clean`+`package`+`image`；OS_BASE_CLEAN；部署规则）。
+- 关键坑：`config/options` 默认 `DEVICE=SM8550`，单包构建务必传 `DEVICE=H700`。
+
+### G1 快速路径跳过 clean
+- 状态：PASS（静态）
+- 实测：`scripts/build_distro:78` `[ -z "${DIRTY}" ] && [ "${OS_BASE_CLEAN:-yes}" != "no" ]` → `OS_BASE_CLEAN=no` 跳过 `CLEAN_OS_BASE` 8 组（`distributions/ROCKNIX/options:49`：emulators system-utils modules quirks autostart rocknix rocknix-joypad kernel-firmware）。
+- 未验证/限制：未实测“日志 Clean: 行数为 0”的运行时输出（全量构建未完成）。
+
+### G2 真的出包
+- 状态：PASS
+- 实测：`integration-20261028.log` 记录创建 `ROCKNIX-H700.aarch64-20261028-DDR4.img`、写 u-boot、设置 FDT、压缩成功。
+- 证据：`P3-evidence.txt`
+
+### G3 耗时对比
+- 状态：PARTIAL
+- 实测：本轮 `DEVICE=H700 make docker-package` 从工具链源码起步，跨小时仍未完成 pocketjs-runtime 阶段 → 全量耗时“数小时”量级。快速路径（单包+组装）按 `docs/build-iteration-fastpath.md` 为“几分钟”量级。
+- 未验证/限制：未取得完整全量构建的精确分钟数（构建未跑完）。
+
+### G4 文档一致
+- 状态：PASS
+- 实测：`docs/build-iteration-fastpath.md` 所述 `OS_BASE_CLEAN`/`DIRTY`/`clean` 语义与 `scripts/build_distro` 实现一致；新增 BUILD.md 补充了「单包必须显式 DEVICE」的坑。

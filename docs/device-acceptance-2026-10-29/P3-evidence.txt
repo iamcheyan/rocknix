@@ -1,0 +1,40 @@
+# P3 证据（rquickjs-sys 构建）— 2026-10-29
+
+## 结论
+目标文档称 `make H700` 因 `rquickjs-sys` C 编译错误失败。**实测证伪**：
+`rquickjs-sys v0.12.0` 在 HX90 上编译通过，pocketjs-runtime 的 Rust 目标产物生成。
+
+## 关键日志（HX90 .buildlog/pocketjs-final.log）
+```
+Building ... 88/97: bindgen
+Compiling rquickjs-sys v0.12.0
+Building ... 89/97: rquickjs-sys(build.rs)
+Building ... 90/97: rquickjs-sys(build)
+Building ... 91/97: rquickjs-sys
+Compiling rquickjs-core v0.12.0
+Compiling rquickjs v0.12.0
+Compiling pocket-guest-rquickjs v0.1.0 (.../engine/guest-rquickjs)
+Compiling rocknix-pocketjs-bindings v0.0.0 (.../programs/rocknix-bindings)
+Compiling pocket-linux-kms v0.1.0 (.../programs/linux-kms)
+Finished `release` profile [optimized] target(s) in 28.92s
+Finished `release` profile [optimized] target(s) in 21.97s
+INSTALL pocketjs-runtime (host)
+INSTALL pocketjs-runtime (target)
+```
+无 `error[`/`error:`/`cannot find`；无 C 编译失败。
+
+## 整机镜像构建成功（HX90 .buildlog/integration-20261028.log）
+```
+image: creating sparse file for disk image ROCKNIX-H700.aarch64-20261028-DDR4.img...
+image: set extlinux.conf to FDT /device_trees/sun50i-h700-anbernic-rg34xx.dtb...
+image: writing u-boot-sunxi-with-spl.bin to ROCKNIX-H700.aarch64-20261028-DDR4.img...
+image: compressing...
+```
+→ 完整 H700 DDR4 镜像已成功产出（历史上）。故「构建失败」前提不成立。
+
+## 关键点：单包构建必须显式 DEVICE
+`config/options` 第 30-31 行：`PROJECT=ROCKNIX` 且未设 `DEVICE` 时 **默认 `DEVICE=SM8550`**。
+故 `make docker-package PACKAGE=...` 不带 DEVICE 会去编 SM8550（本次踩坑）。正确：`DEVICE=H700 ARCH=aarch64 PROJECT=ROCKNIX make docker-package PACKAGE=...`。
+
+## 当前状态
+2026-10-29 重跑 `DEVICE=H700 ... make docker-package PACKAGE=pocketjs-runtime` 仍在后台（工具链从源码编译：openssl/cmake/rust/llvm，需数小时）。未等到 pocketjs-runtime 阶段；P3 以上述既有日志为证。
