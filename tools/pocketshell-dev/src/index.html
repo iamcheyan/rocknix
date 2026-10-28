@@ -424,7 +424,7 @@
   }
   function favoriteInput(value){if(inputState.function==='History'){inputState.history=[value,...inputState.history.filter((x)=>x!==value)];postInput('FAVORITE '+value);}else if(inputState.function==='Phrases'&&!customPhrases.includes(value)){customPhrases.unshift(value);postInput('PHRASE_ADD '+value);}renderInputWorkspace();}
   function deleteInput(value){if(inputState.function==='History'){inputState.history=inputState.history.filter((x)=>x!==value);postInput('DELETE '+value);}else{const index=customPhrases.indexOf(value);if(index>=0){customPhrases.splice(index,1);postInput('PHRASE_DELETE '+value);}}renderInputWorkspace();}
-  async function submitInput(){const value=inputState.buffer.trim();if(!value)return;await postInput('BUFFER '+value);await postInput('SUBMIT');inputState.history=[value,...inputState.history.filter((x)=>x!==value)];inputState.buffer='';document.getElementById('iwText').textContent='';refreshState();renderInputWorkspace();}
+  async function submitInput(){const value=inputState.buffer.trim();if(!value)return;await postInput('BUFFER '+value);await postInput('SUBMIT');inputState.history=[value,...inputState.history.filter((x)=>x!==value)];inputState.buffer='';document.getElementById('iwText').textContent='';await refreshState();renderInputWorkspace();}
   document.getElementById('iwExit').onclick=exitInput;
   async function addCurrentPhrase(){const value=inputState.buffer.trim();if(value&&!customPhrases.includes(value)){customPhrases.push(value);await postInput('PHRASE_ADD '+value);renderInputWorkspace();}}
   document.addEventListener('keydown',async(e)=>{

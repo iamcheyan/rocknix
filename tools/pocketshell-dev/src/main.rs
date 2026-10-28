@@ -384,6 +384,9 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
                     "SUBMIT" => {
                         let value = shared.input.buffer.trim().to_string();
                         if !value.is_empty() {
+                            let view = shared.view;
+                            shared.shell.command(&format!("{view}\tTEXT {value}"));
+                            shared.shell.command(&format!("{view}\tKEY ENTER"));
                             shared.input.history.retain(|item| item != &value);
                             shared.input.history.insert(0, value);
                         }

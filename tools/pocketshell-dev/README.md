@@ -50,7 +50,7 @@ binds the first private IPv4 address found by `ip -4`.
 | F2 / ` | Open Input Workspace; Escape exits and restores the existing view |
 | L / R while open | Cycle ABC / NUM / SYM / PATH layouts |
 | PageUp / PageDown while open | Cycle Keyboard / History / Commands / Phrases / Sessions / Agent |
-| Character / Backspace / Enter while open | Edit and submit the input buffer |
+| Character / Backspace / Enter while open | Edit the input buffer; Enter submits the command to the active PTY |
 | Tab | Next workspace |
 | ` | WS1 |
 | Arrows | Arrow keys |
