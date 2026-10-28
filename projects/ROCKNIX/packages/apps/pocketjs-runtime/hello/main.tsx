@@ -80,8 +80,8 @@ mount(() => {
   });
 
   // Hardware Status State
-  const [ipAddress, setIpAddress] = createSignal("192.168.3.57");
-  const [batteryLevel, setBatteryLevel] = createSignal(85);
+  const [ipAddress, setIpAddress] = createSignal("--");
+  const [batteryLevel, setBatteryLevel] = createSignal(-1);
   const [toastMessage, setToastMessage] = createSignal("");
 
   // Animation Node Mirrors
@@ -268,6 +268,20 @@ mount(() => {
     if (Number.isFinite(b) && b >= 0 && b <= 100) setBrightness(b);
     const v = Number(host.__launcher("LEVEL\tvolume"));
     if (Number.isFinite(v) && v >= 0 && v <= 100) setVolume(v);
+  };
+
+  // Real hardware status for the top bar: battery %, Wi-Fi association and the
+  // live IPv4 address. Falls back to "--" / -1 when the bridge cannot answer,
+  // never to a made-up number.
+  const syncHardwareStatus = () => {
+    if (!host?.__launcher) return;
+    const battery = Number(host.__launcher("LEVEL\tbattery"));
+    setBatteryLevel(Number.isFinite(battery) && battery >= 0 && battery <= 100 ? battery : -1);
+    const wifi = (host.__launcher("LEVEL\twifi") ?? "").trim();
+    setWifiEnabled(wifi === "on");
+    const ip = (host.__launcher("LEVEL\tip") ?? "").trim();
+    const addr = ip.includes("|") ? ip.split("|")[1] : "";
+    setIpAddress(addr || "--");
   };
 
   const changeBrightness = (delta: number) => {
@@ -480,6 +494,7 @@ mount(() => {
     for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
     log("Workspace Created WS1..WS5");
     syncHardwareLevels();
+    syncHardwareStatus();
 
     onTextEvent((event: TextEvent) => {
       if (active() === 0 && launcherOpen()) {
@@ -587,10 +602,14 @@ mount(() => {
     if (active() === LOG_WORKSPACE && armed && !inputOpen())
       applyRows(send(`SNAP\t${LOG_WORKSPACE}`));
 
-    // Periodic hardware poll (every 60 frames ~ 1 sec)
+    // Periodic hardware poll: levels every ~1s, battery/Wi-Fi/IP every ~5s
+    // (the latter shells out to `ip`, so poll it less often).
     frameCounter++;
     if (frameCounter % 60 === 0) {
       syncHardwareLevels();
+    }
+    if (frameCounter % 300 === 0) {
+      syncHardwareStatus();
     }
 
     if (!armed) {

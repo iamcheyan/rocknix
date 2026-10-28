@@ -12,8 +12,10 @@ export interface StatusBarProps {
 const TAB_NAMES = ["HOME", "MEDIA", "GAMES", "SETTINGS", "SYSTEM"];
 
 export function StatusBar(props: StatusBarProps) {
+  const batteryKnown = () => props.batteryLevel >= 0;
   const batteryIcon = () => {
     const level = props.batteryLevel;
+    if (!batteryKnown()) return "\uf244";
     if (level >= 90) return "\uf240";
     if (level >= 65) return "\uf241";
     if (level >= 40) return "\uf242";
@@ -64,11 +66,11 @@ export function StatusBar(props: StatusBarProps) {
 
         {/* Right: Battery */}
         <View class="flex-row items-center gap-1">
-          <Text class={props.batteryLevel > 20 ? "text-xs text-emerald-400" : "text-xs text-amber-400"}>
+          <Text class={!batteryKnown() ? "text-xs text-slate-600" : props.batteryLevel > 20 ? "text-xs text-emerald-400" : "text-xs text-amber-400"}>
             {batteryIcon()}
           </Text>
           <Text class="text-xs font-mono text-slate-300">
-            {`${props.batteryLevel}%`}
+            {batteryKnown() ? `${props.batteryLevel}%` : "--"}
           </Text>
         </View>
       </View>

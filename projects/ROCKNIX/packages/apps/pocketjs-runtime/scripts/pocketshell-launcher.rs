@@ -15,6 +15,61 @@ pub fn command(value: &str) -> String {
             }
             "unknown".into()
         }
+        // Real battery percentage from the fuel gauge (0-100), or "unknown".
+        ["LEVEL", "battery"] => {
+            for name in ["battery", "BAT0", "BAT1", "rk817-battery", "cw2015-battery"] {
+                let base = std::path::Path::new("/sys/class/power_supply").join(name);
+                if let Ok(raw) = std::fs::read_to_string(base.join("capacity")) {
+                    if let Ok(level) = raw.trim().parse::<u32>() {
+                        return level.min(100).to_string();
+                    }
+                }
+            }
+            // Fall back to any supply that exposes a capacity.
+            if let Ok(entries) = std::fs::read_dir("/sys/class/power_supply") {
+                for entry in entries.flatten() {
+                    if let Ok(raw) = std::fs::read_to_string(entry.path().join("capacity")) {
+                        if let Ok(level) = raw.trim().parse::<u32>() {
+                            return level.min(100).to_string();
+                        }
+                    }
+                }
+            }
+            "unknown".into()
+        }
+        // First IPv4 address of an interface that is up and not loopback: "iface|addr" or "--".
+        ["LEVEL", "ip"] => {
+            if let Ok(out) = Command::new("ip").args(["-o", "-4", "addr", "show"]).output() {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    let f: Vec<&str> = line.split_whitespace().collect();
+                    // inet 192.168.1.5/24 brd ... scope global eth0
+                    if f.len() < 4 || f.get(2) != Some(&"inet") { continue; }
+                    let iface = *f.last().unwrap_or(&"");
+                    if iface == "lo" { continue; }
+                    if line.contains("scope host") { continue; }
+                    let addr = f[3].split('/').next().unwrap_or("");
+                    if addr.is_empty() { continue; }
+                    return format!("{}|{}", iface, addr);
+                }
+            }
+            "--".into()
+        }
+        // "on" when a wireless interface is up and associated, else "off".
+        ["LEVEL", "wifi"] => {
+            let associated = std::fs::read_dir("/sys/class/net")
+                .map(|entries| {
+                    entries.flatten().any(|e| {
+                        let inet = e.path().join("wireless");
+                        let oper = std::fs::read_to_string(e.path().join("operstate"))
+                            .map(|s| s.trim() == "up")
+                            .unwrap_or(false);
+                        inet.exists() && oper
+                    })
+                })
+                .unwrap_or(false);
+            if associated { "on".into() } else { "off".into() }
+        }
         ["LEVEL", "volume"] => {
             for (program, args) in [("pactl", vec!["get-sink-volume", "@DEFAULT_SINK@"]), ("amixer", vec!["get", "Master"])] {
                 if let Ok(out) = Command::new(program).args(args).output() {

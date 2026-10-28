@@ -62,7 +62,7 @@ export function SystemPage(props: SystemPageProps) {
               <Text class="text-xs font-bold text-cyan-400">{"\uf012"} NETWORK</Text>
               <Text class="text-xs font-mono text-slate-400">wlan0</Text>
             </View>
-            <Text class="text-xs font-mono text-white">{props.ipAddress || "192.168.3.57"}</Text>
+            <Text class="text-xs font-mono text-white">{props.ipAddress || "--"}</Text>
           </View>
         </View>
 
