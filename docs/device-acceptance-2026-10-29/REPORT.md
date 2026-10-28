@@ -18,8 +18,8 @@
 | A2 | 电池 Nerd 图标 | PENDING | - | - | |
 | A3 | 字体子集可复现 | PENDING | - | - | |
 | A4 | 全页面巡检 | PENDING | - | - | |
-| B1 | 抓帧字节正确 | PENDING | - | - | |
-| B2 | 浏览器显示真实画面 | PENDING | - | - | |
+| B1 | 抓帧字节正确 | PASS | B01-lcd-frame-rgb-correct.png | - | 1036800 字节 ✓ |
+| B2 | 浏览器显示真实画面 | PASS | B02-browser-shows-device.png | - | DOM 确认 LCD live |
 | B3 | 网页→设备注入 | PENDING | - | - | |
 | B4 | 设备→网页跟随 | PENDING | - | - | |
 | B5 | 刷新率/撕帧限制 | PENDING | - | - | |
@@ -58,3 +58,22 @@
 ## 详细记录
 
 （逐项测试时填充，每个编号一个小节。）
+### B1 抓帧字节正确
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 00:46
+- 设备状态：H700 / 7.2.0 / pocketshell-dev active / 服务全部 active
+- 操作步骤：`curl -s http://192.168.3.57:8080/device/frame.rgb | wc -c`
+- 预期 / 实测：恰好 1,036,800 字节（720×480×3 RGB24）。实测 = 1036800 ✓。人眼无法判图，已用脚本校验 PNG 720×480 且像素有变化（sum_std=92，非空帧）。
+- 截图：![](./B01-lcd-frame-rgb-correct.png)
+- 问题与根因：无。
+- 未验证/限制：无。
+
+### B2 浏览器显示真实画面
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 00:47
+- 设备状态：同上；Dev Center 打开即自动拉取 `/device/frame.rgb`（每 250ms 轮询）。
+- 操作步骤：Playwright 打开 `http://192.168.3.57:8080/`，等待 6s 后截图 `B02-browser-shows-device.png`；并用 DOM 探针读取 `#link` 文本与 canvas 像素。
+- 预期 / 实测：画布显示设备当前 LCD。DOM 探针确认 `link="handheld LCD live · 192.168.3.57:8080"`，canvas 720×480 非黑像素 100%，说明渲染的是真实 LCD 而非主机 PTY 模型。控制台 0 错误。
+- 截图：![](./B02-browser-shows-device.png)
+- 问题与根因：无。
+- 未验证/限制：浏览器侧画面为设备 LCD 的 RGB 镜像（约 4fps，见 B5），非原生逐帧同步。
