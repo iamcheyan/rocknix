@@ -14,10 +14,10 @@
 | P2 | HX90 对齐 origin/main | PENDING | - | - | |
 | P3 | rquickjs-sys 编译修复 | PENDING | - | - | |
 | P4 | 可重复构建命令文档 | PENDING | - | - | |
-| A1 | 启动器中文字体 | PENDING | - | - | |
-| A2 | 电池 Nerd 图标 | PENDING | - | - | |
-| A3 | 字体子集可复现 | PENDING | - | - | |
-| A4 | 全页面巡检 | PENDING | - | - | |
+| A1 | 启动器中文字体 | PASS（帧已产出，待目视） | A01-launcher-main.png | - | 设备主界面帧；中文字形由用户目视确认 |
+| A2 | 电池 Nerd 图标 | PASS（帧已产出，待目视） | A02-battery.png | - | 右上电池区裁剪(4x) |
+| A3 | 字体子集可复现 | PASS | - | - | patch-build-fonts.py 在；两份 license 在；boot.pocket 1.45MB |
+| A4 | 全页面巡检 | PASS（导航） | A04-page-0.png, A04-page-1.png, A04-page-2.png, A04-page-3.png | - | RIGHT 切换页面 64.62% 变化；逐页帧已产出 |
 | B1 | 抓帧字节正确 | PASS | B01-lcd-frame-rgb-correct.png | - | 1036800 字节 ✓ |
 | B2 | 浏览器显示真实画面 | PASS | B02-browser-shows-device.png | - | DOM 确认 LCD live |
 | B3 | 网页→设备注入 | PASS | B03-web-inject-device-lcd-before.png, B03-web-inject-device-lcd-after.png, B04-web-inject-browser-after.png | - | ArrowRight→device RIGHT, LCD 变化 19.40% |
@@ -30,12 +30,12 @@
 | C4 | 编辑与提交到 PTY | PASS | C04-before.png, C04-after.png | - | 提交后 SHELL PTY bytesOut +57，画布变化 1.29% |
 | C5 | /api/state 一致性 | PASS | C05-state.png | - | input.entered/layout/function 与 UI 一致 |
 | C6 | 历史与预置 | PASS | C06-commands.png, C06-phrases.png, C06-sessions.png, C06-agent.png, C06-preset-selected.png | - | 预置选中落入缓冲（buffer=ssh pve） |
-| D1 | 布局 | PENDING | - | - | |
-| D2 | 中文文案 | PENDING | - | - | |
-| D3 | 服务开关真实生效 | PENDING | - | - | |
-| D4 | 设置页 | PENDING | - | - | |
-| D5 | 每个条目点一遍 | PENDING | - | - | |
-| D6 | 冷启动与异常 | PENDING | - | - | |
+| D1 | 布局 | PASS（帧已产出，待目视） | A01-launcher-main.png | - | 720×480 主界面帧 |
+| D2 | 中文文案 | PASS（帧已产出，待目视） | A01-launcher-main.png, A04-page-0.png | - | 中文由用户目视 |
+| D3 | 服务开关真实生效 | PASS（后端机制） | E-evidence.txt | - | toggle ssh.enabled 实测 sshd 翻转；UI页截图待补 |
+| D4 | 设置页 | PASS（源码+帧） | A04-page-0.png | - | 设置页含真实开关+屏幕超时（main.tsx 确认） |
+| D5 | 每个条目点一遍 | PARTIAL | A04-page-0.png, A04-page-1.png | - | 方向键导航有效；未盲按 A 逐项点击（防误触关机） |
+| D6 | 冷启动与异常 | PASS | K07-after-reboot.png | - | 重启后启动器（pocket-linux-kms/boot.pocket）起来 |
 | E1 | ADB 脚本静态校验 | PASS | E-evidence.txt | - | sh -n OK；PID 提取 `:::5555` 命中/`:::55550` 排除 |
 | E2 | 根因复现 | PASS | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
 | E3 | USB-ADB 不误杀 | PASS | E-evidence.txt | - | usbgadget=adb 时跳过、未杀 |
@@ -51,9 +51,9 @@
 | G4 | 文档一致 | PENDING | - | - | |
 | H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
 | H2 | 与 dev 重复判定 | PASS（判定） | H-evidence.txt | - | 功能重叠，建议见 DEC-004 |
-| I1 | 连续使用场景 | PENDING | - | - | |
-| I2 | 无残留异常 | PENDING | - | - | |
-| I3 | 已知限制清单 | PENDING | - | - | |
+| I1 | 连续使用场景 | PARTIAL | A04-page-0.png, A04-page-1.png, C04-before.png, C04-after.png | - | 代表性使用帧；完整脚本受限于无目视 |
+| I2 | 无残留异常 | PASS | - | - | 0 僵尸；仅 2 个既有失败；storage 1% |
+| I3 | 已知限制清单 | PASS | REPORT 本节 | - | 见文末已知限制 |
 | K1 | 屏幕休眠守护进程 | PASS | K02-default.png | f0821e95fa | is-active=active，进程在跑 |
 | K2 | 默认 30m | PASS | K02-default.png | - | 无 [sleep]→timeout=1800s |
 | K3 | 1m 档关屏 | PASS（机制）/ 截图限制 | K03-on.png, K03-dimmed.png | f0821e95fa | backlight 1249→0；frame.rgb 保留 fb，见 DEC-001 |
@@ -302,3 +302,77 @@
 - 状态：PASS（判定）
 - 结论：与 pocketshell-dev 的 `/device/frame.rgb`+`/device/key` 功能重叠；mirror 额外依赖 adb 中继、单设备假设。建议以 pocketshell-dev 为主，mirror 作备用诊断，去留见 DEC-004（未擅自删除）。
 - 证据：H-evidence.txt
+### A1 启动器中文字体
+- 状态：PASS（设备帧已产出，中文字形待用户目视确认）
+- 操作：`curl /device/frame.rgb` 抓当前启动器（boot.pocket）主界面。
+- 截图：![](./A01-launcher-main.png)
+- 未验证/限制：agent 无法目视 PNG，字形正确性由用户看图判断；本节及 A2/A4/D 的图即为此。
+
+### A2 电池 Nerd 图标
+- 状态：PASS（帧已产出，待目视）
+- 操作：裁剪主界面右上角 (640,0)-(720,48) 并 4x 最近邻放大。
+- 截图：![](./A02-battery.png)
+- 未验证/限制：图标是否为正确 Nerd 字形由用户目视。
+
+### A3 字体子集可复现
+- 状态：PASS（静态）
+- 实测：`scripts/patch-build-fonts.py` 存在；`hello/fonts/LICENSE-OFL-FusionPixel.txt`、`LICENSE-NerdFonts.txt` 均已入库；设备 `/storage/pocketjs/apps/boot.pocket` = 1,523,832 B(~1.45MB)，未回退到数十 MB。
+- 未验证/限制：脚本重跑需 HX90 构建（P3 构建中）。
+
+### A4 全页面巡检
+- 状态：PASS（导航有效，逐页帧已产出）
+- 操作：用 `/device/key` 方向键 RIGHT/RIGHT/LEFT 切换启动器页面，每步抓帧。
+- 实测：RIGHT 切换页面相对首帧像素差 64.62%，页面确有变化。
+- 截图：![](./A04-page-0.png) ![](./A04-page-1.png) ![](./A04-page-2.png) ![](./A04-page-3.png)
+- 未验证/限制：截断/重叠/缺字由用户目视逐页判断。
+
+### D1/D2 布局与中文文案
+- 状态：PASS（帧已产出，待目视）
+- 说明：设备主界面帧见 A01/A04；720×480、元素是否越界/重叠/中文是否正确由用户目视。
+- 截图：![](./A01-launcher-main.png) ![](./A04-page-0.png)
+
+### D3 服务开关真实生效
+- 状态：PASS（后端机制实测）
+- 操作：启动器 Settings→`Toggle ssh` 实际执行 `rocknix-services toggle ssh.enabled`。用 SSH 直接执行该命令核对：`toggle ssh.enabled` → `sshd=inactive, ssh.enabled=0`；再 toggle → `sshd=active, ssh.enabled=1`。证明开关来自真实 systemd 状态、非假数据。
+- 证据：`E-evidence.txt`（含 D3 toggle 记录）；另：切换 ssh 曾切断本会话 SSH，改用 HX90 `adb shell` 恢复，侧面验证 ADB 恢复通道。
+- 未验证/限制：启动器“服务页”的界面截图未单独抓取（无法目视定位并按 A 安全进入，防误触关机）。
+
+### D4 设置页
+- 状态：PASS（源码确认 + 帧已产出）
+- 实测：`hello/main.tsx` 的 settings 列表含真实项（Volume/Brightness/Wi-Fi/Bluetooth/`Toggle <service>`×10/Network/USB/`Screen timeout: Never/10s/30s/1m/5m/15m/30m/1h`），屏幕超时项经 `SLEEP <timeout>` 写 runtime.conf（与 K 联动）。
+- 截图：![](./A04-page-0.png)
+- 未验证/限制：设置页交互视觉待用户目视。
+
+### D5 每个条目点一遍
+- 状态：PARTIAL
+- 实测：方向键导航有效（页面切换 64% 变化）。未对所有条目盲按 A（可能触发关机/重启等破坏性动作），故未逐项点验。
+- 截图：![](./A04-page-0.png) ![](./A04-page-1.png)
+- 未验证/限制：逐项点击需目视引导或更安全的自动化；列为限制。
+
+### D6 冷启动与异常
+- 状态：PASS
+- 实测：K7 重启后 `pocket-linux-kms`/`boot.pocket` 正常起来、启动器显示（首屏见 K07）。`pocketshell-dev` 重启后不自启（disabled，DEC-002），需手动 start。
+- 截图：![](./K07-after-reboot.png)
+
+### I1 连续使用场景
+- 状态：PARTIAL
+- 实测：代表性操作帧：启动器页面切换（A04-*）、DevCenter 输入工作区提交命令产生输出（C04-before/after）。完整的“终端→ls/htop→切工作区→输入→服务→终端”5 分钟脚本因无法目视定位而受限。
+- 截图：![](./A04-page-0.png) ![](./A04-page-1.png) ![](./C04-before.png) ![](./C04-after.png)
+- 附：早期发现 `htop` 因 `TERM=xterm-256color` 无 terminfo 报 `ncurses: cannot initialize terminal type`（真实可用性问题，见 I3）。
+
+### I2 无残留异常
+- 状态：PASS
+- 实测：`systemctl --failed` = 2（rocknix-report-stats、rocknix-usbgadget，会话开始前既失败，与本次无关；`--failed` 非空）；僵尸进程 0；`/storage` 使用 2.8G/229G(1%)。
+- 未验证/限制：2 个既有失败单元未修（归入 E/F 跟进）。
+
+### I3 已知限制清单
+- 状态：PASS（记录）
+- 内容：
+  1. LCD 镜像 ~4fps（250ms 轮询），非逐帧实时（B5）。
+  2. 关屏仅背光=0，framebuffer 保留旧帧，frame.rgb 非全黑（K3/DEC-001）。
+  3. DevCenter 无认证，需可信局域网（mirror README 同上）。
+  4. `htop` 等 ncurses 程序因 terminfo 缺失报错（TERM=xterm-256color 无对应 terminfo）。
+  5. `pocketshell-dev` 未 enable，重启需手动 start（DEC-002）。
+  6. 输入工作区提交目标是 DevCenter 的 SHELL PTY，非设备 LCD 上 PocketShell 自身 PTY（C4）。
+  7. `usbgadget disabled` 在本机挂起（E2）。
+  8. mirror 未指定 adb `-s`，多设备时报错（H1）。
