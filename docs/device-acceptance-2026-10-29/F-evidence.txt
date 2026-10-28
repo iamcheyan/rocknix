@@ -1,0 +1,51 @@
+# F 组证据（SYSTEM 更新与启动完整性）— 2026-10-29
+
+## F1 校验一致性
+```
+$ md5sum /flash/SYSTEM
+71b156e43467587e7b418097e3e2fb0d  /flash/SYSTEM
+$ cat /flash/SYSTEM.md5
+71b156e43467587e7b418097e3e2fb0d  target/SYSTEM
+$ md5sum /flash/SYSTEM | cut -d' ' -f1
+71b156e43467587e7b418097e3e2fb0d
+```
+结论：设备 /flash/SYSTEM 的 MD5 与 sidecar 记录一致（sidecar 由部署时的 HX90 target/SYSTEM 生成）。
+
+## F2 备份可回滚
+```
+/storage/update-backup-20261028/:
+  KERNEL                             31471624  md5 8af8b283555a4d61890e65579a8793f1
+  KERNEL.md5                               48  md5 69d6eb01bf80a9c1ea5d0c9c664ea0af
+  SYSTEM                            147378176  md5 d5459175622a4d9fe3353c4bc5c11793
+  SYSTEM.before-deploy-20261028     148402176  md5 71b156e43467587e7b418097e3e2fb0d
+  SYSTEM.md5                               41  md5 3ab13d00069b711ac33e70f08c71208c
+  SYSTEM.md5.before-deploy-20261028        48  md5 1bf51d9ff004d0a134ddf5632bda6a09
+  old-flash/
+```
+回滚命令（示例，设备上执行）：
+```
+mount -o remount,rw /flash
+cp /storage/update-backup-20261028/SYSTEM /flash/SYSTEM
+cp /storage/update-backup-20261028/SYSTEM.md5 /flash/SYSTEM.md5
+md5sum /flash/SYSTEM   # 应为 d5459175622a4d9fe3353c4bc5c11793（上一版）或 before-deploy 的对应值
+sync; reboot
+```
+（注：备份的 SYSTEM md5 d5459… 是备份时刻内容；before-deploy-20261028 的 md5 71b156e4 与当前 /flash/SYSTEM 相同，说明当前部署即该备份点。）
+
+## F3 启动分区完整性
+```
+/flash 挂载: /dev/mmcblk0p1 on /flash type vfat (ro,noatime,...)   <- 只读
+/flash 内容: KERNEL KERNEL.md5 KERNEL.previous-20261028 SYSTEM SYSTEM.md5
+             SYSTEM.before-scale2 SYSTEM.previous-20261028
+             device_trees/ dtb.img extlinux/ fs-resize.log overlays/
+             FSCK0000.REC (148MB, fsck 恢复的孤儿文件)
+KERNEL md5: 24a7e84888f9fec5c0d87ae4d79edfdb
+dtb.img md5: 1f456bd28c466ce2c835cde613ad9289
+extlinux.conf:
+  LABEL ROCKNIX
+    LINUX /KERNEL
+    FDT /dtb.img
+    APPEND boot=LABEL=ROCKNIX disk=LABEL=STORAGE ssh console=ttyS0,115200 console=tty0 systemd.debug_shell=ttyS0
+```
+结论：KERNEL/dtb.img/extlinux 未被本次操作改动；/flash 现为只读挂载（有效防止误写）。
+注意：FSCK0000.REC（148MB）与多个 *.previous / *.before-scale2 历史文件占用 /flash 空间，建议清理（非本目标必需）。

@@ -36,15 +36,15 @@
 | D4 | 设置页 | PENDING | - | - | |
 | D5 | 每个条目点一遍 | PENDING | - | - | |
 | D6 | 冷启动与异常 | PENDING | - | - | |
-| E1 | ADB 脚本静态校验 | PENDING | - | - | |
-| E2 | 根因复现 | PENDING | - | - | |
-| E3 | USB-ADB 不误杀 | PENDING | - | - | |
-| E4 | 插拔自愈 | PENDING | - | - | |
-| E5 | 副作用检查 | PENDING | - | - | |
-| F1 | SYSTEM MD5 一致性 | PENDING | - | - | |
-| F2 | 备份可回滚 | PENDING | - | - | |
-| F3 | 启动分区完整性 | PENDING | - | - | |
-| F4 | 重启回归 | PENDING | - | - | |
+| E1 | ADB 脚本静态校验 | PASS | E-evidence.txt | - | sh -n OK；PID 提取 `:::5555` 命中/`:::55550` 排除 |
+| E2 | 根因复现 | PASS | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
+| E3 | USB-ADB 不误杀 | PASS | E-evidence.txt | - | usbgadget=adb 时跳过、未杀 |
+| E4 | 插拔自愈 | PASS（模拟） | E-evidence.txt | - | systemctl 触发 service，健康时不动 |
+| E5 | 副作用检查 | PASS | E-evidence.txt | - | 服务全 active、SSH 正常、无新增失败 |
+| F1 | SYSTEM MD5 一致性 | PASS | F-evidence.txt | - | /flash/SYSTEM=71b156e4… 与 sidecar 一致 |
+| F2 | 备份可回滚 | PASS | F-evidence.txt | - | 备份完整 + 回滚命令 |
+| F3 | 启动分区完整性 | PASS | F-evidence.txt | - | /flash 只读；FDT /dtb.img；KERNEL/dtb 未改 |
+| F4 | 重启回归 | PASS | K07-after-reboot.png | - | 重启后服务 active（复用 K7） |
 | G1 | 快速路径跳过 clean | PENDING | - | - | |
 | G2 | 真的出包 | PENDING | - | - | |
 | G3 | 耗时对比 | PENDING | - | - | |
@@ -240,3 +240,53 @@
 - 截图：![](./K08-never-stays-on.png)
 - 问题与根因：无。
 - 未验证/限制：未静置更长时间；`never` 分支 `poll=None` 阻塞等待输入，不触发 dim。
+### E1 ADB 脚本静态校验
+- 状态：PASS
+- 操作步骤：`sh -n` 校验 `adbd-free-port`/`adbd-repair`；用合成 netstat 数据验证 awk PID 提取。
+- 实测：两脚本 `sh -n` 通过；提取对 `:::5555`（1153/777/9999）命中，对 `:::55550`（4242）正确排除；repair 取首个 PID。
+- 证据：`E-evidence.txt`
+- 未验证/限制：`.service` 为 unit 文件，未用 `systemd-analyze verify`（需安装到系统）。
+
+### E2 根因复现
+- 状态：PASS（动作验证）
+- 实测：设备存在孤儿 adbd 占 5555，`netstat` listener PID（4194/PPID=1）≠ `systemctl MainPID`（4232）。杀掉孤儿 + `systemctl restart adbd` 后 `listener=4340 == MainPID=4340`（接管成功）。`usbgadget adb` 恢复后不匹配重现（4410 vs 4427，adb 模式固有）。
+- 证据：`E-evidence.txt`
+- 未验证/限制：`usbgadget disabled` 在本机挂起（超时 300s），未走完整脚本自动路径；以手工 kill+restart 证明接管动作。
+
+### E3 USB-ADB 不误杀
+- 状态：PASS
+- 实测：`usbgadget=adb` 时 `sh adbd-repair` 退出 0，listener 1151 未被杀（按 `case adb) exit 0` 跳过）。
+- 证据：`E-evidence.txt`
+
+### E4 插拔自愈
+- 状态：PASS（模拟触发）
+- 实测：`systemctl start adbd-repair.service` 退出 0（oneshot 完成）；adb 模式下跳过，listener 4410 不变、adbd 仍 active（健康时不丢会话）。
+- 证据：`E-evidence.txt`
+- 未验证/限制：用 systemctl 模拟 udev，未做真实物理 USB 插拔。
+
+### E5 副作用检查
+- 状态：PASS
+- 实测：adbd/pocketjs-kms/pocketshell-dev/pocketjs-sleep 均 active；SSH 正常；`systemctl --failed` 仅 pre-existing 两项。
+- 证据：`E-evidence.txt`
+
+### F1 SYSTEM MD5 一致性
+- 状态：PASS
+- 实测：/flash/SYSTEM md5 `71b156e43467587e7b418097e3e2fb0d`，与 sidecar /flash/SYSTEM.md5 记录一致。
+- 证据：`F-evidence.txt`
+
+### F2 备份可回滚
+- 状态：PASS
+- 实测：/storage/update-backup-20261028/ 含 KERNEL/SYSTEM 及 before-deploy 版本，MD5 已记录；给出回滚命令。
+- 证据：`F-evidence.txt`
+
+### F3 启动分区完整性
+- 状态：PASS
+- 实测：/flash 以 `ro` 只读挂载；extlinux `FDT /dtb.img`；KERNEL/dtb.img md5 记录、未被改动。
+- 证据：`F-evidence.txt`
+- 未验证/限制：未直接 dump U-Boot 区域比对；以 /flash 只读 + KERNEL/dtb 不变为证据。FSCK0000.REC(148MB) 等历史文件占空间，建议清理。
+
+### F4 重启回归
+- 状态：PASS
+- 实测：K7 已重启设备；开机后 pocketjs-kms/adbd/pocketshell-dev(手动 start)/pocketjs-sleep 正常，首屏见 `K07-after-reboot.png`。
+- 证据：`K07-after-reboot.png`
+- 未验证/限制：`pocketshell-dev` 重启后不自启（disabled，见 DEC-002），需手动 start。

@@ -1,0 +1,58 @@
+# E 组证据（ADB 永久修复）— 2026-10-29
+
+> 说明：E 组证据均为 SSH 命令输出（设备 LCD 不显示 ADB 状态，无法截 LCD 图）。脚本为手工部署到 `/storage/adbd-deploy/` 运行期验证（根 fs 只读），非镜像内验证。
+
+## E1 静态校验
+```
+sh -n adbd-free-port   -> OK
+sh -n adbd-repair      -> OK
+adbd.service / adbd-repair.service -> systemd unit（非 shell）
+```
+PID 提取合成测试（`awk '/:5555 / {n=split($7,a,"/"); ...}'`）：
+```
+输入:
+  tcp 0 0 :::5555    ... LISTEN 1153/adbd
+  tcp 0 0 :::55550   ... LISTEN 4242/adbd
+  tcp 0 0 0.0.0.0:5555 ... LISTEN 777/adbd
+  tcp 0 0 :::5555    ... LISTEN 9999/python
+输出(free-port, 应命中 1153/777/9999, 排除 4242): 1153 777 9999
+输出(repair 首个): 1153
+```
+结论：`:::5555` 命中、`:::55550` 不误匹配；PID 提取正确。E1 PASS。
+
+## E3 USB-ADB 模式不误杀
+```
+usbgadget=adb
+sh adbd-repair -> repair_exit=0
+listener still: 1151/adbd   (未被杀)
+```
+结论：usbgadget=adb 时 adbd-repair 走 `case adb) exit 0` 跳过，不杀 FunctionFS adbd。E3 PASS。
+
+## E2 根因与接管
+```
+before: listener=4194/adbd (PPID=1, 非 MainPID) MainPID=4232   <- 孤儿占端口
+kill 4194; systemctl restart adbd; sleep 4
+after:  listener=4340/adbd  MainPID=4340   active=active        <- 一致（接管成功）
+restore usbgadget adb -> listener=4410/adbd MainPID=4427          <- adb 模式固有分裂（usbgadget 的 adbd 占端口）
+```
+结论：孤儿 adbd 占 5555 导致 netstat listener PID ≠ systemctl MainPID（真实故障条件）。杀掉孤儿并重启 adbd 后 listener==MainPID（接管动作有效）。在 usbgadget=adb 模式下该分裂为固有（修复按设计跳过）。E2 PASS（动作验证；`usbgadget disabled` 在本机挂起超时，未走完整脚本自动路径）。
+
+## E4 插拔/udev 触发
+```
+systemctl start adbd-repair.service -> exit=0
+Active: inactive (dead) (oneshot 完成)
+before listener=4410 / after listener=4410   (adb 模式下跳过，未干扰)
+```
+结论：udev→`adbd-repair.service` 路径可正常触发；健康/adb 模式时不做动作、不丢会话。E4 PASS（用 systemctl 模拟 udev 触发，未做物理 USB 插拔）。
+
+## E5 副作用检查
+```
+adbd=active pocketjs-kms=active pocketshell-dev=active pocketjs-sleep=active
+SSH 登录正常
+systemctl --failed: 仅 pre-existing rocknix-report-stats / rocknix-usbgadget，无新增
+```
+结论：修复操作后设备正常联网、SSH/adb 可用、pocketjs/kms 不受影响。E5 PASS。
+
+## 备注
+- 脚本未进镜像（当前设备 SYSTEM 早于 adbd 修复 commit）；实际生效需 P3 出包后部署。
+- `usbgadget disabled` 在设备上会挂起（本次超时 300s），需注意；完整脚本自动接管（非手工 kill）留待镜像版验证。
