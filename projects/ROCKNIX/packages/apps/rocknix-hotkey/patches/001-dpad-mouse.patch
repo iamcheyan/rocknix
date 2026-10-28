@@ -1,0 +1,68 @@
+Allow controllers without analog sticks to operate the on-screen keyboard.
+The new dpad_as_mouse option defaults to off.
+
+--- a/gptokeyb.cpp
++++ b/gptokeyb.cpp
+@@ -137,6 +137,7 @@
+   int textinputconfirmtrigger_jsdevice; // to trigger text input confirm via Enter key
+   int mouseX = 0;
+   int mouseY = 0;
++  unsigned dpad_mouse_buttons = 0;
+   int current_left_analog_x = 0;
+   int current_left_analog_y = 0;
+   int current_right_analog_x = 0;
+@@ -257,6 +258,7 @@
+   short right_modifier = 0;
+   short right_hk_modifier = 0;
+ 
++  bool dpad_as_mouse = false;
+   bool left_analog_as_mouse = false;
+   bool right_analog_as_mouse = false;
+   short left_analog_up = KEY_W;
+@@ -1184,6 +1186,8 @@
+       config.deadzone_x = atoi(co.value);
+     } else if (strcmp(co.key, "deadzone_triggers") == 0) {
+       config.deadzone_triggers = atoi(co.value);
++    } else if (strcmp(co.key, "dpad_as_mouse") == 0) {
++      config.dpad_as_mouse = atoi(co.value) != 0;
+     } else if (strcmp(co.key, "mouse_scale") == 0) {
+       config.fake_mouse_scale = atoi(co.value);
+     } else if (strcmp(co.key, "mouse_delay") == 0) {
+@@ -1449,7 +1453,7 @@
+   ioctl(fd, UI_SET_EVBIT, EV_SYN);
+ 
+   // Fake mouse (if configured)
+-  if (config.left_analog_as_mouse || config.right_analog_as_mouse) {
++  if (config.dpad_as_mouse || config.left_analog_as_mouse || config.right_analog_as_mouse) {
+     ioctl(fd, UI_SET_EVBIT, EV_REL);
+     ioctl(fd, UI_SET_RELBIT, REL_X);
+     ioctl(fd, UI_SET_RELBIT, REL_Y);
+@@ -1505,6 +1509,28 @@
+     case SDL_CONTROLLERBUTTONDOWN:
+     case SDL_CONTROLLERBUTTONUP: {
+       const bool is_pressed = event.type == SDL_CONTROLLERBUTTONDOWN;
++
++      if (config.dpad_as_mouse && !xbox360_mode && !state.textinputinteractive_mode_active) {
++        unsigned direction = 0;
++        switch (event.cbutton.button) {
++          case SDL_CONTROLLER_BUTTON_DPAD_UP: direction = 1; break;
++          case SDL_CONTROLLER_BUTTON_DPAD_DOWN: direction = 2; break;
++          case SDL_CONTROLLER_BUTTON_DPAD_LEFT: direction = 4; break;
++          case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: direction = 8; break;
++          default: break;
++        }
++        if (direction) {
++          if (is_pressed) state.dpad_mouse_buttons |= direction;
++          else state.dpad_mouse_buttons &= ~direction;
++          int scale = config.fake_mouse_scale > 0 ? config.fake_mouse_scale : 8192;
++          int speed = 32767 / scale;
++          if (speed < 1) speed = 1;
++          unsigned held = state.dpad_mouse_buttons;
++          state.mouseX = (int(bool(held & 8)) - int(bool(held & 4))) * speed;
++          state.mouseY = (int(bool(held & 2)) - int(bool(held & 1))) * speed;
++          return true;
++        }
++      }
+ 
+         if (state.textinputinteractive_mode_active) {
+         switch (event.cbutton.button) {
