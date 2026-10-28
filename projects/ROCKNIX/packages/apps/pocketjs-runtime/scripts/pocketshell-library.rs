@@ -15,7 +15,9 @@ fn data_dir() -> PathBuf {
     env::var_os("POCKETSHELL_LIBRARY_DATA_ROOT").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(DEFAULT_DATA))
 }
 fn allowed(path: &Path) -> bool {
-    path.components().all(|part| !matches!(part, Component::ParentDir)) && roots().iter().any(|root| path.starts_with(root))
+    if path.components().any(|part| matches!(part, Component::ParentDir)) { return false; }
+    let Ok(target) = path.canonicalize() else { return false; };
+    roots().iter().filter_map(|root| root.canonicalize().ok()).any(|root| target.starts_with(root))
 }
 fn state_name(name: &str) -> bool {
     ["progress.json", "bookmarks.json", "history.json", "settings.json"].contains(&name)
@@ -33,7 +35,7 @@ pub fn command(input: &str) -> String {
             if !allowed(&root) { return "[]".into() }
             let Ok(entries) = fs::read_dir(root) else { return "[]".into() };
             let values = entries.filter_map(Result::ok).filter_map(|entry| {
-                let path = entry.path(); if !allowed(&path) { return None }
+                let path = entry.path(); if entry.file_type().ok()?.is_symlink() || !allowed(&path) { return None }
                 let metadata = entry.metadata().ok()?;
                 Some(format!("{{\"path\":\"{}\",\"directory\":{},\"size\":{}}}", escape(&path.to_string_lossy()), metadata.is_dir(), metadata.len()))
             }).collect::<Vec<_>>();
@@ -50,17 +52,19 @@ pub fn command(input: &str) -> String {
             let (Ok(offset), Ok(length)) = (offset.parse::<u64>(), length.parse::<usize>()) else { return String::new() };
             let Ok(mut file) = fs::File::open(path) else { return String::new() };
             let Ok(metadata) = file.metadata() else { return String::new() };
-            if offset > metadata.len() { return String::new() }
-            let start = offset.saturating_sub(3);
-            if file.seek(SeekFrom::Start(start)).is_err() { return String::new() }
-            let mut bytes = vec![0; length.min(MAX_READ).saturating_add((offset - start) as usize).saturating_add(4)];
+            if !metadata.is_file() || offset >= metadata.len() { return String::new() }
+            if file.seek(SeekFrom::Start(offset)).is_err() { return String::new() }
+            let mut bytes = vec![0; length.min(MAX_READ)];
             let Ok(count) = file.read(&mut bytes) else { return String::new() };
             bytes.truncate(count);
-            let prefix = (offset - start) as usize;
-            let valid_start = if start == 0 { 0 } else { (0..=prefix.min(bytes.len())).find(|index| *index == bytes.len() || (bytes[*index] & 0xc0) != 0x80).unwrap_or(prefix) };
-            let text = String::from_utf8_lossy(&bytes[valid_start..]);
-            let skip = String::from_utf8_lossy(&bytes[valid_start..prefix.min(bytes.len())]).chars().count();
-            text.chars().skip(skip).take(length.min(MAX_READ)).collect()
+            let start = bytes.iter().position(|byte| byte & 0xc0 != 0x80).unwrap_or(bytes.len());
+            let bytes = &bytes[start..];
+            let end = match std::str::from_utf8(bytes) {
+                Ok(_) => bytes.len(),
+                Err(error) if error.error_len().is_none() => error.valid_up_to(),
+                Err(_) => bytes.len(),
+            };
+            String::from_utf8_lossy(&bytes[..end]).into_owned()
         }
         "STATE_GET" => {
             let Some(name) = fields.next() else { return String::new() };
@@ -76,5 +80,38 @@ pub fn command(input: &str) -> String {
             "ok".into()
         }
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn confines_symlinks_and_preserves_multibyte_windows() {
+        let root = env::temp_dir().join(format!("pocketshell-library-test-{}", std::process::id()));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        env::set_var("POCKETSHELL_LIBRARY_ROOTS", &docs);
+        let secret = root.join("secret.txt");
+        fs::write(&secret, "private").unwrap();
+        std::os::unix::fs::symlink(&secret, docs.join("escape.txt")).unwrap();
+        assert_eq!(command(&format!("READ\t{}\t0\t100", docs.join("escape.txt").display())), "");
+        std::os::unix::fs::symlink(&docs, docs.join("loop")).unwrap();
+        let list = command(&format!("LIST\t{}", docs.display()));
+        assert!(!list.contains("escape.txt"));
+        assert!(!list.contains("loop"));
+        let text = format!("{}\nnext line\n", "日本語😀".repeat(3000));
+        let path = docs.join("japanese.txt");
+        fs::write(&path, &text).unwrap();
+        let mut reconstructed = String::new();
+        while reconstructed.len() < text.len() {
+            let chunk = command(&format!("READ\t{}\t{}\t{}", path.display(), reconstructed.len(), MAX_READ));
+            assert!(!chunk.is_empty());
+            assert!(!chunk.contains('\u{fffd}'));
+            reconstructed.push_str(&chunk);
+        }
+        assert_eq!(reconstructed, text);
+        fs::remove_dir_all(root).unwrap();
     }
 }

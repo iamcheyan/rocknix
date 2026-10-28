@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { classify, decodeWindow, indexSections, progressAt, safeLoad, searchWindow, stateSnapshot, WINDOW_BYTES } from "./library-model.ts";
+import { classify, decodeWindow, indexSections, progressAt, safeLoad, searchWindow, stateSnapshot, utf8ByteLength, WINDOW_BYTES } from "./library-model.ts";
 
 const utf8 = new TextEncoder();
 const lines = ["# Start", "αβγ", ...Array.from({ length: 30000 }, (_, i) => `line ${i}`), "## Deep Heading", "needle-crosses-window 終端"];
@@ -28,3 +28,8 @@ assert.ok(largest <= WINDOW_BYTES + 3, `read window exceeded: ${largest}`);
 const state = { progress: [], bookmarks: [{ file: "a", chapter: 1, line: 3, timestamp: 1, title: "A" }], history: [], settings: { fontSize: 18, lineHeight: 1.35, margins: 24, theme: "dark", showProgress: true } };
 assert.equal(stateSnapshot(state, undefined).bookmarks.length, 1);
 console.log(JSON.stringify({ ok: true, fileBytes: markdown.length, largestReadWindow: largest, readCalls: reads, sections: sections.length, matches: matches.length }));
+
+const japanese = "日本語😀\nnext line";
+const prefix = japanese.slice(0, japanese.indexOf("\n") + 1);
+assert.equal(utf8ByteLength(prefix), utf8.encode(prefix).length);
+assert.equal(new TextDecoder().decode(utf8.encode(japanese).slice(utf8ByteLength(prefix))), "next line");

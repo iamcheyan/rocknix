@@ -71,7 +71,7 @@ mount(() => {
     const sections: Model.Section[] = []; let offset = 0; let lineNumber = 1; let carry = "";
     while (offset < item.size) {
       const chunk = call(`READ\t${item.path}\t${offset}\t${Model.WINDOW_BYTES}`); if (!chunk) break;
-      offset += Math.min(Model.WINDOW_BYTES, item.size - offset); const rows = (carry + chunk).split("\n"); carry = rows.pop() ?? "";
+      offset += Model.utf8ByteLength(chunk); const rows = (carry + chunk).split("\n"); carry = rows.pop() ?? "";
       for (const text of rows) { if (/^#{1,6}\s+/.test(text)) sections.push({ title: text.replace(/^#{1,6}\s+/, "").trim(), line: lineNumber }); lineNumber++; }
     }
     return sections;
@@ -89,8 +89,8 @@ mount(() => {
     while (currentLine < targetLine && offset < item.size) {
       const chunk = call(`READ\t${item.path}\t${offset}\t${Model.WINDOW_BYTES}`); if (!chunk) break;
       const needed = targetLine - currentLine; const newlines = [...chunk.matchAll(/\n/g)];
-      if (newlines.length >= needed) { offset += (newlines[needed - 1]?.index ?? 0) + 1; currentLine = targetLine; break; }
-      currentLine += newlines.length; offset += Math.min(Model.WINDOW_BYTES, item.size - offset);
+      if (newlines.length >= needed) { offset += Model.utf8ByteLength(chunk.slice(0, (newlines[needed - 1]?.index ?? 0) + 1)); currentLine = targetLine; break; }
+      currentLine += newlines.length; offset += Model.utf8ByteLength(chunk);
     }
     currentOffset = offset;
     const chunk = call(`READ\t${item.path}\t${offset}\t${Model.WINDOW_BYTES}`);
@@ -148,7 +148,7 @@ mount(() => {
     while (offset < size && found.length < 100) {
       const chunk = call(`READ\t${item.path}\t${offset}\t${Model.WINDOW_BYTES}`);
       if (!chunk) break;
-      offset += Math.min(Model.WINDOW_BYTES, size - offset);
+      offset += Model.utf8ByteLength(chunk);
       const pieces = (carry + chunk).split("\n"); carry = pieces.pop() ?? "";
       for (const text of pieces) { if (text.toLowerCase().includes(input().toLowerCase())) found.push({ line: lineNumber, text: text.slice(0, 180) }); lineNumber++; }
     }

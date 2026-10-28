@@ -145,6 +145,7 @@
 
   let socket;
   let protocolSeq = 0;
+  let logEntries = [];
   let inputEvents = 0;
   let sessionEvents=[];
   let sessionStarted=Date.now();
@@ -155,7 +156,7 @@
   let link = document.getElementById('link');
   function connect() {
     socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-    socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', version: 1 }));
+    socket.onopen = () => { protocolSeq = 0; socket.send(JSON.stringify({ type: 'hello', version: 1 })); };
     socket.onmessage = (event) => {
       try {
         const msg=JSON.parse(event.data);
@@ -163,7 +164,7 @@
         protocolSeq=msg.seq;
         if(msg.type==='workspace_state'){state=msg.state;active=state.view??state.visible;recordEvent({type:'workspace_state',workspace_state:state});renderPanels();draw();}
         else if(msg.type==='terminal_buffer'){if(msg.full_snapshot)rows=Array.from({length:ROWS},()=>[]);applyFrame(msg.data||'');recordEvent({type:'terminal_buffer',terminal_buffer:msg.data,full_snapshot:msg.full_snapshot});renderPanels();draw();}
-        else if(msg.type==='logs'&&state){state.log=msg.entries;recordEvent({type:'logs',entries:msg.entries});renderPanels();}
+        else if(msg.type==='logs'&&state){logEntries=msg.entries;recordEvent({type:'logs',entries:msg.entries});renderPanels();}
         else if(msg.type==='metrics'&&state){state.fps=msg.fps;state.frameMs=msg.frame_ms;state.runs=msg.ansi_events;state.ansiEvents=msg.ansi_events;state.inputEvents=msg.input_events;recordEvent({type:'metrics',metrics:msg});renderPanels();}
         else if(msg.type==='runtime_state')recordEvent({type:'runtime_state',runtime:msg});
         else if(msg.type==='frame_mirror_status')link.textContent=msg.enabled?'frame mirror active':'mirror unavailable · '+msg.reason;
@@ -177,10 +178,10 @@
   }
   function sendProtocol(message) { if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
   function sendKey(key) { inputEvents++; const message={type:'input',workspace:active,key}; recordEvent({type:'input',message}); sendProtocol(message); }
-  function sendText(text) { if(text&&text.length<=4096&&!/[\\x00-\\x1f\\x7f]/.test(text)){inputEvents++;const message={type:'input',workspace:active,text};recordEvent({type:'input',message});sendProtocol(message);} }
+  function sendText(text) { if(text&&text.length<=4096&&!/[\x00-\x1f\x7f]/.test(text)){inputEvents++;const message={type:'input',workspace:active,text};recordEvent({type:'input',message});sendProtocol(message);} }
   function recordEvent(event){sessionEvents.push({at_ms:Date.now()-sessionStarted,...event});}
   function downloadSession(){const blob=new Blob([JSON.stringify({protocol_version:1,events:sessionEvents},null,2)],{type:'application/json'});const anchor=document.createElement('a');anchor.href=URL.createObjectURL(blob);anchor.download='session.json';anchor.click();URL.revokeObjectURL(anchor.href);}
-  function loadSession(file){const reader=new FileReader();reader.onload=()=>{const events=JSON.parse(reader.result).events||[];let i=0;let prior=0;function next(){if(i>=events.length)return;const item=events[i++];const delay=Math.max(0,item.at_ms-prior);prior=item.at_ms;setTimeout(()=>{if(item.type==='workspace_state'){state=item.workspace_state;active=state.view??state.visible;renderPanels();}else if(item.type==='terminal_buffer'){if(item.full_snapshot)rows=Array.from({length:ROWS},()=>[]);applyFrame(item.terminal_buffer||'');draw();}else if(item.type==='logs'&&state){state.log=item.entries;renderPanels();}else if(item.type==='metrics'&&state){state.fps=item.metrics.fps;state.frameMs=item.metrics.frame_ms;renderPanels();}next();},delay);}next();};reader.readAsText(file);}
+  function loadSession(file){const reader=new FileReader();reader.onload=()=>{const events=JSON.parse(reader.result).events||[];let i=0;let prior=0;function next(){if(i>=events.length)return;const item=events[i++];const delay=Math.max(0,item.at_ms-prior);prior=item.at_ms;setTimeout(()=>{if(item.type==='workspace_state'){state=item.workspace_state;active=state.view??state.visible;renderPanels();}else if(item.type==='terminal_buffer'){if(item.full_snapshot)rows=Array.from({length:ROWS},()=>[]);applyFrame(item.terminal_buffer||'');draw();}else if(item.type==='logs'&&state){logEntries=item.entries;renderPanels();}else if(item.type==='metrics'&&state){state.fps=item.metrics.fps;state.frameMs=item.metrics.frame_ms;renderPanels();}next();},delay);}next();};reader.readAsText(file);}
   document.getElementById('sessionDownload').onclick=downloadSession;
   document.getElementById('sessionFile').onchange=e=>{if(e.target.files[0])loadSession(e.target.files[0]);};
   document.getElementById('mirrorToggle').onclick=()=>sendProtocol({type:'frame_mirror',enabled:true});
@@ -272,7 +273,7 @@
     const ws = viewIdx === 5 ? { name: 'REPLAY', state: state.replay.playing ? 'playing' : 'paused', pid: 0, pty: '-', cells: 0, idle: 0, bytesIn: 0, bytesOut: 0, altScreen: false } : (state.workspaces[viewIdx] || state.workspaces[0]);
     document.getElementById('bufferKv').innerHTML = [['Rows',state.rows],['Cols',state.cols],['Cursor','row '+cursor.row+', col '+cursor.col+(cursor.visible?'':' (hidden)')],['Visible cells',viewIdx===5?(state.replay.chunks+' replay chunks'):state.cells+' / '+(state.rows*state.cols)],['Active','WS'+(viewIdx+1)+' '+ws.name+' ('+ws.state+')'],['Alt screen',ws.altScreen?'yes':'no'],['Bytes in/out',ws.bytesIn+' / '+ws.bytesOut]].map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
     document.querySelector('#wsTable tbody').innerHTML = state.workspaces.map((w,i)=>'<tr><td'+(i===viewIdx?' class="ok"':'')+'>WS'+(w.id+1)+'</td><td class="'+(w.state==='running'?'ok':w.state==='exited'?'bad':'warn')+'">'+w.state+'</td><td>'+(w.pid||'-')+'</td><td>'+escapeHtml(w.pty)+'</td><td>'+w.cells+'</td><td>'+(w.idle?w.idle.toFixed(1)+'s':'-')+'</td></tr>').join('');
-    document.getElementById('logLines').innerHTML = state.log.length ? state.log.map((line,i)=>'<div class="logline'+(i%2?' alt':'')+'">'+escapeHtml(line)+'</div>').join('') : '<pre>(empty)</pre>';
+    document.getElementById('logLines').innerHTML = logEntries.length ? logEntries.map((line,i)=>'<div class="logline'+(i%2?' alt':'')+'">'+escapeHtml(line)+'</div>').join('') : '<pre>(empty)</pre>';
     document.getElementById('perfKv').innerHTML = [['FPS',state.fps.toFixed(1)],['Frame time',state.frameMs.toFixed(2)+' ms'],['Workspace count',state.workspaces.length],['ANSI events',state.ansiEvents??state.runs],['Input events',state.inputEvents??inputEvents],['Buffer size',state.cols+' × '+state.rows],['CPU',state.cpuEstimate||'estimate: host process unavailable'],['Memory',state.memoryEstimate||'estimate: unavailable'],['Network',state.networkEstimate||'estimate: unavailable']].map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
     document.getElementById('ptyOut').textContent = JSON.stringify(ws,null,2);
     document.querySelectorAll('#wsbar .ws').forEach((el,i)=>el.classList.toggle('on',i===active));

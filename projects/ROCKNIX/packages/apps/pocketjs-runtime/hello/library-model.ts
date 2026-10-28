@@ -116,3 +116,12 @@ export function progressAt(file: string, chapter: number, line: number, totalLin
 export function stateSnapshot(state: LibraryState, current: Progress | undefined) {
   return { version: 1, current: current ?? null, progress: current?.percentage ?? 0, chapter: current?.chapter ?? 0, bookmarks: state.bookmarks.map((bookmark) => ({ ...bookmark })) };
 }
+
+export function utf8ByteLength(text: string): number {
+  let size = 0;
+  for (const character of text) {
+    const point = character.codePointAt(0)!;
+    size += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+  }
+  return size;
+}
