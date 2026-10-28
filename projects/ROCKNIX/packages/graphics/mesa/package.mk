@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
+# Copyright (C) 2009-2016 Stephan Raue
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="mesa"
@@ -12,6 +12,8 @@ PKG_DEPENDS_HOST="toolchain:host expat:host libclc:host libdrm:host llvm:host Ma
 PKG_DEPENDS_TARGET="toolchain expat libdrm Mako:host pyyaml:host"
 PKG_LONGDESC="Mesa is a 3-D graphics library with an API."
 PKG_PATCH_DIRS+=" ${DEVICE}"
+# Reconfigure Mesa when the selected display or graphics backends change.
+PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
 
 get_graphicdrivers
 
@@ -70,7 +72,6 @@ elif [ "${DISPLAYSERVER}" = "wl" ]; then
   export X11_INCLUDES=
 else
   PKG_MESON_OPTS_TARGET+="	-Dplatforms="" \
-				-Dgallium-nine=false \
 				-Dglx=disabled \
 				-Dglvnd=disabled"
 fi

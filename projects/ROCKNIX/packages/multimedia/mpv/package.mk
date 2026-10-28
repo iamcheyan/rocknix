@@ -10,6 +10,7 @@ PKG_LICENSE="GPLv2+"
 PKG_SITE="https://github.com/mpv-player/mpv"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain ffmpeg SDL2 luajit libass libplacebo libdrm"
+PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
 PKG_LONGDESC="Video player based on MPlayer/mplayer2 https://mpv.io"
 
 if [ "${OPENGLES_SUPPORT}" = yes ]; then
@@ -24,6 +25,14 @@ if [ "${DISPLAYSERVER}" = "wl" ]; then
   PKG_MESON_OPTS_TARGET+=" -Dwayland=enabled"
 else
   PKG_MESON_OPTS_TARGET+=" -Dwayland=disabled"
+fi
+
+if [ "${DISPLAYSERVER}" = "x11" ]; then
+  PKG_MESON_OPTS_TARGET+=" -Dx11=enabled"
+  PKG_STAMP+=" x11"
+else
+  PKG_MESON_OPTS_TARGET+=" -Dx11=disabled -Dx11-clipboard=disabled"
+  PKG_STAMP+=" no-x11 no-x11-clipboard"
 fi
 
 PKG_MESON_OPTS_TARGET+=" -Dsdl2-audio=enabled -Dsdl2-video=enabled -Dsdl2-gamepad=enabled"
@@ -55,4 +64,11 @@ post_makeinstall_target() {
       sed -i 's/^hwdec=.*/hwdec=v4l2m2m-copy,auto/' ${INSTALL}/etc/mpv/mpv.conf ${INSTALL}/usr/config/mpv/mpv.conf
     ;;
   esac
+
+  if [ "${DISPLAYSERVER}" = "no" ]; then
+    for config in "${INSTALL}/etc/mpv/mpv.conf" "${INSTALL}/usr/config/mpv/mpv.conf"; do
+      sed -i 's/^gpu-api=.*/gpu-api=opengl/' "$config"
+      echo 'gpu-context=drm' >> "$config"
+    done
+  fi
 }

@@ -5,7 +5,9 @@ H700 frontend quirk live in [iamcheyan/rocknix](https://github.com/iamcheyan/roc
 ROCKNIX downloads a pinned heya source archive and builds it with its ARM64 Go/SDL2
 toolchain. The local desktop preview builds the sibling heya checkout instead.
 
-The boot sequence is rocknix-autostart → H700 quirks → app seeder → sway + heya.
+On the H700 KMS image, the boot sequence is rocknix-autostart → H700 quirks →
+app seeder → PocketJS. The heya package installs its ROCKNIX service from the
+authoritative package recipe; this directory contains integration assets only.
 
 When `DEVELOPER_MODE=true` (or `PROJECT_DEVELOPER_MODE=true`) is set for the
 ROCKNIX build, the package builds and installs `/usr/bin/devexec` and rewrites

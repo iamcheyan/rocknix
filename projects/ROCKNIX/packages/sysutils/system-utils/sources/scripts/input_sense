@@ -10,6 +10,12 @@
 # set -e
 set -o pipefail
 
+notify() {
+  if [ -x /usr/bin/mako-notify ]; then
+    /usr/bin/mako-notify "$@"
+  fi
+}
+
 ### Summary
 #   This script listens to input events and takes actions.
 ###
@@ -248,7 +254,7 @@ execute_action() {
         ${FN_A_ACTION_UP}
         if [ "${FN_A_ACTION_UP}" == "brightness up" ]; then
           CUR_BRIGHTNESS=$(get_setting "display.brightness")
-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
         fi
         ;;
       down)
@@ -256,7 +262,7 @@ execute_action() {
         ${FN_A_ACTION_DOWN}
         if [ "${FN_A_ACTION_DOWN}" == "brightness down" ]; then
           CUR_BRIGHTNESS=$(get_setting "display.brightness")
-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
         fi
         ;;
     esac
@@ -405,7 +411,7 @@ set +e
           stop_volume_repeat
           if [ "${FN_A_PRESSED}" = false ] && [ "${FN_B_PRESSED}" = false ]; then
             CUR_VOLUME=$(get_setting "audio.volume")
-            /usr/bin/mako-notify "Volume: ${CUR_VOLUME}%" -no-es
+            notify "Volume: ${CUR_VOLUME}%" -no-es
           fi
         fi
       ;;
@@ -426,7 +432,7 @@ set +e
           stop_volume_repeat
           if [ "${FN_A_PRESSED}" = false ] && [ "${FN_B_PRESSED}" = false ]; then
             CUR_VOLUME=$(get_setting "audio.volume")
-            /usr/bin/mako-notify "Volume: ${CUR_VOLUME}%" -no-es
+            notify "Volume: ${CUR_VOLUME}%" -no-es
           fi
         fi
       ;;
@@ -502,7 +508,7 @@ set +e
           ${DEBUG} && log $0 "${FUNCTION_HOTKEY_DPAD_RIGHT_EVENT}${FUNCTION_HOTKEY_HAT_RIGHT_EVENT}: Brightness Up"
           brightness up
           CUR_BRIGHTNESS=$(get_setting "display.brightness")
-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
         fi
       ;;
       (${FUNCTION_HOTKEY_DPAD_LEFT_EVENT}|${FUNCTION_HOTKEY_HAT_LEFT_EVENT})
@@ -510,7 +516,7 @@ set +e
           ${DEBUG} && log $0 "${FUNCTION_HOTKEY_DPAD_LEFT_EVENT}${FUNCTION_HOTKEY_HAT_LEFT_EVENT}: Brightness Down"
           brightness down
           CUR_BRIGHTNESS=$(get_setting "display.brightness")
-          /usr/bin/mako-notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
+          notify "Brightness: ${CUR_BRIGHTNESS}%" -no-es
         fi
       ;;
       (${FUNCTION_HOTKEY_TOUCH_EVENT})
@@ -525,7 +531,7 @@ set +e
           /usr/bin/rocknix-screenshot
           # Display notification if 'success' exit code
           SCREENSHOT_SUCCESS=$?
-          [ "$SCREENSHOT_SUCCESS" -eq 0 ] && /usr/bin/mako-notify "Screenshot Saved" -no-ra
+          [ "$SCREENSHOT_SUCCESS" -eq 0 ] && notify "Screenshot Saved" -no-ra
         fi
       ;;
      (${FUNCTION_HOTKEY_BTN_WEST_EVENT})
@@ -545,7 +551,7 @@ set +e
          ${DEBUG} && log $0 "${FUNCTION_HOTKEY_BTN_SOUTH_EVENT}: Toggling touchscreen"
          /usr/bin/rocknix-touchscreen toggle
          TOGGLE_SUCCESS=$?
-         [ "$TOGGLE_SUCCESS" -eq 0 ] && /usr/bin/mako-notify "Touchscreen toggled" -no-es
+         [ "$TOGGLE_SUCCESS" -eq 0 ] && notify "Touchscreen toggled" -no-es
        fi
      ;;
   esac

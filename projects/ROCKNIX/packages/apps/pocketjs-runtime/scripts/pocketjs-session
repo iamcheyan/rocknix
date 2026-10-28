@@ -1,5 +1,27 @@
 #!/bin/sh
 set -eu
-/usr/bin/systemctl stop heya.service
-/usr/bin/systemctl stop sway.service
-/usr/libexec/pocket-linux-kms --package "${POCKETJS_APP:-/storage/pocketjs/apps/hello.pocket}"
+
+default=/usr/share/pocketjs/apps/boot.pocket
+app=${POCKETJS_APP:-$default}
+runtime=/usr/libexec/pocket-linux-kms
+mkdir -p /storage/pocketjs/apps /storage/pocketjs/data /storage/pocketjs/cache /storage/pocketjs/logs
+
+if ! "$runtime" --package "$app" --check; then
+  [ "$app" != "$default" ] || exit 1
+  echo "PocketJS: selected app rejected; starting the packaged boot app" >&2
+  app=$default
+  "$runtime" --package "$app" --check
+fi
+
+card=${POCKETJS_CARD:-}
+if [ -z "$card" ]; then
+  for status in /sys/class/drm/card*-*/status; do
+    [ -f "$status" ] || continue
+    [ "$(cat "$status")" = connected ] || continue
+    connector=${status%/status}
+    connector=${connector##*/}
+    card=/dev/dri/${connector%%-*}
+    break
+  done
+fi
+exec "$runtime" --package "$app" --card "${card:-/dev/dri/card0}"

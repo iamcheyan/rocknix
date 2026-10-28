@@ -2,6 +2,7 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 . ${ROOT}/packages/graphics/cairo/package.mk
+PKG_STAMP="${DISPLAYSERVER} ${OPENGL} ${OPENGLES} ${VULKAN}"
 
 configure_package() {
   if [ "${OPENGL}" != "no" ]; then

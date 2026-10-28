@@ -1,0 +1,15 @@
+[Unit]
+Description=PocketJS recovery console
+Conflicts=pocketjs-kms.service
+After=systemd-user-sessions.service
+
+[Service]
+Type=idle
+TTYPath=/dev/tty7
+StandardInput=tty
+TTYReset=yes
+TTYVHangup=yes
+ExecStartPre=/usr/bin/chvt 7
+ExecStart=/usr/sbin/agetty --noclear tty7 linux
+Restart=always
+RestartSec=3
