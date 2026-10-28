@@ -39,3 +39,11 @@ AGENTS.md、docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md、devices/H700
 ## P2 风险提示
 
 以上未跟踪文件中，相当一部分（如 `patch-build-fonts.py`、`patch-runtime.py`、`pocketshell-*.rs`、`pocketshell-dev.service`）在本机 `main` 上已是**已跟踪**文件 —— HX90 直接 fast-forward 会因 "untracked working tree files would be overwritten" 失败。P2 需先把冲突未跟踪文件备份重命名，ff 后逐个与上游版本比对，决定保留哪份。
+## P2 对齐结果（2026-10-29 00:45 JST）
+
+- `git fetch` + `git merge --ff-only origin/main` 成功，HX90 HEAD = `d681c8f25e`（= 本机已推送最新的 origin/main，含 P0/P1 文档提交）。
+- 冲突处理：72 个未跟踪文件与 ff 路径相交，已先 `cp -a` 备份到 `/tmp/hx90-p2-backup-20261029T003343/`（4.8MB）再删除，未丢失任何内容。
+- 26 个已跟踪改动：`git diff stash@{0} HEAD` 显示其中 **25 个文件的 stash 版本与当前 HEAD 完全一致** → 这些改动早已合入 main（本机 `174727d4a4` 及其后续）。仅 `pocketjs-runtime/hello/main.tsx` 在 stash 中与 HEAD 不一致；该文件本机另有更新的未提交版本，为权威来源，HX90 的 stash 旧版无需单独提交。
+- `git stash@{0}`（"P2 pre-ff tracked changes 2026-10-29"）保留未丢弃；完整 diff 亦存档于 `attachments/hx90-rocknix-20261029T003343.patch`。
+- ff 后残留未跟踪（不与 main 冲突、构建会重新生成）：`.buildlog/`、`linux-splash`、`main_linux.c`、`pocketjs-runtime/{README,browser-preview.html,fixtures,fonts,fonts.json,launcher-*,library-*,main.tsx,pocket.json,pocket.runtime-config.ts,profile.ts,scripts/pocketjs-legacy-settings}` 等。不影响后续构建。
+- 结论：HX90 已与 origin/main 基线对齐，可开始 P3 构建修复。
