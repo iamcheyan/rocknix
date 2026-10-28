@@ -10,6 +10,7 @@ PKG_SITE="https://www.libsdl.org/"
 PKG_URL="https://www.libsdl.org/release/SDL2-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host"
 PKG_DEPENDS_TARGET="toolchain alsa-lib systemd dbus pulseaudio libdrm"
+PKG_STAMP="${DISPLAYSERVER} ${WINDOWMANAGER} ${OPENGL} ${OPENGLES} ${VULKAN}"
 PKG_LONGDESC="Simple DirectMedia Layer is a cross-platform development library designed to provide low level access to audio, keyboard, mouse, joystick, and graphics hardware."
 
 if [ ! "${OPENGL_SUPPORT}" = "no" ]; then
@@ -61,7 +62,8 @@ if [ "${DISPLAYSERVER}" = "wl" ]; then
                            -DVIDEO_X11=OFF \
                            -DSDL_X11=OFF"
 else
-  PKG_CMAKE_OPTS_TARGET+=" -DVIDEO_WAYLAND=OFF \
+  PKG_CMAKE_OPTS_TARGET+=" -DSDL_WAYLAND=OFF \
+                           -DVIDEO_WAYLAND=OFF \
                            -DVIDEO_WAYLAND_QT_TOUCH=ON \
                            -DWAYLAND_SHARED=OFF \
                            -DVIDEO_X11=OFF \

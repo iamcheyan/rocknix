@@ -12,8 +12,12 @@ PKG_DEPENDS_TARGET="toolchain squashfs-tools:host dosfstools:host fakeroot:host 
                     mtools:host populatefs:host libc gcc linux linux-drivers linux-firmware \
                     ${BOOTLOADER} busybox lsof umtprd util-linux usb-modeswitch jq socat \
                     p7zip file grep util-linux btrfs-progs zstd lz4 empty lzo libzip \
-                    bash coreutils system-utils autostart quirks powerstate sdl2notify \
-                    gzip six xmlstarlet pyudev dialog network mako-osd rocknix"
+                    bash coreutils system-utils autostart quirks powerstate \
+                    gzip six xmlstarlet pyudev dialog network rocknix"
+
+if [ "${DISPLAYSERVER}" = "wl" ]; then
+  PKG_DEPENDS_TARGET+=" sdl2notify mako-osd"
+fi
 
 PKG_UI="emulationstation es-themes textviewer lowerdeck"
 PKG_UI_TOOLS="fbgrab grim"
@@ -52,13 +56,13 @@ else
   PKG_DEPENDS_TARGET+=" ${PKG_TOOLS} ${PKG_FONTS} ${PKG_SOUND} ${PKG_SYNC} ${PKG_GRAPHICS} ${PKG_UI} ${PKG_UI_TOOLS} ${PKG_MULTIMEDIA} misc-packages"
 
   # GL demos and tools
-  [[ ! -z "${OPENGL_SUPPORT}" ]] && PKG_DEPENDS_TARGET+=" mesa-demos"
+  [[ "${MINI_DISTRO}" != "yes" && "${OPENGL_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" mesa-demos"
 
   # GLmark2
-  [[ ! -z "${OPENGLES_SUPPORT}" ]] && PKG_DEPENDS_TARGET+=" glmark2"
+  [[ "${MINI_DISTRO}" != "yes" && "${OPENGLES_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" glmark2"
 
   # Vulkan demos and tools
-  [ "${VULKAN_SUPPORT}" = "yes" ] && PKG_DEPENDS_TARGET+=" vkmark"
+  [[ "${MINI_DISTRO}" != "yes" && "${VULKAN_SUPPORT}" = "yes" ]] && PKG_DEPENDS_TARGET+=" vkmark"
 
   # Weston kiosk shell dpms support.
   [ "${WINDOWMANAGER}" = "weston" ] && PKG_DEPENDS_TARGET+=" weston-kiosk-shell-dpms"

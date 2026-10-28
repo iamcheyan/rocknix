@@ -1,6 +1,9 @@
 # CPR77 Phase 3 implementation log
 
-Status: partial PoC; hardware launch and release image acceptance blocked.
+Historical PoC report. Current H700 migration work is tracked in
+[H700_POCKETJS_MIGRATION.md](H700_POCKETJS_MIGRATION.md).
+
+Status at the time of this report: partial PoC; hardware launch and release image acceptance blocked.
 
 ## Source and upstream behavior
 

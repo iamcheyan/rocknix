@@ -8,7 +8,7 @@ PKG_ARCH="any"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/iamcheyan/heya"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
-PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb commander foot rocknix-hotkey"
+PKG_DEPENDS_TARGET="toolchain go:host SDL2 SDL2_ttf rocknix gamecontrollerdb commander rocknix-hotkey"
 PKG_LONGDESC="Lightweight JSON-driven launcher shell for Linux handhelds"
 PKG_TOOLCHAIN="manual"
 
@@ -25,7 +25,7 @@ make_target() {
   export CGO_CFLAGS="${CFLAGS}"
   export CGO_LDFLAGS="${LDFLAGS} -lSDL2 -lSDL2_ttf"
   export GOCACHE="${PKG_BUILD}/.gocache"
-  export GOPATH="${PKG_BUILD}/.gopath"
+  export GOPATH="${BUILD}/.gopath-heya"
   export GOFLAGS="-mod=readonly"
   export GOTOOLCHAIN=local
 
@@ -67,6 +67,9 @@ makeinstall_target() {
   mkdir -p "${INSTALL}/usr/share/heya"
   install -m 0644 "${PKG_DIR}/config/removed-apps" \
     "${INSTALL}/usr/share/heya/removed-apps"
+  if [ "${DISPLAYSERVER}" != "wl" ]; then
+    echo terminal >> "${INSTALL}/usr/share/heya/removed-apps"
+  fi
   if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
     install -m 0755 "${PKG_BUILD}/devexec" "${INSTALL}/usr/bin/devexec"
   fi
@@ -80,14 +83,18 @@ makeinstall_target() {
   install -m 0644 "${PKG_BUILD}/themes/default/theme.json" \
     "${INSTALL}/usr/share/heya/themes/default/theme.json"
 
-  mkdir -p "${INSTALL}/usr/lib/systemd/system"
-  if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
-    sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
-      "${PKG_DIR}/integrations/rocknix/heya.service" \
-      > "${INSTALL}/usr/lib/systemd/system/heya.service"
-  else
-    install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
-      "${INSTALL}/usr/lib/systemd/system/heya.service"
+  if [ "${DISPLAYSERVER}" = "wl" ]; then
+  if [ "${DISPLAYSERVER}" = "wl" ]; then
+    mkdir -p "${INSTALL}/usr/lib/systemd/system"
+    if [ "${PROJECT_DEVELOPER_MODE:-${DEVELOPER_MODE:-false}}" = "true" ]; then
+      sed 's#^ExecStart=/usr/bin/heya #ExecStart=/usr/bin/devexec /usr/bin/heya #' \
+        "${PKG_DIR}/integrations/rocknix/heya.service" \
+        > "${INSTALL}/usr/lib/systemd/system/heya.service"
+    else
+      install -m 0644 "${PKG_DIR}/integrations/rocknix/heya.service" \
+        "${INSTALL}/usr/lib/systemd/system/heya.service"
+    fi
+    fi
   fi
 
   mkdir -p "${INSTALL}/usr/lib/autostart/common"
@@ -96,5 +103,5 @@ makeinstall_target() {
 }
 
 post_install() {
-  enable_service heya.service
+  [ "${DISPLAYSERVER}" = "wl" ] && enable_service heya.service || true
 }

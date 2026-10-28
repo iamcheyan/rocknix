@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the mini image's entrypoints and ELF library closure without running ARM code."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -24,12 +25,15 @@ def resolve(root, path):
     raise ValueError(f'symlink loop: {path}')
 
 
-def check(root):
+def check(root, frontend=None):
+    if frontend is None:
+        frontend = 'pocketjs' if resolve(root, '/usr/share/pocketjs/pocket-profile.json').is_file() else 'heya'
     commands = [
         'heya', 'heya-control', 'xmplayer',
-        'xmplayer-playback', 'mpv', 'foot', 'gptokeyb', 'nmcli', 'evtest',
+        'xmplayer-playback', 'mpv', 'gptokeyb', 'nmcli', 'evtest',
         'disk-browser', 'mc', 'rocknix-services',
     ]
+    commands += ['pocket', 'pocket-session-run', 'commander', 'chvt', 'flock', 'systemd-run', 'systemctl'] if frontend == 'pocketjs' else ['foot']
     errors = []
     for command in commands:
         if not os.access(resolve(root, '/usr/bin/' + command), os.X_OK):
@@ -38,7 +42,7 @@ def check(root):
         errors.append('missing executable: /usr/sbin/rfkill')
     for path in [
         '/usr/lib/bluetooth/bluetoothd', '/usr/config/SDL-GameControllerDB/gamecontrollerdb.txt',
-        '/usr/lib/systemd/system/heya.service', '/usr/lib/autostart/common/050-heya-apps',
+        '/usr/lib/autostart/common/050-heya-apps',
         '/usr/lib/udev/rules.d/99-automount.rules', '/usr/lib/tmpfiles.d/rocknix-dirs.conf',
         '/usr/share/heya/apps/xmplayer/app.json', '/usr/share/heya/apps/disk/app.json',
         '/usr/lib/autostart/daemons/003-avahi', '/usr/lib/autostart/daemons/028-telnet',
@@ -47,10 +51,37 @@ def check(root):
     ]:
         if not resolve(root, path).is_file():
             errors.append(f'missing runtime file: {path}')
+    if frontend == 'pocketjs':
+        for path in ['/usr/libexec/pocket-linux-kms', '/usr/libexec/pocketjs-session',
+                     '/usr/lib/systemd/system/pocketjs-kms.service',
+                     '/usr/lib/systemd/system/pocketjs-recovery.service',
+                     '/usr/share/pocketjs/apps/boot.pocket']:
+            if not resolve(root, path).is_file():
+                errors.append(f'missing PocketJS runtime file: {path}')
+        if not os.access(resolve(root, '/usr/sbin/agetty'), os.X_OK):
+            errors.append('missing recovery console executable: /usr/sbin/agetty')
+        quirk = resolve(root, '/usr/lib/autostart/quirks/platforms/H700/090-ui_service')
+        if not quirk.is_file() or 'UI_SERVICE="pocketjs-kms.service"' not in quirk.read_text():
+            errors.append('H700 does not select the PocketJS startup service')
+        for pattern in ['usr/bin/sway*', 'usr/bin/foot', 'usr/bin/weston*', 'usr/bin/Xwayland',
+                        'usr/bin/mako*', 'usr/lib/libwayland*', 'usr/lib/libwlroots*',
+                        'usr/lib/systemd/system/sway.service', 'usr/lib/systemd/system/heya.service']:
+            for path in root.glob(pattern):
+                errors.append(f'forbidden compositor runtime file: /{path.relative_to(root)}')
+        try:
+            profile = json.loads(resolve(root, '/usr/share/pocketjs/pocket-profile.json').read_text())['profile']
+            if profile['id'] != 'rocknix-h700-kms' or profile['display']['physicalViewport'] != [720, 480]:
+                errors.append('unexpected PocketJS profile or display geometry')
+        except (OSError, ValueError, KeyError, TypeError):
+            errors.append('missing or invalid PocketJS profile export')
+    elif not resolve(root, '/usr/lib/systemd/system/heya.service').is_file():
+        errors.append('missing runtime file: /usr/lib/systemd/system/heya.service')
     for path in sorted((root / 'usr/share/xmplayer/bin').glob('*')):
         if path.name == 'gptokeyb2':
             errors.append('obsolete bundled gptokeyb2 still installed')
     entries = ['/usr/bin/' + name for name in ('heya', 'mpv', 'gptokeyb')]
+    if frontend == 'pocketjs':
+        entries += ['/usr/libexec/pocket-linux-kms', '/usr/bin/commander']
     entries += ['/usr/share/xmplayer/bin/' + name for name in ('love', 'ffmpeg', 'ffplay')]
     visited = set()
     for entry in entries:
@@ -98,11 +129,12 @@ def check(root):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('rootfs', type=Path)
+    parser.add_argument('--frontend', choices=['heya', 'pocketjs'])
     args = parser.parse_args()
     root = args.rootfs.resolve()
     if not (root / 'usr').is_dir():
         parser.error('expected a built image/system root containing usr/')
-    problems = check(root)
+    problems = check(root, args.frontend)
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:

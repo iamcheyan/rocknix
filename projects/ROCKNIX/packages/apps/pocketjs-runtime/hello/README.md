@@ -1,5 +1,9 @@
-# Hello PocketJS for ROCKNIX H700
+# H700 boot application
 
-Built from the PocketJS `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f` workspace with `pocket compile` against the H700 Linux-KMS profile. The exact `.pocket` output is copied here by the package preparation step; it embeds no host binary or profile asset.
+The package host build typechecks and compiles this app into `boot.pocket` for
+`rocknix-h700-kms` (720x480, native presentation). The app is installed under
+`/usr/share/pocketjs/apps` and records button presses on screen.
 
-The app uses the native logical viewport selected by the runtime profile. A confirms the input binding; B is the runtime exit action when supported by the host.
+This is the direct-display bring-up interface. It does not implement the heya
+application catalog or settings. Native apps can be run through
+`pocket-session-run COMMAND [ARG...]` over SSH.
