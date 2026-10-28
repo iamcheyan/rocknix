@@ -67,12 +67,20 @@ fi
 PKG_CLEAN+=" ${CLEAN_NETWORK} ${CLEAN_OS_BASE} ${CLEAN_PACKAGES}"
 
 if [ -z "${DIRTY}" ]; then
+  # Clean initramfs so early-boot scripts stay in sync with the tree.
+  rm -rf build.${DISTRO}-${DEVICE_ROOT}.${ARCH}/{.stamps/initramfs,initramfs}
+fi
+
+# OS_BASE_CLEAN=no skips the forced rebuild of the OS-base package groups
+# (emulators, system-utils, modules, quirks, autostart, rocknix, rocknix-joypad,
+# kernel-firmware). Use it for fast iteration after rebuilding the specific
+# package(s) you changed: ./scripts/clean P && ./scripts/build P
+if [ -z "${DIRTY}" ] && [ "${OS_BASE_CLEAN:-yes}" != "no" ]; then
   # Clean packages to ensure build date and version are updated
   for package in ${PKG_CLEAN}; do
     echo "Clean: ${package}"
     ./scripts/clean "${package}" 2>/dev/null || true
   done
-  rm -rf build.${DISTRO}-${DEVICE_ROOT}.${ARCH}/{.stamps/initramfs,initramfs}
 fi
 
 # Prune old releases
