@@ -1,286 +1,144 @@
-import { createSignal, Index, onMount } from "solid-js";
+import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { mount } from "@pocketjs/framework/solid";
-import { ActionHandler, Text, View } from "@pocketjs/framework/solid/components";
-import { BTN, onTextEvent, type TextEvent } from "@pocketjs/framework/input";
+import { ActionHandler, FocusScope, Modal, Text, View, type NodeMirror } from "@pocketjs/framework/solid/components";
+import { BTN, getFocused } from "@pocketjs/framework/input";
+import { animate } from "@pocketjs/framework/animation";
 import { onFrame } from "@pocketjs/framework/lifecycle";
+import { virtualFrame } from "@pocketjs/framework/clock";
+import { VirtualList } from "@pocketjs/framework/virtual-list";
+import { createScroller } from "@pocketjs/framework/kinetics";
+import { createShowcaseModel, PAGE_NAMES, STRESS_SIZES, type PageId } from "./showcase-model";
 
-type HostUI = { __pocketshell?: (command: string) => string };
-type Run = { text: string; fg: number; bg: number; flags: number };
-
-const NAMES = ["SHELL", "FILES", "VIM", "TOP", "LOG"];
-const LOG_WORKSPACE = 4;
-// DisplayProfile: 54x24 cells at 12px mono (12x16) = 648x384 inside the 720x480 panel.
-const ROWS = 24;
-
-const abgr = (rgb: number) => {
-  const r = rgb & 0xff;
-  const g = (rgb >> 8) & 0xff;
-  const b = (rgb >> 16) & 0xff;
-  return (((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0);
-};
-
-const emptyRow = (): Run[] => [];
+const COLORS = { ink: "#101820", paper: "#e8edf0", muted: "#78909c", lime: "#c4f24b", amber: "#ffb454", coral: "#f27766" };
+const NAV_ROW = "w-full h-[30] flex-row items-center px-2 rounded-md bg-[#1b2730] border-[#344650] focus:bg-[#2a3c45] focus:border-[#c4f24b] transition-colors duration-100";
+const PANEL = "flex-col gap-1 p-2 rounded-lg shadow-md bg-[#1b2730] border-[#344650]";
+const PAGES: PageId[] = ["home", "layout", "focus", "animation", "list", "input", "rendering", "gallery", "performance", "diagnostics"];
+const COMPONENTS = ["View", "Text", "Image", "Sprite", "CompositorSurface", "DeepZoom", "Screen", "Focusable", "Named", "FocusScope", "FocusGrid", "ActionHandler", "AxisHandler", "MotionHandler", "For", "Portal", "AuxiliarySurface", "AuxiliaryPortal", "Modal", "ActionBar", "Grid", "Lazy", "Gallery"];
+const BUTTONS = [["UP", BTN.UP], ["DOWN", BTN.DOWN], ["LEFT", BTN.LEFT], ["RIGHT", BTN.RIGHT], ["A / CROSS", BTN.CROSS], ["B / CIRCLE", BTN.CIRCLE], ["X / SQUARE", BTN.SQUARE], ["Y / TRIANGLE", BTN.TRIANGLE], ["L / LTRIGGER", BTN.LTRIGGER], ["R / RTRIGGER", BTN.RTRIGGER], ["L1 / ZL", BTN.ZL], ["R1 / ZR", BTN.ZR], ["START", BTN.START], ["SELECT", BTN.SELECT]] as const;
 
 mount(() => {
-  const global = globalThis as typeof globalThis & { ui?: HostUI; __pocketshellOutput?: string };
-  const host = global.ui;
-  const [active, setActive] = createSignal(0);
-  const [lines, setLines] = createSignal<Run[][]>(Array.from({ length: ROWS }, emptyRow));
-  const [cursor, setCursor] = createSignal({ row: 0, col: 0, visible: false });
-  const [input, setInput] = createSignal("");
-  const [commandOpen, setCommandOpen] = createSignal(false);
-  const [inputOpen, setInputOpen] = createSignal(false);
-  const [inputLayout, setInputLayout] = createSignal(0);
-  const [inputFunction, setInputFunction] = createSignal(0);
-  const [inputHistory, setInputHistory] = createSignal<string[]>([]);
-  const [inputSelection, setInputSelection] = createSignal(0);
-  const INPUT_TABS = ["Keyboard", "History", "Commands", "Phrases", "Sessions", "Agent"];
-  const INPUT_LAYOUTS = [
-    ["A B C D E F G", "H I J K L M N", "O P Q R S T U", "V W X Y Z"],
-    ["1 2 3 4 5", "6 7 8 9 0", ". , : ;", "/ - _ @"],
-    ["! ? # $ %", "& * + =", "( ) [ ]", "{ } < >", "| \\ ~ ^"],
-    ["/ ~ . .. - _ : @", "root home storage roms", "mnt tmp config logs", "usr bin"],
-  ];
-  const INPUT_ENTRIES: string[][][] = [[], [],
-    [["Open Shell", ""], ["Connect NAS", "ssh nas"], ["Restart WiFi", "sudo systemctl restart NetworkManager"], ["Mount USB", "udisksctl mount -b"], ["Check Logs", "journalctl -f"], ["Update ROMs", "/usr/bin/rocknix-roms-update"], ["Shutdown", "sudo poweroff"], ["Reboot", "sudo reboot"], ["System Info", "uname -a"]],
-    [["SSH", "ssh user@host"], ["Git Clone", "git clone"], ["Git Pull", "git pull"], ["Rsync", "rsync -av"], ["Journal", "journalctl -f"], ["tmux", "tmux attach"]],
-    [["PVE", "ssh pve"], ["DEVBOX", "ssh devbox"], ["NAS", "ssh nas"], ["CLAUDE", "tmux attach -t claude"], ["AIDER", "tmux attach -t aider"], ["CODEX", "tmux attach -t codex"], ["Remote Agent", "ssh agent"]],
-    ["查看日志", "查看异常", "分析系统状态", "检查存储空间", "检查网络连接", "更新 ROM 库", "生成 SSH 配置", "管理 Workspace", "生成脚本", "生成命令"].map((label) => [label, `请${label}，检查当前系统并给出结论。`]),
-  ];
-  let armed = false;
+  const model = createShowcaseModel();
+  const [page, setPage] = createSignal<PageId>("home");
+  const [selected, setSelected] = createSignal(0);
+  const [fpsVisible, setFpsVisible] = createSignal(true);
+  const [modalOpen, setModalOpen] = createSignal(false);
+  const [listSize, setListSize] = createSignal(100);
+  const [stressSize, setStressSize] = createSignal(100);
+  const [eventText, setEventText] = createSignal("Waiting for controller input");
+  const [notice, setNotice] = createSignal("CROSS opens · CIRCLE home · START screenshot request");
+  const [recording, setRecording] = createSignal(false);
+  const [visibleRows, setVisibleRows] = createSignal(0);
+  const [focusSnapshot, setFocusSnapshot] = createSignal({ id: "none", path: "none" });
+  let treeRoot: NodeMirror | undefined;
+  let animated: NodeMirror | undefined;
   let previousButtons = 0;
-  const send = (command: string) => host?.__pocketshell?.(command) ?? "";
-  const log = (entry: string) => send(`LOG\t${entry.replace(/[\t\r\n]/g, " ").slice(0, 120)}`);
+  const [mirror, setMirror] = createSignal({ nodes: 0, focusable: 0 });
+  const samples: Array<{ button: string; frame: number }> = [];
+  const listScroller = createScroller({ max: () => Math.max(0, listSize() * 28 - 250) });
 
-  const applyRows = (payload: string) => {
-    if (!payload) return;
-    const changed = new Map<number, Run[]>();
-    let nextCursor: { row: number; col: number; visible: boolean } | null = null;
-    for (const record of payload.split("\n")) {
-      if (!record) continue;
-      const fields = record.split("\t");
-      if (fields[0] === "C") {
-        nextCursor = { row: Number(fields[1]) || 0, col: Number(fields[2]) || 0, visible: fields[3] === "1" };
-        continue;
-      }
-      if (fields[0] !== "L") continue;
-      const row = Number(fields[1]);
-      if (!Number.isInteger(row) || row < 0 || row >= ROWS) continue;
-      const runs: Run[] = [];
-      for (const field of fields.slice(2)) {
-        const parts = field.split(":");
-        if (parts.length < 4) continue;
-        const fg = parseInt(parts[0], 16);
-        const bg = parseInt(parts[1], 16);
-        const flags = Number(parts[2]) || 0;
-        const text = parts.slice(3).join(":").replace(/\\t/g, "    ").replace(/\\n/g, "").replace(/\\\\/g, "\\");
-        if (!text) continue;
-        runs.push({ text, fg, bg, flags });
-      }
-      changed.set(row, runs);
+  const inspectTree = (node: NodeMirror | undefined): void => {
+    let nodes = 0;
+    let focusable = 0;
+    const visit = (current: NodeMirror) => {
+      nodes++;
+      if (current.focusable) focusable++;
+      current.children.forEach(visit);
+    };
+    if (node) visit(node);
+    setMirror({ nodes, focusable });
+  };
+  const updateFocusSnapshot = () => {
+    const node = getFocused();
+    if (!node) { setFocusSnapshot({ id: "none", path: "none" }); return; }
+    const path: string[] = [];
+    let current: NodeMirror | null = node;
+    while (current) {
+      path.push(current.debugName ?? (current.text ? current.text.slice(0, 24) : `node#${current.id}`));
+      current = current.parent;
     }
-    if (changed.size > 0) {
-      setLines((old) => old.map((runs, index) => changed.get(index) ?? runs));
+    setFocusSnapshot({ id: String(node.id), path: path.reverse().join(" / ") });
+  };
+  const saveScreenshot = () => {
+    const host = globalThis as typeof globalThis & { ui?: { __showcase?: (request: string) => string } };
+    setNotice(host.ui?.__showcase?.("screenshot") ?? "Unavailable: host has no screenshot/filesystem bridge");
+  };
+  const toggleRecording = () => {
+    setRecording((value) => !value);
+    setNotice(recording() ? "Recording stopped; report requires preview host export" : "Recording started: button edges and virtual frames");
+  };
+  const movePage = (delta: number) => {
+    const index = Math.max(0, Math.min(PAGES.length - 1, PAGES.indexOf(page()) + delta));
+    setPage(PAGES[index]);
+    setSelected(0);
+  };
+  const back = () => {
+    if (modalOpen()) setModalOpen(false);
+    else { setPage("home"); setSelected(0); }
+  };
+  const activate = () => {
+    if (page() === "home") { setPage(PAGES[Math.min(selected(), PAGES.length - 1)]); setSelected(0); }
+    else if (page() === "list") {
+      const sizes = [100, 1000, 5000, 10000];
+      setListSize(sizes[(sizes.indexOf(listSize()) + 1) % sizes.length]);
+      listScroller.scrollTo(0, { immediate: true });
+    } else if (page() === "animation" && animated) {
+      const turn = virtualFrame() % 2;
+      animate(animated, "opacity", turn ? 1 : 0.35, { dur: 240, easing: "out" });
+      animate(animated, "scale", turn ? 1.1 : 0.82, { dur: 300, easing: "spring-bouncy" });
+      animate(animated, "translateX", turn ? 48 : 0, { dur: 300, easing: "out-back" });
+      animate(animated, "bgColor", turn ? COLORS.lime : COLORS.amber, { dur: 300, easing: "in-out" });
+    } else if (page() === "gallery") setModalOpen((value) => !value);
+    else if (page() === "input") setEventText(`CROSS edge at virtual frame ${virtualFrame()}`);
+  };
+  const recordButtons = (pressed: number, held: number) => {
+    for (const [name, mask] of BUTTONS) {
+      if (held & mask) setEventText(`${name} held; frame ${virtualFrame()}`);
+      if (!(pressed & mask)) continue;
+      setEventText(`${name} press edge; frame ${virtualFrame()}`);
+      if (recording()) samples.push({ button: name, frame: virtualFrame() });
     }
-    if (nextCursor) setCursor(nextCursor);
-  };
-
-  const switchTo = (id: number) => {
-    const next = (id + NAMES.length) % NAMES.length;
-    if (next === active()) return;
-    setActive(next);
-    setLines(Array.from({ length: ROWS }, emptyRow));
-    setCursor({ row: 0, col: 0, visible: false });
-    send(`ACTIVATE\t${next}`);
-    applyRows(send(`SNAP\t${next}`));
-    log(`Workspace Activated WS${next + 1}`);
-  };
-
-  const sendKey = (key: string) => send(`${active()}\tKEY ${key}`);
-  const submitInput = () => {
-    const value = input().trim();
-    if (value) setInputHistory((items) => [value, ...items.filter((item) => item !== value)]);
-    setInput("");
-  };
-  const selectInputEntry = (index: number) => {
-    if (inputFunction() === 0) {
-      const chars = [...INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")), "SPACE", "BACKSPACE", "ENTER"];
-      const value = chars[index];
-      if (value === "SPACE") setInput((text) => text + " ");
-      else if (value === "BACKSPACE") setInput((text) => text.slice(0, -1));
-      else if (value === "ENTER") submitInput();
-      else if (value) setInput((text) => text + value);
-      return;
-    }
-    const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-    if (inputFunction() === 2 && index >= 6) return;
-    if (entries[index]) setInput(entries[index][1]);
-  };
-  const deleteInput = (index: number) => {
-    if (inputFunction() === 1) setInputHistory((items) => items.filter((_, i) => i !== index));
   };
 
   onMount(() => {
-    for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
-    log("Workspace Created WS1..WS5");
-    onTextEvent((event: TextEvent) => {
-      if (event.kind === "commit") {
-        if (inputOpen()) setInput((value) => value + event.text);
-        else if (commandOpen()) setInput((value) => value + event.text);
-        else if (active() < LOG_WORKSPACE) send(`${active()}\tTEXT ${event.text}`);
-        return true;
-      }
-      if (event.kind !== "key" || !event.pressed) return false;
-      if (inputOpen()) {
-        if (event.key === "Escape") setInputOpen(false);
-        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
-        else if (event.key === "Enter") submitInput();
-        return true;
-      }
-      if (commandOpen()) {
-        if (event.key === "Escape") { setCommandOpen(false); setInput(""); }
-        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
-        else if (event.key === "Enter") {
-          const value = input(); setInput(""); setCommandOpen(false); switchTo(0);
-          if (value) send(`0\tTEXT ${value}`); send("0\tKEY ENTER"); log("Process Input WS1");
-        }
-        return true;
-      }
-      const key = event.key.replace(/^Control\+/, "CTRL_").toUpperCase();
-      if (["ENTER", "BACKSPACE", "ARROWUP", "ARROWDOWN", "ARROWLEFT", "ARROWRIGHT", "TAB", "ESC", "CTRL_C", "CTRL_D", "CTRL_L", "HOME", "END"].includes(key)) sendKey(key.replace("ARROW", ""));
-      return true;
+    onFrame((buttons) => {
+      const pressed = buttons & ~previousButtons;
+      previousButtons = buttons;
+      if (pressed) recordButtons(pressed, buttons);
+      updateFocusSnapshot();
+      inspectTree(treeRoot);
+      if ((pressed & BTN.SELECT) && (buttons & BTN.START)) toggleRecording();
+      else if (pressed & BTN.START) saveScreenshot();
+      else if (pressed & BTN.SELECT) setFpsVisible((value) => !value);
+      else if (pressed & BTN.CIRCLE) back();
+      else if (pressed & BTN.CROSS) activate();
+      else if (pressed & BTN.UP) setSelected((value) => Math.max(0, value - 1));
+      else if (pressed & BTN.DOWN) setSelected((value) => value + 1);
+      else if (pressed & BTN.LEFT) movePage(-1);
+      else if (pressed & BTN.RIGHT) movePage(1);
     });
   });
 
-  onFrame((buttons: number) => {
-    if (buttons === 0) armed = true;
-    const payload = global.__pocketshellOutput ?? "";
-    if (payload) { delete global.__pocketshellOutput; applyRows(payload); }
-    if (active() === LOG_WORKSPACE && armed && !inputOpen()) applyRows(send(`SNAP\t${LOG_WORKSPACE}`));
-    if (!armed) { previousButtons = buttons; return; }
-    const pressed = buttons & ~previousButtons;
-    previousButtons = buttons;
-    if (inputOpen()) {
-      const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-      const selectionCount = inputFunction() === 0
-        ? INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + 3
-        : entries.length;
-      if (pressed & BTN.LEFT) setInputLayout((inputLayout() + 3) % 4);
-      if (pressed & BTN.RIGHT) setInputLayout((inputLayout() + 1) % 4);
-      if (pressed & BTN.LTRIGGER) setInputFunction((inputFunction() + 5) % 6);
-      if (pressed & BTN.RTRIGGER) setInputFunction((inputFunction() + 1) % 6);
-      if (pressed & BTN.UP) setInputSelection((inputSelection() + Math.max(1, selectionCount) - 1) % Math.max(1, selectionCount));
-      if (pressed & BTN.DOWN) setInputSelection((inputSelection() + 1) % Math.max(1, selectionCount));
-      if (pressed & BTN.CIRCLE) selectInputEntry(inputSelection());
-      if (pressed & BTN.CROSS) setInputOpen(false);
-      if (pressed & BTN.START) setInputFunction((inputFunction() + 1) % 6);
-      if (pressed & BTN.SELECT) submitInput();
-      return;
-    }
-    if (pressed & BTN.LEFT) switchTo(active() - 1);
-    if (pressed & BTN.RIGHT) switchTo(active() + 1);
-    if (pressed & BTN.LTRIGGER) sendKey("PGUP");
-    if (pressed & BTN.RTRIGGER) sendKey("PGDN");
-    if (pressed & BTN.UP) sendKey("UP");
-    if (pressed & BTN.DOWN) sendKey("DOWN");
-    if (pressed & BTN.CIRCLE) { sendKey("ENTER"); log(`Process Input WS${active() + 1}`); }
-    if (pressed & BTN.CROSS) { sendKey("ESC"); switchTo(0); }
-    if (pressed & BTN.START) switchTo(active() + 1);
-    if (pressed & BTN.SELECT) { setInput(""); setInputOpen(true); setInputFunction(0); }
+  const LabelValue = (props: { label: string; value: string }) => (
+    <View class="flex-row items-center justify-between gap-2 h-[22]"><Text class="text-xs" style={{ textColor: COLORS.muted }}>{props.label}</Text><Text class="text-xs font-bold" style={{ textColor: COLORS.paper }}>{props.value}</Text></View>
+  );
+  const Section = (props: { title: string; children: unknown }) => (
+    <View class={PANEL}><Text class="text-sm font-bold" style={{ textColor: COLORS.lime }}>{props.title}</Text>{props.children as never}</View>
+  );
+  const Heading = (props: { title: string; subtitle: string }) => (
+    <View class="flex-col gap-1"><Text class="text-lg font-bold" style={{ textColor: COLORS.paper }}>{props.title}</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>{props.subtitle}</Text></View>
+  );
+  const content = createMemo(() => {
+    if (page() === "home") return <View class="flex-col gap-2 w-full h-full"><Heading title="Capability Explorer" subtitle={`PocketJS ${model.revision} · native 720×480 compile-time profile`}/><View class="flex-row gap-2"><Section title="PROFILE"><LabelValue label="platform" value="Linux embedded"/><LabelValue label="tick" value="60 Hz profile fact"/><LabelValue label="backend" value="host query unavailable"/></Section><Section title="INPUT / FOCUS"><LabelValue label="button masks" value="input.buttons"/><LabelValue label="focus node/path" value={focusSnapshot().id}/><Text class="text-xs" style={{ textColor: COLORS.paper }}>{focusSnapshot().path}</Text></Section></View><Section title="MEASUREMENT"><Text class="text-xs" style={{ textColor: COLORS.amber }}>FPS and presented frame time are not exposed to this guest. Use browser preview measurements only.</Text><Text class="text-xs" style={{ textColor: COLORS.paper }}>{mirror().nodes} app mirror nodes · {mirror().focusable} focusable · counts exclude native core-owned nodes.</Text></Section><Text class="text-xs" style={{ textColor: COLORS.amber }}>{notice()}</Text></View>;
+    if (page() === "layout") return <View class="flex-col gap-3 w-full h-full"><Heading title="Layout Demo" subtitle="Native flex, gap, alignment, spacing and clipping"/><View class="flex-row gap-2 p-2 rounded-xl bg-[#1b2730] border-[#344650]"><View class="flex-col gap-2 w-[174]"><Text class="text-xs" style={{ textColor: COLORS.lime }}>COLUMN + GAP</Text><View class="h-[44] items-center justify-center rounded-md bg-[#344650]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>padding / radius / border</Text></View><View class="h-[44] items-center justify-center rounded-md bg-[#344650]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>nested column margin</Text></View></View><View class="flex-1 flex-col gap-2"><Text class="text-xs" style={{ textColor: COLORS.lime }}>ROW + ALIGNMENT</Text><View class="flex-row items-center justify-between h-[44] px-2 rounded-md bg-[#344650]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>start</Text><Text class="text-xs" style={{ textColor: COLORS.amber }}>center</Text><Text class="text-xs" style={{ textColor: COLORS.paper }}>end</Text></View><View class="flex-1 overflow-hidden rounded-md border-[#78909c] bg-[#101820]"><View class="w-[280] h-[80] p-2 bg-[#2a3c45]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>overflow-hidden clips the subtree</Text></View></View></View></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>Kinetic scrolling is demonstrated by VirtualList. A clip alone is not a scroll view.</Text></View>;
+    if (page() === "focus") return <View class="flex-col gap-2 w-full h-full"><Heading title="Focus Demo" subtitle="Native traversal; app observes the Solid node mirror"/><View class="flex-row gap-2"><Section title="FOCUSED"><LabelValue label="node id" value={focusSnapshot().id}/><Text class="text-xs" style={{ textColor: COLORS.paper }}>{focusSnapshot().path}</Text></Section><Section title="OBSERVED"><Text class="text-xs" style={{ textColor: COLORS.paper }}>{eventText()}</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>getFocused() is polled by the app. No focus-change event callback exists.</Text></Section></View><View class="flex-row gap-2"><For each={["document order", "FocusScope", "FocusGrid", "focus restore"]}>{(label) => <View focusable debugName={label} onPress={() => setNotice(`${label} activated`)} class="flex-col justify-center p-2 w-[122] h-[66] rounded-lg bg-[#1b2730] border-[#344650] focus:bg-[#2a3c45] focus:border-[#c4f24b] transition-colors duration-100"><Text class="text-xs font-bold" style={{ textColor: COLORS.paper }}>{label}</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>mirror node</Text></View>}</For></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>Focus path and node count are app mirror measurements, not native core diagnostics.</Text></View>;
+    if (page() === "animation") return <View class="flex-col gap-2 w-full h-full"><Heading title="Animation Demo" subtitle="Native core tween and spring APIs"/><View class="flex-row items-center justify-between p-3 h-[118] rounded-xl bg-[#1b2730] border-[#344650]"><View ref={(node: NodeMirror) => { animated = node; }} style={{ opacity: 0.35, scale: 0.82, bgColor: COLORS.amber }} class="w-[112] h-[70] rounded-lg shadow-md items-center justify-center"><Text class="text-xs font-bold" style={{ textColor: COLORS.ink }}>animate()</Text></View><View class="flex-col gap-2"><Text class="text-sm" style={{ textColor: COLORS.paper }}>opacity · scale · translateX · bgColor</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>240–300 ms; out, spring-bouncy, out-back easing</Text><Text class="text-xs" style={{ textColor: COLORS.amber }}>Press CROSS to tween</Text></View></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>Native animations use fixed profile dt; they do not expose presentation latency.</Text></View>;
+    if (page() === "list") return <View class="flex-col gap-1 w-full h-full"><Heading title="Virtual List Demo" subtitle={`generated ${listSize()} rows; visible window is bounded by viewport + overscan`}/><View class="flex-row items-center gap-2 h-[26]"><Text class="text-xs font-bold" style={{ textColor: COLORS.lime }}>ROWS {listSize()}</Text><For each={[100, 1000, 5000, 10000]}>{(count) => <View focusable onPress={() => { setListSize(count); listScroller.scrollTo(0, { immediate: true }); }} class="px-2 py-1 rounded-md bg-[#1b2730] border-[#344650] focus:border-[#c4f24b]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>{count}</Text></View>}</For></View><LabelValue label="visible rows (viewport + overscan bound)" value={String(visibleRows())}/><LabelValue label="current app mirror nodes" value={String(mirror().nodes)}/><View ref={(node: NodeMirror) => { treeRoot = node; }} class="flex-1 overflow-hidden rounded-lg border-[#344650] bg-[#101820]"><VirtualList count={listSize()} rowHeight={28} height={250} controller={listScroller} overscan={56} ref={() => setVisibleRows(Math.min(listSize(), Math.ceil(250 / 28) + Math.ceil(2 * 56 / 28)))} renderRow={(index) => <View focusable debugName={`row-${index}`} onPress={() => setNotice(`Selected row ${index}`)} class="flex-row items-center gap-2 px-2 h-[28] border-[#344650] focus:bg-[#2a3c45] focus:border-[#c4f24b]"><Text class="text-xs" style={{ textColor: COLORS.lime }}>{String(index + 1).padStart(5, "0")}</Text><Text class="text-xs" style={{ textColor: COLORS.paper }}>PocketJS virtual row</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>key {index}</Text></View>}/></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>Only rows in the viewport and overscan are mounted. Generated count is not mounted count.</Text></View>;
+    if (page() === "input") return <View class="flex-col gap-2 w-full h-full"><Heading title="Input Demo" subtitle="Held masks sampled each frame; controller callback is edge-only"/><View class="flex-row gap-2"><Section title="LAST EVENT"><Text class="text-sm font-bold" style={{ textColor: COLORS.lime }}>{eventText()}</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>Hold observation uses virtual frames. Native repeat callback is unavailable.</Text></Section><Section title="CHORDS"><Text class="text-xs" style={{ textColor: COLORS.paper }}>START + SELECT: recording toggle</Text><Text class="text-xs" style={{ textColor: COLORS.paper }}>START: preview host screenshot request</Text><Text class="text-xs" style={{ textColor: COLORS.paper }}>SELECT: FPS panel toggle (preview only)</Text></Section></View><View class="flex-row flex-wrap gap-1"><For each={BUTTONS}>{([name]) => <View class="px-2 py-1 rounded-md border-[#344650] bg-[#1b2730]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>{name}</Text></View>}</For></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>Evdev aliases L/R to triggers and maps L1/R1 to ZL/ZR. Verify the physical board mapping on RG34XX.</Text></View>;
+    if (page() === "rendering") return <View class="flex-col gap-2 w-full h-full"><Heading title="Rendering Demo" subtitle="CPU raster and baked styles; gaps are explicit"/><View class="flex-row gap-2"><View class="flex-1 flex-col gap-2 p-2 rounded-xl bg-gradient-to-r from-blue-900 to-slate-950 border-[#78909c] shadow-md"><Text class="text-sm font-bold" style={{ textColor: COLORS.paper }}>gradient · border · radius · shadow</Text><Text class="text-xs" style={{ textColor: COLORS.lime }}>View / Text supported</Text></View><View class="flex-1 flex-col gap-2 p-2 rounded-xl bg-[#1b2730] border-[#344650]"><Text class="text-sm font-bold" style={{ textColor: COLORS.paper }}>Image / Sprite</Text><Text class="text-xs" style={{ textColor: COLORS.amber }}>Image API exists; profile omits image capability, no asset bundled.</Text></View></View><Text class="text-xs" style={{ textColor: COLORS.muted }}>The rendering stress levels are in Performance. No browser DOM, WebGL, OpenGL or Vulkan app API is exposed by this profile.</Text></View>;
+    if (page() === "gallery") return <View class="flex-col gap-2 w-full h-full"><Heading title="Component Gallery" subtitle={`${COMPONENTS.length} component exports + VirtualList API listed`}/><View class="flex-row flex-wrap gap-1"><For each={COMPONENTS}>{(name) => <View class="px-2 py-1 rounded-md border-[#344650] bg-[#1b2730]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>{name}</Text></View>}</For></View><Text class="text-xs" style={{ textColor: COLORS.lime }}>Button/Card/Progress/Tabs patterns compose from View, Text and focus styles.</Text><Text class="text-xs" style={{ textColor: COLORS.amber }}>No exported Button, Card, Progress, Tabs, Dialog, Overlay or ScrollView component in this pinned Solid API.</Text><View focusable onPress={() => setModalOpen(true)} class="w-[178] h-[40] justify-center px-3 rounded-lg bg-[#1b2730] border-[#344650] focus:border-[#c4f24b]"><Text class="text-sm" style={{ textColor: COLORS.paper }}>Open native Modal</Text></View><Modal open={modalOpen} panelClass="flex-col gap-2 w-[390] p-4 rounded-xl shadow-lg bg-[#1b2730] border-[#78909c]"><Text class="text-lg font-bold" style={{ textColor: COLORS.lime }}>Modal / Portal / FocusScope</Text><Text class="text-sm" style={{ textColor: COLORS.paper }}>CIRCLE closes; background button handlers are blocked.</Text><View focusable onPress={() => setModalOpen(false)} class="px-3 py-2 rounded-md border-[#c4f24b]"><Text class="text-sm" style={{ textColor: COLORS.paper }}>Close</Text></View></Modal></View>;
+    if (page() === "performance") return <View class="flex-col gap-2 w-full h-full"><Heading title="Performance Demo" subtitle="Native guest cannot query presented FPS, frame time, or memory"/><Text class="text-xs" style={{ textColor: COLORS.amber }}>FPS / avg / min / max / 1% low / frame time: N/A on this KMS guest; browser RAF measurements belong to the preview only.</Text><View class="flex-row items-center gap-2"><Text class="text-xs" style={{ textColor: COLORS.lime }}>ELEMENT COUNT</Text><For each={STRESS_SIZES}>{(count) => <View focusable onPress={() => setStressSize(count)} class="px-2 py-1 rounded-md bg-[#1b2730] border-[#344650] focus:border-[#c4f24b]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>{count}</Text></View>}</For></View><Text class="text-xs" style={{ textColor: COLORS.paper }}>Selected stress level: {stressSize()} explicit native View nodes. Switch away to destroy the stress subtree.</Text><Show when={page() === "performance"}><View ref={(node: NodeMirror) => { treeRoot = node; }} class="flex-1 flex-row flex-wrap gap-1 overflow-hidden">{Array.from({ length: stressSize() }, (_, index) => <View class="w-[12] h-[12] rounded-sm" style={{ bgColor: index % 2 ? COLORS.lime : COLORS.amber }}/>)}</View></Show><Text class="text-xs" style={{ textColor: COLORS.amber }}>Guest mirror counts are app-side only. Native core nodes, hidden nodes, animation count and memory/RSS: N/A.</Text></View>;
+    return <View class="flex-col gap-2 w-full h-full"><Heading title="Diagnostics" subtitle="Source-backed values and unavailable queries"/><For each={model.diagnostics}>{(item) => <View class="flex-row items-start gap-2 p-1 border-[#344650]"><Text class="text-xs font-bold w-[110]" style={{ textColor: COLORS.lime }}>{item.field}</Text><Text class="text-xs w-[110]" style={{ textColor: item.value === "N/A" ? COLORS.coral : COLORS.paper }}>{item.value}</Text><Text class="text-xs flex-1" style={{ textColor: COLORS.muted }}>{item.source}</Text></View>}</For><Text class="text-xs" style={{ textColor: COLORS.amber }}>PocketJS/QuickJS package revisions are build inputs; app JS receives no engine-version query.</Text></View>;
   });
 
-  const runColor = (run: Run) =>
-    (run.flags & 2) !== 0
-      ? { textColor: abgr(run.bg), bgColor: abgr(run.fg) }
-      : { textColor: abgr(run.fg), bgColor: abgr(run.bg) };
-
-  // The panel has no block cursor primitive, so the cursor is drawn as an
-  // inverted cell inside the row's runs.
-  const withCursor = (runs: Run[], row: number): Run[] => {
-    const c = cursor();
-    if (!c.visible || c.row !== row) return runs;
-    const out: Run[] = [];
-    let col = 0;
-    for (const run of runs) {
-      const chars = [...run.text];
-      const start = col;
-      const end = col + chars.length;
-      col = end;
-      if (c.col < start || c.col >= end) { out.push(run); continue; }
-      const offset = c.col - start;
-      if (offset > 0) out.push({ ...run, text: chars.slice(0, offset).join("") });
-      out.push({ ...run, text: chars[offset], flags: run.flags ^ 2 });
-      if (offset + 1 < chars.length) out.push({ ...run, text: chars.slice(offset + 1).join("") });
-    }
-    if (c.col >= col) out.push({ text: " ", fg: 0xe5e5e5, bg: 0xe5e5e5, flags: 0 });
-    return out;
-  };
-
-  return (
-    <View class="w-[720px] h-[480px] bg-slate-950">
-      <View class="absolute left-[20px] top-[8px] w-[680px] h-[31px] items-center">
-        <Text class="text-base font-mono font-bold text-emerald-300">◀ WS{active() + 1}:{NAMES[active()]} ▶</Text>
-      </View>
-
-      <View class="absolute left-[20px] top-[45px] w-[648px] h-[384px] flex-col">
-        <Index each={lines()}>
-          {(runs, rowIndex) => (
-            <View class="w-[648px] h-[16px] flex-row">
-              <Index each={withCursor(runs(), rowIndex)}>
-                {(run) => {
-                  const c = runColor(run());
-                  return (
-                    <Text class="text-xs font-mono" style={{ textColor: c.textColor, bgColor: c.bgColor }}>
-                      {run().text}
-                    </Text>
-                  );
-                }}
-              </Index>
-            </View>
-          )}
-        </Index>
-        {commandOpen() ? (
-          <View class="absolute left-0 top-[368px] w-[648px] h-[16px] bg-slate-800">
-            <Text class="text-xs font-mono text-white">: {input()}█</Text>
-          </View>
-        ) : <View class="w-[1px] h-[1px]" />}
-      </View>
-      {inputOpen() ? (
-        <View class="absolute left-0 top-0 w-[720px] h-[480px] bg-slate-950 flex-col">
-          <View class="absolute left-[20px] top-[8px] w-[680px] h-[34px] items-center"><Text class="text-base font-mono font-bold text-emerald-300">INPUT</Text></View>
-          <View class="absolute left-[20px] top-[45px] w-[680px] h-[42px] bg-slate-800"><Text class="text-sm font-mono text-white">&gt; {input()}█</Text></View>
-          <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
-            {inputFunction() === 0 ? (
-              <>
-                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={`text-2xs font-mono ${inputLayout() === i ? "text-slate-950 bg-emerald-300" : "text-slate-300 bg-slate-800"}`}>{label()}</Text>}</Index></View>
-                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={`text-sm font-mono ${inputSelection() === row * 7 + col ? "text-slate-950 bg-emerald-300" : "text-slate-100 bg-slate-800"}`}>{key()}</Text>}</Index></View>}</Index>
-                <View class="w-[680px] h-[40px] flex-row"><Text class="text-xs font-mono text-slate-100 bg-slate-800">SPACE　 BACKSPACE　 ENTER</Text></View>
-              </>
-            ) : (
-              <Index each={inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()]}>
-                {(entry, i) => <View class={`w-[680px] h-[36px] ${inputSelection() === i ? "bg-emerald-300" : "bg-slate-800"}`}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
-              </Index>
-            )}
-          </View>
-          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={`text-2xs font-mono ${inputFunction() === i ? "text-slate-950 bg-emerald-300" : "text-slate-300 bg-slate-800"}`}>{tab()}</Text>}</Index></View>
-          <View class="absolute left-[20px] top-[466px] w-[680px] h-[14px]"><Text class="text-2xs text-slate-500">L/R Layout　L1/R1 Function　↑↓ Select　A Choose　B Exit　SELECT Submit</Text></View>
-        </View>
-      ) : <View class="w-[1px] h-[1px]" />}
-
-      <View class="absolute left-[20px] top-[440px] w-[680px] h-[24px] items-center">
-        <Text class="text-2xs text-slate-500">L/R WS　L1/R1 PgUp/PgDn　↑↓ 键　A Enter　B Esc/WS1　START 切换　SELECT 命令</Text>
-      </View>
-
-      <ActionHandler button={BTN.LEFT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 3) % 4) : switchTo(active() - 1)} />
-      <ActionHandler button={BTN.RIGHT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 1) % 4) : switchTo(active() + 1)} />
-      <ActionHandler button={BTN.LTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 5) % 6) : sendKey("PGUP")} />
-      <ActionHandler button={BTN.RTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : sendKey("PGDN")} />
-      <ActionHandler button={BTN.UP} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("UP")} />
-      <ActionHandler button={BTN.DOWN} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("DOWN")} />
-      <ActionHandler button={BTN.CIRCLE} onPress={() => inputOpen() ? selectInputEntry(inputSelection()) : sendKey("ENTER")} />
-      <ActionHandler button={BTN.CROSS} onPress={() => inputOpen() ? setInputOpen(false) : sendKey("ESC")} />
-      <ActionHandler button={BTN.START} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : switchTo(active() + 1)} />
-      <ActionHandler button={BTN.SELECT} onPress={() => inputOpen() ? submitInput() : (setInput(""), setInputOpen(true), setInputFunction(0))} />
-    </View>
-  );
+  return <View class="relative flex-col w-[720] h-[480] p-3 gap-2 bg-[#101820] overflow-hidden"><View class="flex-row items-center justify-between h-[38] border-[#344650]"><View class="flex-col"><Text class="text-xs font-bold tracking-wide" style={{ textColor: COLORS.lime }}>POCKETJS / CAPABILITY EXPLORER</Text><Text class="text-xs" style={{ textColor: COLORS.muted }}>pinned {model.revision.slice(0, 8)} · target rocknix-h700-kms · 720×480</Text></View><Show when={fpsVisible()}><Text class="text-xs" style={{ textColor: COLORS.amber }}>FPS unavailable · preview only</Text></Show></View><View ref={(node: NodeMirror) => { treeRoot = node; }} class="flex-row gap-3 flex-1 overflow-hidden"><FocusScope class="w-[158] flex-col gap-1 shrink-0" autoFocus><For each={PAGE_NAMES}>{(entry, index) => <View focusable debugName={entry} onPress={() => { setPage(PAGES[index()]); setSelected(index()); }} class={NAV_ROW}><Text class="text-xs font-bold" style={{ textColor: page() === PAGES[index()] ? COLORS.lime : COLORS.paper }}>{entry}</Text></View>}</For></FocusScope><View class="flex-1 flex-col p-2 gap-1 rounded-xl border-[#344650] bg-[#14212a] overflow-hidden">{content()}</View></View><View class="flex-row items-center justify-between h-[24] border-[#344650]"><Text class="text-xs" style={{ textColor: COLORS.paper }}>↑↓ SELECT   CROSS OPEN   CIRCLE HOME   ←→ PAGE</Text><Text class="text-xs" style={{ textColor: COLORS.amber }}>START SHOT   SELECT FPS   START+SELECT REC</Text></View><ActionHandler button={BTN.START} onPress={() => saveScreenshot()}/></View>;
 });
