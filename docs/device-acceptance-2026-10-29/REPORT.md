@@ -56,7 +56,7 @@
 | D2 | 中文文案 | PASS（帧已产出，待目视） | A01-launcher-main.png, A04-page-0.png | - | 中文由用户目视 |
 | D3 | 服务开关真实生效 | PASS（后端机制） | E-evidence.txt | - | toggle ssh.enabled 实测 sshd 翻转；UI页截图待补 |
 | D4 | 设置页 | PASS（源码+帧） | A04-page-0.png | - | 设置页含真实开关+屏幕超时（main.tsx 确认） |
-| D5 | 每个条目点一遍 | PARTIAL | A04-page-0.png, A04-page-1.png | - | 方向键导航有效；未盲按 A 逐项点击（防误触关机） |
+| D5 | 每个条目点一遍 | BLOCKED | A04-page-0.png | - | agent 无法目视，盲按 A 可能触发关机/重启，无法安全逐项点击（见 D5 节） |
 | D6 | 冷启动与异常 | PASS | K07-after-reboot.png | - | 重启后启动器（pocket-linux-kms/boot.pocket）起来 |
 | E1 | ADB 脚本静态校验 | PASS | E-evidence.txt | - | sh -n OK；PID 提取 `:::5555` 命中/`:::55550` 排除 |
 | E2 | 根因复现 | PASS | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
@@ -69,7 +69,7 @@
 | F4 | 重启回归 | PASS | K07-after-reboot.png | - | 重启后服务 active（复用 K7） |
 | G1 | 快速路径跳过 clean | PASS（静态） | BUILD.md | - | OS_BASE_CLEAN=no 跳过 8 组（build_distro:78） |
 | G2 | 真的出包 | PASS | P3-evidence.txt | - | integration 出 DDR4 镜像 |
-| G3 | 耗时对比 | PARTIAL | BUILD.md | - | 全量跨小时未测完；快速路径按文档几分钟 |
+| G3 | 耗时对比 | PARTIAL（实测下界） | BUILD.md | - | 实测全量从零 ≥23min 仍在工具链阶段；快速路径单包=文档分钟级（未独立实测） |
 | G4 | 文档一致 | PASS | BUILD.md | - | 与 build-iteration-fastpath.md 一致 |
 | H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
 | H2 | 与 dev 重复判定 | PASS（判定） | H-evidence.txt | - | 功能重叠，建议见 DEC-004 |
@@ -366,7 +366,7 @@
 - 未验证/限制：设置页交互视觉待用户目视。
 
 ### D5 每个条目点一遍
-- 状态：PARTIAL
+- 状态：BLOCKED（agent 无法目视，盲按 A 有触发关机/重启等破坏性动作的风险，无法安全逐项点击）
 - 实测：方向键导航有效（页面切换 64% 变化）。未对所有条目盲按 A（可能触发关机/重启等破坏性动作），故未逐项点验。
 - 截图：![](./A04-page-0.png) ![](./A04-page-1.png)
 - 未验证/限制：逐项点击需目视引导或更安全的自动化；列为限制。
@@ -420,9 +420,9 @@
 - 证据：`P3-evidence.txt`
 
 ### G3 耗时对比
-- 状态：PARTIAL
-- 实测：本轮 `DEVICE=H700 make docker-package` 从工具链源码起步，跨小时仍未完成 pocketjs-runtime 阶段 → 全量耗时“数小时”量级。快速路径（单包+组装）按 `docs/build-iteration-fastpath.md` 为“几分钟”量级。
-- 未验证/限制：未取得完整全量构建的精确分钟数（构建未跑完）。
+- 状态：PARTIAL（已取得实测下界）
+- 实测（2026-10-29）：`DEVICE=H700 make docker-package PACKAGE=pocketjs-runtime` 从近乎空 build 目录起步，已运行 **23 分钟** 仍停留在交叉工具链（GCC 16.2）阶段、尚未进入 pocketjs-runtime → 全量耗时远大于 23min（预计 1–2 小时量级）。快速路径（单包 + 镜像组装）按 `docs/build-iteration-fastpath.md` 为“几分钟”量级。
+- 未验证/限制：未等到完整全量构建结束，无法给出精确总分钟数；快速路径未独立计时（只用文档数据）。
 
 ### G4 文档一致
 - 状态：PASS
