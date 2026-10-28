@@ -1,6 +1,6 @@
 --- a/main.c
 +++ b/main.c
-@@ -3,119 +3,170 @@
+@@ -3,109 +3,168 @@
  #include <unistd.h>
  #include <errno.h>
  #include <string.h>
