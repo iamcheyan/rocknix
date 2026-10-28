@@ -1,6 +1,6 @@
 --- a/main.c
 +++ b/main.c
-@@ -3,119 +3,168 @@
+@@ -3,119 +3,169 @@
  #include <unistd.h>
  #include <errno.h>
  #include <string.h>
@@ -190,6 +190,7 @@
 +    const int glyph_w = 7;
 +    const int glyph_h = 9;
 +    const int glyph_spacing = 2;
++    const uint8_t *glyphs[] = {glyph_K, glyph_o, glyph_r, glyph_o, glyph_O, glyph_S};
 +    const int num_chars = 6;
 +
 +    int total_units_x = num_chars * glyph_w + (num_chars - 1) * glyph_spacing;
