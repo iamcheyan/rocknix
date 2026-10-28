@@ -10,8 +10,8 @@
 
 | 编号 | 项目 | 状态 | 证据截图 | 修复 commit | 备注 |
 |---|---|---|---|---|---|
-| P1 | HX90 未提交改动盘点 | PENDING | - | - | |
-| P2 | HX90 对齐 origin/main | PENDING | - | - | |
+| P1 | HX90 未提交改动盘点 | PASS | HX90_TREE_AUDIT.md, attachments/ | - | status/diff patch/untracked 归档 |
+| P2 | HX90 对齐 origin/main | PASS | HX90_TREE_AUDIT.md | - | ff 到 origin/main；25/26 改动已在 main |
 | P3 | rquickjs-sys 编译修复 | PASS（前提证伪） | P3-evidence.txt | - | rquickjs-sys v0.12.0 编译通过；构建成功，无需修复 |
 | P4 | 可重复构建命令文档 | PASS | BUILD.md | - | 命令 + DEVICE gotcha + 计时说明 |
 | A1 | 启动器中文字体 | PASS（帧已产出，待目视） | A01-launcher-main.png | - | 设备主界面帧；中文字形由用户目视确认 |
@@ -405,3 +405,23 @@
 ### G4 文档一致
 - 状态：PASS
 - 实测：`docs/build-iteration-fastpath.md` 所述 `OS_BASE_CLEAN`/`DIRTY`/`clean` 语义与 `scripts/build_distro` 实现一致；新增 BUILD.md 补充了「单包必须显式 DEVICE」的坑。
+
+## 剩余未提交文件登记（用户资产，保留不动）
+
+以下为**本次开工前即存在**的用户未提交改动/未跟踪文件，按目标 §3 保留不提交（无一项属于本次交付）：
+
+- `M AGENTS.md`
+- `M projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/patch-runtime.py`
+- `M projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocket-session-run`
+- `M projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/pocketshell-terminal.rs`
+- `M projects/ROCKNIX/packages/utils/adbd/package.mk`
+- `M projects/ROCKNIX/packages/utils/adbd/system.d/adbd.service`
+- `M tools/pocketshell-mirror/server.py`
+- `?? .playwright-mcp/`、`?? origin/`
+- `?? docs/heya-core-minimal/ADB_RECOVERY_2026-10-28.md`
+- `?? projects/.../pocketjs-runtime/hello/launcher-catalog.ts`
+- `?? projects/.../pocketjs-runtime/scripts/pocketjs-legacy-settings`
+- `?? projects/.../utils/adbd/bin/adbd-free-port`、`bin/adbd-repair`、`system.d/adbd-repair.service`、`udev.d/`
+
+说明：`hello/main.tsx` 的改动已由用户提交 `faacfe0e6a` 收编，故不再出现在未提交列表。
+说明：`pocketjs-sleep` 的两处修复已提交（`f0821e95fa`）。
