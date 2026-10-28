@@ -21,7 +21,7 @@
 | B1 | 抓帧字节正确 | PASS | B01-lcd-frame-rgb-correct.png | - | 1036800 字节 ✓ |
 | B2 | 浏览器显示真实画面 | PASS | B02-browser-shows-device.png | - | DOM 确认 LCD live |
 | B3 | 网页→设备注入 | PASS | B03-web-inject-device-lcd-before.png, B03-web-inject-device-lcd-after.png, B04-web-inject-browser-after.png | - | ArrowRight→device RIGHT, LCD 变化 19.40% |
-| B4 | 设备→网页跟随 | PENDING | - | - | |
+| B4 | 设备→网页跟随 | PASS | B05-web-follow-device-before.png, B06-web-follow-device-after.png, B07-web-follow-browser-before.png, B08-web-follow-browser-after.png, B09-device-after.png, B10-web-canvas-after.png | - | 设备 LCD 变化 19.40%，浏览器同步 |
 | B5 | 刷新率/撕帧限制 | PENDING | - | - | |
 | B6 | 断线恢复 | PENDING | - | - | |
 | C1 | 输入工作区开关 | PENDING | - | - | |
@@ -86,3 +86,12 @@
 - 截图：![](./B03-web-inject-device-lcd-before.png) / ![](./B03-web-inject-device-lcd-after.png) / 浏览器侧 ![](./B04-web-inject-browser-after.png)
 - 问题与根因：无。
 - 未验证/限制：该按键映射是 Dev Center 的 Web 层映射（ArrowRight→RIGHT），并非物理手柄；物理手柄走同一 `/device/key` 后端，本次未接物理手柄实按（设备无实体按键可远程按）。逻辑链路已通过 HTTP 端点证明。
+### B4 设备→网页跟随
+- 状态：PASS
+- 测试时间（JST）：2026-10-29 00:55
+- 设备状态：H700 / pocketshell-dev active
+- 操作步骤：在不经过网页 UI 的情况下，用 `curl -X POST /device/key --data RIGHT` 直接让设备侧按键（模拟物理按键）改变 LCD；等待浏览器 250ms 轮询追上后，分别截设备帧与浏览器画面。再用 Playwright 单独截 `#screen` 画布元素，缩放回 720×480 与设备帧做像素差。
+- 预期 / 实测：设备 LCD 独立变化后，浏览器应在下一帧跟随。实测设备帧前后差 **19.40%**；浏览器整页前后差 **2.43%**；浏览器画布元素缩放后与设备帧差 **2.54%**（残差来自 CSS 缩放/采样，内容一致）。证明网页跟随设备显示。
+- 截图：设备 ![](./B05-web-follow-device-before.png) → ![](./B06-web-follow-device-after.png)；浏览器 ![](./B07-web-follow-browser-before.png) → ![](./B08-web-follow-browser-after.png)；画布 vs 设备 ![](./B09-device-after.png) / ![](./B10-web-canvas-after.png)
+- 问题与根因：无。
+- 未验证/限制：跟随存在约 250ms 轮询延迟（见 B5）；浏览器画布为 CSS 缩放显示，非 1:1 像素拷贝。
