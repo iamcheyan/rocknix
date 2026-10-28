@@ -252,7 +252,7 @@ mount(() => {
           <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
             {inputFunction() === 0 ? (
               <>
-                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-2xs font-mono text-slate-950 bg-emerald-300" : "text-2xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
+                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
                 <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === row * 7 + col ? "text-sm font-mono text-slate-950 bg-emerald-300" : "text-sm font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
                 <View class="w-[680px] h-[40px] flex-row"><Text class="text-xs font-mono text-slate-100 bg-slate-800">SPACE　 BACKSPACE　 ENTER</Text></View>
               </>
@@ -262,7 +262,7 @@ mount(() => {
               </Index>
             )}
           </View>
-          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-2xs font-mono text-slate-950 bg-emerald-300" : "text-2xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
+          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
           <View class="absolute left-[20px] top-[466px] w-[680px] h-[14px]"><Text class="text-2xs text-slate-500">L/R Layout　L1/R1 Function　↑↓ Select　A Choose　B Exit　SELECT Submit</Text></View>
         </View>
       ) : <View class="w-[1px] h-[1px]" />}
