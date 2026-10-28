@@ -1,0 +1,22 @@
+flowchart TB
+  subgraph Source[Mainline source]
+    UI[hello/main.tsx<br/>Shell and input UI]
+    CFG[config/profile.ts<br/>PocketJS profile]
+    PTY[scripts/pocketshell-terminal.rs<br/>PTY + ANSI + screen model]
+    PATCH[scripts/patch-runtime.py]
+    RECIPE[package.mk]
+  end
+  UI -->|Bun compiles| APP[generated boot.pocket]
+  CFG -->|profile export| PROFILE[generated profile]
+  PTY --> PATCH --> RUNTIME[PocketJS native runtime]
+  APP --> RECIPE
+  PROFILE --> RECIPE
+  RUNTIME --> RECIPE
+  RECIPE -->|makeinstall_target| ROOTFS[/usr/libexec + /usr/share + systemd]
+  SERVICE[pocketjs-kms.service] --> SESSION[pocketjs-session]
+  SESSION --> RUNTIME
+  SESSION --> APP
+  STORAGE[/storage config and user data] -. environment and user state .-> SERVICE
+  ROOTFS --> SYSTEM[ROCKNIX SYSTEM image]
+  SYSTEM --> OTA[ROCKNIX tar OTA]
+  OTA -->|reboot and replace SYSTEM| DEVICE[Device]

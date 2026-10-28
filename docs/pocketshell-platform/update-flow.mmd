@@ -1,0 +1,18 @@
+flowchart LR
+  subgraph Current[Current mainline]
+    Edit[UI/runtime source] --> PKG[pocketjs-runtime package build]
+    PKG --> IMAGE[Build image and SYSTEM]
+    IMAGE --> TAR[ROCKNIX update tar]
+    TAR --> REBOOT[Reboot to apply]
+    REBOOT --> REPLACE[Replace SYSTEM]
+    REPLACE --> START[Start runtime on boot]
+  end
+  subgraph Target[Proposed independent platform flow]
+    Change[Shell/Input/Theme/Agent change] --> ART[Versioned signed package]
+    ART --> STAGE[Download and verify in staging]
+    STAGE --> SWITCH[Atomic version switch]
+    SWITCH --> RESTART[Restart PocketShell]
+    RESTART --> HEALTH{Health check}
+    HEALTH -->|pass| KEEP[Retain new version]
+    HEALTH -->|fail| ROLLBACK[Restore previous version]
+  end
