@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "cloud-backup",
   "name": "Cloud Backup",
-  "description": "ROCKNIX rclone backup",
+  "description": "KoroOS rclone backup",
   "entrypoint": "/usr/bin/heya-tool",
   "workingDirectory": "/storage",
   "icon": "nf-md-cloud",

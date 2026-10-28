@@ -1,0 +1,4 @@
+# Keep the interactive terminal prompt on the custom system name.
+if [ "${CFW_NAME:-}" = "KoroOS" ]; then
+  export PS1='KoroOS:\w \$ '
+fi

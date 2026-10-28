@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "cloud-restore",
   "name": "Cloud Restore",
-  "description": "ROCKNIX rclone restore, with confirmation",
+  "description": "KoroOS rclone restore, with confirmation",
   "entrypoint": "/usr/bin/heya-tool",
   "workingDirectory": "/storage",
   "icon": "nf-md-backup-restore",

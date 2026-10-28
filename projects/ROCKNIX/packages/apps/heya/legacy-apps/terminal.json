@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "terminal",
   "name": "Terminal",
-  "description": "Open the ROCKNIX terminal",
+  "description": "Open the KoroOS terminal",
   "entrypoint": "/usr/bin/foot",
   "workingDirectory": "/storage",
   "icon": "nf-md-console",

@@ -1,0 +1,13 @@
+dpad_as_mouse = 1
+mouse_scale = 8192
+mouse_delay = 12
+a = mouse_left
+b = backspace
+x = tab
+y = enter
+l1 = shift
+r1 = ctrl
+l2 = left
+r2 = right
+start = f10
+back = f12

@@ -5,10 +5,10 @@ tool=${1:-}
 terminal=${HEYA_TERMINAL:-/usr/bin/heya-terminal}
 if [ "${2:-}" != --inside ]; then
   case "$tool" in
-    terminal) exec "$terminal" "Terminal | SELECT: return" /bin/bash ;;
+    terminal) exec "$terminal" "KoroOS Terminal | SELECT: return" /bin/bash --login ;;
     file-manager) exec /usr/bin/disk-browser ;;
     gamepad) exec /bin/bash '/usr/config/modules/Test Gamepad.sh' ;;
-    *) exec "$terminal" "ROCKNIX tools | SELECT: return" "$0" "$tool" --inside ;;
+    *) exec "$terminal" "KoroOS tools | SELECT: return" "$0" "$tool" --inside ;;
   esac
 fi
 
@@ -38,7 +38,7 @@ case "$tool" in
   kernel-log) report dmesg ;;
   notes) exec nano /storage/.config/heya/notes.txt ;;
   cloud-backup)
-    confirm 'Cloud backup' 'Run ROCKNIX cloud backup using your existing rclone configuration?' || exit 0
+    confirm 'Cloud backup' 'Run KoroOS cloud backup using your existing rclone configuration?' || exit 0
     /usr/bin/cloud_backup || printf '\nCloud backup failed. Check the message above.\n'
     read -r -p 'Press A to return.' ;;
   cloud-restore)
