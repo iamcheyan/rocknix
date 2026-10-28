@@ -39,14 +39,19 @@ Exit with Ctrl-C; nothing is installed system-wide.
 
 | Key | Action |
 |---|---|
-| Q / E | previous / next workspace |
+| Q / E | Previous / next workspace |
 | 1 / 2 | PageUp / PageDown to the shell |
 | Enter | Enter |
-| Backspace | Esc, then return to WS1 |
-| Tab | next workspace |
-| `` ` `` | WS1 |
-| Arrows | arrow keys |
-| Ctrl-C | interrupt |
+| F2 / ` | Open Input Workspace; Escape exits and restores the existing view |
+| L / R while open | Cycle ABC / NUM / SYM / PATH layouts |
+| PageUp / PageDown while open | Cycle Keyboard / History / Commands / Phrases / Sessions / Agent |
+| Character / Backspace / Enter while open | Edit and submit the input buffer |
+| Tab | Next workspace |
+| ` | WS1 |
+| Arrows | Arrow keys |
+| Ctrl-C | Interrupt |
+
+The Input Workspace is a render overlay. `POST /api/input` accepts `INPUT\tENTER`, `INPUT\tEXIT`, `INPUT\tBUFFER <text>`, `INPUT\tLAYOUT <name>`, `INPUT\tFUNCTION <name>`, `INPUT\tSUBMIT`, `INPUT\tCLEAR`, `INPUT\tDELETE <text>`, and `INPUT\tFAVORITE <text>`. `/api/state` includes an `input` object with `entered`, `previousView`, `buffer`, `layout`, `function`, and submitted `history`.
 
 ## Panels
 

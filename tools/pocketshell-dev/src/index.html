@@ -7,8 +7,7 @@
 <style>
   :root { --bg:#0b1220; --panel:#111a2b; --line:#1e293b; --ink:#e2e8f0; --dim:#94a3b8; --accent:#34d399; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-         font:14px/1.45 ui-sans-serif,system-ui,"Noto Sans CJK JP",sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 ui-sans-serif,system-ui,"Noto Sans CJK JP",sans-serif; }
   header { display:flex; align-items:center; gap:16px; padding:10px 20px; border-bottom:1px solid var(--line); }
   header h1 { font-size:15px; margin:0; letter-spacing:.02em; }
   header .meta { color:var(--dim); font-size:12px; font-family:ui-monospace,monospace; }
@@ -48,6 +47,24 @@
   .logline { font:11.5px/1.6 ui-monospace,monospace; color:#cbd5e1; }
   .logline.alt { color:#64748b; }
   .hidden { display:none; }
+  #inputWorkspace { display:none; position:fixed; inset:0; z-index:10; background:#07101d; padding:18px 24px 14px; grid-template-rows:50px 56px minmax(0,1fr) 54px; gap:10px; }
+  #inputWorkspace.open { display:grid; }
+  .iw-head { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #24334a; color:#34d399; font:700 20px ui-monospace,monospace; }
+  .iw-buffer { background:#111a2b; border:1px solid #334155; border-radius:8px; padding:12px 16px; font:18px ui-monospace,monospace; overflow:hidden; white-space:nowrap; }
+  .iw-content { min-height:0; display:flex; flex-direction:column; gap:8px; overflow:auto; }
+  .iw-layouts { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; height:40px; flex:none; }
+  .iw-layouts button { background:#152238; color:#94a3b8; border:1px solid #334155; border-radius:7px; font-weight:700; cursor:pointer; }
+  .iw-layouts button.on { background:#34d399; color:#05130c; }
+  .iw-grid { flex:1; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); grid-auto-rows:minmax(36px,1fr); gap:7px; }
+  .iw-grid button,.iw-item { background:#152238; color:#e2e8f0; border:1px solid #334155; border-radius:7px; font:16px ui-monospace,monospace; cursor:pointer; }
+  .iw-item { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; width:100%; min-height:42px; text-align:left; }
+  .iw-item button { color:inherit; background:transparent; border:0; padding:5px 8px; cursor:pointer; }
+  .iw-item small { color:#94a3b8; }
+  .iw-tabs { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+  .iw-tabs button { border:1px solid #334155; border-radius:7px; background:#111a2b; color:#94a3b8; font-weight:700; cursor:pointer; }
+  .iw-tabs button.on { background:#34d399; color:#05130c; }
+  .iw-action { grid-column:span 2; }
+  @media(max-width:650px) { #inputWorkspace { padding:10px; } .iw-grid { grid-template-columns:repeat(5,minmax(0,1fr)); } .iw-tabs { gap:3px; } .iw-tabs button { font-size:10px; } }
 </style>
 </head>
 <body>
@@ -98,6 +115,12 @@
     </div>
   </aside>
 </main>
+<section id="inputWorkspace" aria-label="Input Workspace">
+  <div class="iw-head"><span>INPUT WORKSPACE</span><button id="iwExit" class="iw-item" style="width:auto;min-height:34px">ESC</button></div>
+  <div id="iwBuffer" class="iw-buffer">&gt; <span id="iwText"></span>█</div>
+  <div id="iwContent" class="iw-content"></div>
+  <nav id="iwTabs" class="iw-tabs"></nav>
+</section>
 
 <script>
 (() => {
@@ -371,6 +394,60 @@
   setInterval(poll, 100);
   refreshState();
   setInterval(refreshState, 700);
+  const INPUT_FUNCTIONS = ['Keyboard', 'History', 'Commands', 'Phrases', 'Sessions', 'Agent'];
+  const INPUT_LAYOUTS = {
+    ABC: ['A B C D E F G','H I J K L M N','O P Q R S T U','V W X Y Z'],
+    NUM: ['1 2 3 4 5','6 7 8 9 0','. , : ;','/ - _ @'],
+    SYM: ['! ? # $ %','& * + =','( ) [ ]','{ } < >','| \\ ~ ^'],
+    PATH: ['/ ~ . .. - _ : @','root home storage roms','mnt tmp config logs','usr bin']
+  };
+  const INPUT_LAYOUT_NAMES = ['ABC','NUM','SYM','PATH'];
+  const INPUT_COMMANDS = [['Open Shell',''],['Connect NAS','ssh nas'],['Restart WiFi','sudo systemctl restart NetworkManager'],['Mount USB','udisksctl mount -b'],['Check Logs','journalctl -f'],['Update ROMs','/usr/bin/rocknix-roms-update'],['Shutdown','sudo poweroff'],['Reboot','sudo reboot'],['System Info','uname -a && df -h']];
+  const INPUT_PHRASES = ['ssh user@host','git clone','git pull','rsync -av','journalctl -f','tmux attach'];
+  const customPhrases = [];
+  const INPUT_SESSIONS = [['PVE','ssh pve'],['DEVBOX','ssh devbox'],['NAS','ssh nas'],['CLAUDE','tmux attach -t claude'],['AIDER','tmux attach -t aider'],['CODEX','tmux attach -t codex'],['Remote Agent','ssh agent']];
+  const INPUT_AGENTS = ['查看日志','查看异常','分析系统状态','检查存储空间','检查网络连接','更新 ROM 库','生成 SSH 配置','管理 Workspace','生成脚本','生成命令'].map((x)=>[x,`请${x}，先检查当前系统状态并给出可执行结论。`]);
+  let inputState = { entered:false, previousView:0, buffer:'', layout:'ABC', function:'Keyboard', history:[] };
+  const postInput = (action) => fetch('/api/input', { method:'POST', body:'INPUT\t'+action });
+  async function enterInput() { await postInput('ENTER'); inputState.entered=true; renderInputWorkspace(); }
+  async function exitInput() { await postInput('EXIT'); inputState.entered=false; document.getElementById('inputWorkspace').classList.remove('open'); draw(); refreshState(); }
+  function setInputBuffer(value) { inputState.buffer=value; postInput('BUFFER '+value); document.getElementById('iwText').textContent=value; }
+  function chooseInput(value) { setInputBuffer(value); inputState.function='Keyboard'; postInput('FUNCTION Keyboard'); renderInputWorkspace(); }
+  function renderInputWorkspace() {
+    document.getElementById('inputWorkspace').classList.add('open');
+    document.getElementById('iwText').textContent=inputState.buffer;
+    const tabs=document.getElementById('iwTabs'); tabs.replaceChildren(...INPUT_FUNCTIONS.map((name)=>{const b=document.createElement('button');b.textContent=name;b.classList.toggle('on',name===inputState.function);b.onclick=()=>{inputState.function=name;postInput('FUNCTION '+name);renderInputWorkspace();};return b;}));
+    const content=document.getElementById('iwContent');content.replaceChildren();
+    if(inputState.function==='Keyboard'){
+      const layouts=document.createElement('div');layouts.className='iw-layouts';
+      for(const name of INPUT_LAYOUT_NAMES){const b=document.createElement('button');b.textContent=name;b.classList.toggle('on',name===inputState.layout);b.onclick=()=>{inputState.layout=name;postInput('LAYOUT '+name);renderInputWorkspace();};layouts.append(b);}content.append(layouts);
+      const grid=document.createElement('div');grid.className='iw-grid';
+      for(const line of INPUT_LAYOUTS[inputState.layout])for(const value of line.split(' ')){const b=document.createElement('button');b.textContent=value;b.onclick=()=>setInputBuffer(inputState.buffer+value);grid.append(b);}
+      for(const [label,fn] of [['SPACE',()=>setInputBuffer(inputState.buffer+' ')],['BACKSPACE',()=>setInputBuffer(Array.from(inputState.buffer).slice(0,-1).join(''))],['ENTER',()=>submitInput()]]){const b=document.createElement('button');b.className='iw-action';b.textContent=label;b.onclick=fn;grid.append(b);}content.append(grid);
+    } else {
+      const source=inputState.function==='History'?inputState.history.map((x)=>[x,x]):inputState.function==='Commands'?INPUT_COMMANDS:inputState.function==='Phrases'?[...INPUT_PHRASES,...customPhrases].map((x)=>[x,x]):inputState.function==='Sessions'?INPUT_SESSIONS:INPUT_AGENTS;
+      if(inputState.function==='Phrases'){const add=document.createElement('button');add.className='iw-item';add.textContent='＋ Add current input as phrase';add.onclick=addCurrentPhrase;content.append(add);}
+      for(const [label,value] of source){const row=document.createElement('div');row.className='iw-item';const b=document.createElement('button');b.textContent=label;b.onclick=()=>chooseInput(value);row.append(b);if(inputState.function==='History'||inputState.function==='Phrases'){const favorite=document.createElement('button');favorite.textContent='★';favorite.title='Favorite';favorite.onclick=()=>favoriteInput(label);row.append(favorite);const remove=document.createElement('button');remove.textContent='×';remove.title='Delete';remove.onclick=()=>deleteInput(label);row.append(remove);}content.append(row);}
+    }
+  }
+  function favoriteInput(value){if(inputState.function==='History'){inputState.history=[value,...inputState.history.filter((x)=>x!==value)];postInput('FAVORITE '+value);}else if(inputState.function==='Phrases'&&!customPhrases.includes(value)){customPhrases.unshift(value);postInput('PHRASE_ADD '+value);}renderInputWorkspace();}
+  function deleteInput(value){if(inputState.function==='History'){inputState.history=inputState.history.filter((x)=>x!==value);postInput('DELETE '+value);}else{const index=customPhrases.indexOf(value);if(index>=0){customPhrases.splice(index,1);postInput('PHRASE_DELETE '+value);}}renderInputWorkspace();}
+  async function submitInput(){const value=inputState.buffer.trim();if(!value)return;await postInput('BUFFER '+value);await postInput('SUBMIT');inputState.history=[value,...inputState.history.filter((x)=>x!==value)];inputState.buffer='';document.getElementById('iwText').textContent='';refreshState();renderInputWorkspace();}
+  document.getElementById('iwExit').onclick=exitInput;
+  async function addCurrentPhrase(){const value=inputState.buffer.trim();if(value&&!customPhrases.includes(value)){customPhrases.push(value);await postInput('PHRASE_ADD '+value);renderInputWorkspace();}}
+  document.addEventListener('keydown',async(e)=>{
+    if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
+    if(e.key==='F2'){await enterInput();e.preventDefault();return;}
+    if(!inputState.entered)return;
+    if(e.key==='Escape'){await exitInput();e.preventDefault();return;}
+    if(e.key==='Enter'){await submitInput();e.preventDefault();return;}
+    if(e.key==='Backspace'){setInputBuffer(Array.from(inputState.buffer).slice(0,-1).join(''));e.preventDefault();return;}
+    if(e.key==='ArrowLeft'||e.key==='ArrowRight'){const names=INPUT_LAYOUT_NAMES;inputState.layout=names[(names.indexOf(inputState.layout)+(e.key==='ArrowRight'?1:3))%4];postInput('LAYOUT '+inputState.layout);renderInputWorkspace();e.preventDefault();return;}
+    if(e.key==='PageUp'||e.key==='PageDown'){const i=INPUT_FUNCTIONS.indexOf(inputState.function);inputState.function=INPUT_FUNCTIONS[(i+(e.key==='PageDown'?1:5))%6];postInput('FUNCTION '+inputState.function);renderInputWorkspace();e.preventDefault();return;}
+    if(e.key.length===1&&!e.ctrlKey&&!e.metaKey){setInputBuffer(inputState.buffer+e.key);e.preventDefault();}
+  });
+  window.addEventListener('keydown',async(e)=>{if(e.key==='`'){await enterInput();e.preventDefault();}});
+  setInterval(async()=>{try{const s=await(await fetch('/api/state',{cache:'no-store'})).json();if(s.input&&!inputState.entered&&s.input.entered){inputState={...inputState,...s.input};renderInputWorkspace();}else if(s.input){inputState.history=s.input.history||[];for(const phrase of s.input.phrases||[])if(!customPhrases.includes(phrase))customPhrases.push(phrase);}}catch(_){}},700);
 })();
 </script>
 </body>

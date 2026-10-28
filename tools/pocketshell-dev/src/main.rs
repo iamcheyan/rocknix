@@ -29,11 +29,22 @@ const TICK_HZ: u64 = 60;
 
 const REPLAY_VIEW: usize = 5;
 
+struct InputWorkspace {
+    entered: bool,
+    previous_view: usize,
+    buffer: String,
+    layout: String,
+    function: String,
+    history: Vec<String>,
+    phrases: Vec<String>,
+}
+
 struct Shared {
     shell: PocketShell,
     replay: Replay,
     /// 0..=4 selects a live workspace, 5 selects the replay buffer.
     view: usize,
+    input: InputWorkspace,
     pending: String,
     polls: u64,
     started: std::time::Instant,
@@ -68,6 +79,15 @@ fn main() {
         shell: PocketShell::new(),
         replay: Replay::empty(24, 54),
         view: 0,
+        input: InputWorkspace {
+            entered: false,
+            previous_view: 0,
+            buffer: String::new(),
+            layout: "ABC".into(),
+            function: "Keyboard".into(),
+            history: Vec::new(),
+            phrases: Vec::new(),
+        },
         pending: String::new(),
         polls: 0,
         started: std::time::Instant::now(),
@@ -177,6 +197,21 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Request> {
     body.truncate(content_length);
     Ok(Request { method, path, body })
 }
+fn escape_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
 
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)
@@ -219,10 +254,12 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
                 if json.ends_with('}') {
                     json.pop();
                 }
+                let history = shared.input.history.iter().map(|item| format!("\"{}\"", escape_json(item))).collect::<Vec<_>>().join(",");
+                let phrases = shared.input.phrases.iter().map(|item| format!("\"{}\"", escape_json(item))).collect::<Vec<_>>().join(",");
                 json.push_str(&format!(
-                    ",\"view\":{},\"replay\":{}}}",
-                    shared.view,
-                    shared.replay.meta_json()
+                    ",\"view\":{},\"replay\":{},\"input\":{{\"entered\":{},\"previousView\":{},\"buffer\":\"{}\",\"layout\":\"{}\",\"function\":\"{}\",\"history\":[{}],\"phrases\":[{}]}}}}",
+                    shared.view, shared.replay.meta_json(), shared.input.entered, shared.input.previous_view,
+                    escape_json(&shared.input.buffer), escape_json(&shared.input.layout), escape_json(&shared.input.function), history, phrases
                 ));
                 json
             };
@@ -289,6 +326,63 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<Shared>>) -> std::io::Result<(
         }
         ("POST", "/api/input") => {
             let command = String::from_utf8_lossy(&request.body).to_string();
+            if let Some(action) = command.strip_prefix("INPUT\t") {
+                let mut shared = state.lock().unwrap();
+                match action {
+                    "ENTER" => {
+                        if !shared.input.entered {
+                            shared.input.previous_view = shared.view;
+                            shared.input.entered = true;
+                        }
+                    }
+                    "EXIT" => {
+                        if shared.input.entered {
+                            shared.input.entered = false;
+                            shared.view = shared.input.previous_view;
+                            if shared.view == REPLAY_VIEW {
+                                shared.replay.repaint();
+                            } else {
+                                let view = shared.view;
+                                shared.shell.command(&format!("REPAINT\t{view}"));
+                                let frame = shared.shell.frame();
+                                shared.pending.push_str(&frame);
+                            }
+                        }
+                    }
+                    "SUBMIT" => {
+                        let value = shared.input.buffer.trim().to_string();
+                        if !value.is_empty() {
+                            shared.input.history.retain(|item| item != &value);
+                            shared.input.history.insert(0, value);
+                        }
+                        shared.input.buffer.clear();
+                    }
+                    "CLEAR" => shared.input.buffer.clear(),
+                    _ if action.starts_with("DELETE ") => {
+                        let value = &action[7..];
+                        shared.input.history.retain(|item| item != value);
+                    }
+                    _ if action.starts_with("FAVORITE ") => {
+                        let value = action[9..].to_string();
+                        shared.input.history.retain(|item| item != &value);
+                        shared.input.history.insert(0, value);
+                    }
+                    _ if action.starts_with("PHRASE_ADD ") => {
+                        let value = action[11..].to_string();
+                        if !value.is_empty() && !shared.input.phrases.contains(&value) { shared.input.phrases.push(value); }
+                    }
+                    _ if action.starts_with("PHRASE_DELETE ") => {
+                        let value = &action[14..];
+                        shared.input.phrases.retain(|item| item != value);
+                    }
+                    _ if action.starts_with("BUFFER ") => shared.input.buffer = action[7..].to_string(),
+                    _ if action.starts_with("LAYOUT ") => shared.input.layout = action[7..].to_string(),
+                    _ if action.starts_with("FUNCTION ") => shared.input.function = action[9..].to_string(),
+                    _ => {}
+                }
+                respond(&mut stream, "200 OK", "text/plain", b"ok");
+                return Ok(());
+            }
             let body = {
                 let mut shared = state.lock().unwrap();
                 // The replay buffer is host-owned and outside PocketShell's five slots.
