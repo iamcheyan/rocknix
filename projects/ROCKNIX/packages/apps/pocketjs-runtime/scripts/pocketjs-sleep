@@ -13,7 +13,6 @@ import os
 import sys
 import time
 import select
-import configparser
 
 BACKLIGHT_DIR = "/sys/class/backlight"
 CONFIG_PATH = "/storage/.config/pocketjs/runtime.conf"
@@ -55,10 +54,22 @@ def set_brightness(path, value):
 
 
 def load_config():
-    cfg = configparser.ConfigParser()
-    cfg.read(CONFIG_PATH)
-    raw = cfg.get("sleep", "timeout", fallback="30m")
-    return TIMEOUTS.get(raw, 300)
+    # runtime.conf may be a plain KEY=VALUE file; only honour an explicit
+    # [sleep] timeout section and ignore everything else.
+    raw = "30m"
+    try:
+        in_section = False
+        with open(CONFIG_PATH) as f:
+            for line in f:
+                s = line.strip()
+                if s.startswith("[") and s.endswith("]"):
+                    in_section = (s == "[sleep]")
+                    continue
+                if in_section and s.startswith("timeout") and "=" in s:
+                    raw = s.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return TIMEOUTS.get(raw, 1800)
 
 
 def load_saved_brightness():
@@ -92,11 +103,16 @@ def main():
         sys.exit(1)
 
     saved = load_saved_brightness()
-    if saved is not None and saved != cur:
-        # Restore from a previous session.
-        set_brightness(bl_path, saved)
+    if saved is not None and saved > 0:
+        # Restore the brightness remembered from a previous session.
+        if saved != cur:
+            set_brightness(bl_path, saved)
         cur = saved
-    elif saved is None:
+    else:
+        # No valid saved state (missing, or 0 = "was dimmed"): never start dark.
+        if cur == 0:
+            cur = mx
+            set_brightness(bl_path, cur)
         save_brightness(cur)
 
     devices = find_input_devices()
@@ -115,7 +131,8 @@ def main():
         print("pocketjs-sleep: cannot open any input device", file=sys.stderr)
         sys.exit(1)
 
-    print(f"pocketjs-sleep: timeout={timeout}s backlight={bl_path} cur={cur} max={mx} devices={list(fds.values())}")
+    timeout_label = "never" if timeout is None else f"{timeout}s"
+    print(f"pocketjs-sleep: timeout={timeout_label} backlight={bl_path} cur={cur} max={mx} devices={list(fds.values())}", flush=True)
     last_input = time.monotonic()
     dimmed = False
 
@@ -124,8 +141,8 @@ def main():
         if timeout is not None and remaining == 0 and not dimmed:
             set_brightness(bl_path, 0)
             dimmed = True
-            print("pocketjs-sleep: screen dimmed")
-        poll = 1.0 if timeout is None else min(1.0, remaining if remaining > 0 else 0.05)
+            print("pocketjs-sleep: screen dimmed", flush=True)
+        poll = None if (timeout is None or dimmed) else max(0.05, min(1.0, remaining))
         r, _, _ = select.select(list(fds), [], [], poll)
         if r:
             for fd in r:
@@ -137,7 +154,7 @@ def main():
             if dimmed:
                 if set_brightness(bl_path, cur):
                     dimmed = False
-                    print("pocketjs-sleep: screen restored")
+                    print("pocketjs-sleep: screen restored", flush=True)
 
 
 if __name__ == "__main__":
