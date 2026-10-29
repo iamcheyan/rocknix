@@ -1,6 +1,6 @@
 #!/bin/bash
 # Force-quit the current foreground application when START and SELECT are held
-# together. The KoroOS runtime owns the display, so a stuck application can
+# together. The PJOS Linux runtime owns the display, so a stuck application can
 # otherwise only be cleared by power cycling the handheld.
 #
 # H700 exposes its buttons through the legacy joystick interface; the evdev

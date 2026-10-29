@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "terminal",
   "name": "Terminal",
-  "description": "Open the KoroOS terminal",
+  "description": "Open the PJOS Linux terminal",
   "entrypoint": "/usr/bin/foot",
   "workingDirectory": "/storage",
   "icon": "nf-md-console",

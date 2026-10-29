@@ -3,7 +3,7 @@
   "pocket": 2,
   "id": "org.rocknix.pocketjs-boot",
   "name": "rocknix-pocketjs-boot",
-  "title": "KoroOS PocketJS",
+  "title": "PJOS Linux PocketJS",
   "version": "0.1.0",
   "engine": {
     "capabilities": {

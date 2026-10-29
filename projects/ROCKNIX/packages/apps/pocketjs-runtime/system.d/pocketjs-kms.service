@@ -1,5 +1,5 @@
 [Unit]
-Description=ROCKNIX PocketJS direct KMS interface
+Description=PJOS Linux PocketJS direct KMS interface
 After=local-fs.target systemd-user-sessions.service
 Conflicts=pocketjs-recovery.service
 Before=graphical.target

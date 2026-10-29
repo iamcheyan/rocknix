@@ -8,7 +8,7 @@ case "$app" in
   xmplayer) set -- /usr/bin/xmplayer ;;
   audio-mixer|clean-mac-files|cloud-backup|cloud-restore|file-manager-text|gamepad|input-info|kernel-log|monitor|network-info|notes|processes|storage-info|system-info|system-log|usb-info)
     set -- /usr/bin/heya-tool "$app" ;;
-  *) echo "Unknown KoroOS app: $app" >&2; exit 2 ;;
+  *) echo "Unknown PJOS Linux app: $app" >&2; exit 2 ;;
 esac
 
 exec /usr/bin/pocket-session-run "$@"

@@ -1,17 +1,16 @@
-import { LAUNCHER_APPS } from "./launcher-catalog";
 import { createSignal, Index, onMount } from "solid-js";
 import { mount } from "@pocketjs/framework/solid";
-import { Text, View } from "@pocketjs/framework/solid/components";
+import { ActionHandler, Text, View } from "@pocketjs/framework/solid/components";
 import { BTN, onTextEvent, type TextEvent } from "@pocketjs/framework/input";
 import { onFrame } from "@pocketjs/framework/lifecycle";
 
-type HostUI = { __launcher?: (command: string) => string; __pocketshell?: (command: string) => string };
+type HostUI = { __pocketshell?: (command: string) => string };
 type Run = { text: string; fg: number; bg: number; flags: number };
 
-const NAMES = ["APPS", "FILES", "VIM", "TOP", "LOG"];
+const NAMES = ["SHELL", "FILES", "VIM", "TOP", "LOG"];
 const LOG_WORKSPACE = 4;
-// 360×240 logical pixels scale 2× to the LCD; 12px text appears at 24px.
-const ROWS = 12;
+// DisplayProfile: 54x24 cells at 12px mono (12x16) = 648x384 inside the 720x480 panel.
+const ROWS = 24;
 
 const abgr = (rgb: number) => {
   const r = rgb & 0xff;
@@ -26,50 +25,6 @@ mount(() => {
   const global = globalThis as typeof globalThis & { ui?: HostUI; __pocketshellOutput?: string };
   const host = global.ui;
   const [active, setActive] = createSignal(0);
-  const [launcherOpen, setLauncherOpen] = createSignal(true);
-  const [launcherPage, setLauncherPage] = createSignal("apps");
-  const [launcherSelection, setLauncherSelection] = createSignal(0);
-  const [launcherNotice, setLauncherNotice] = createSignal("");
-  const [volume, setVolume] = createSignal(50);
-  const [brightness, setBrightness] = createSignal(80);
-  const serviceKeys = ["adbusb", "ssh", "avahi", "ftp", "http", "rsyncd", "samba", "syncthing", "telnet", "pocketshell-dev"];
-  const settings = ["Volume -", "Volume +", "Brightness -", "Brightness +", "Wi-Fi on", "Wi-Fi off", "Bluetooth on", "Bluetooth off", ...serviceKeys.map((s) => `Toggle ${s}`), "Network / USB settings", "Screen timeout: Never", "Screen timeout: 10s", "Screen timeout: 30s", "Screen timeout: 1m", "Screen timeout: 5m", "Screen timeout: 15m", "Screen timeout: 30m", "Screen timeout: 1h"];
-  const launcherRows = () => launcherPage() === "settings" ? settings : [...LAUNCHER_APPS.map((a) => a.name), "Settings"];
-  const moveLauncher = (step: number) => setLauncherSelection((launcherSelection() + step + launcherRows().length) % launcherRows().length);
-  const launcherCommand = (value: string) => setLauncherNotice(host?.__launcher?.(value) ?? "Launcher bridge unavailable");
-  const openLauncherEntry = () => {
-    const selected = launcherSelection();
-    if (launcherPage() === "settings") {
-      if (selected < 4) {
-        const control = selected < 2 ? "volume" : "brightness";
-        const value = Math.max(control === "brightness" ? 5 : 0, Math.min(100, Number(host?.__launcher?.(`LEVEL\t${control}`) ?? "NaN") + (selected % 2 ? 5 : -5)));
-        if (!Number.isFinite(value)) { setLauncherNotice("Current level unavailable"); return; }
-        if (control === "volume") setVolume(value); else setBrightness(value);
-        launcherCommand(`CONTROL\t${control}\t${value}`);
-      } else if (selected < 8) launcherCommand(`CONTROL\t${selected < 6 ? "wifi" : "bluetooth"}\t${selected % 2 ? "off" : "on"}`);
-      else if (selected < 8 + serviceKeys.length) launcherCommand(`SERVICE\t${serviceKeys[selected - 8]}.enabled`);
-      else if (selected === 8 + serviceKeys.length) { setLauncherOpen(false); send("RESET\t0"); send("0\tTEXT /usr/libexec/pocketjs-legacy-settings"); send("0\tKEY ENTER"); }
-      else {
-        const timeoutIndex = selected - (8 + serviceKeys.length + 1);
-        const timeouts = ["never", "10s", "30s", "1m", "5m", "15m", "30m", "1h"];
-        const timeout = timeouts[timeoutIndex];
-        if (timeout) launcherCommand(`SLEEP\t${timeout}`);
-      }
-      return;
-    }
-    if (selected === LAUNCHER_APPS.length) { setLauncherPage("settings"); setLauncherSelection(0); return; }
-    const app = LAUNCHER_APPS[selected];
-    if (app.kind === "native") { launcherCommand(`LAUNCH\t${app.id}`); return; }
-    setLauncherOpen(false);
-    send("RESET\t0");
-    if (app.id !== "terminal") { send(`0\tTEXT ${app.id === "gamepad" ? "/usr/bin/evtest /dev/input/event3" : `/usr/bin/heya-tool ${app.id} --inside`}`); send("0\tKEY ENTER"); }
-  };
-  const launcherKey = (key: string) => {
-    if (key === "ArrowUp") moveLauncher(-1);
-    else if (key === "ArrowDown") moveLauncher(1);
-    else if (key === "Enter") openLauncherEntry();
-    else if (key === "Escape") { setLauncherPage("apps"); setLauncherSelection(0); }
-  };
   const [lines, setLines] = createSignal<Run[][]>(Array.from({ length: ROWS }, emptyRow));
   const [cursor, setCursor] = createSignal({ row: 0, col: 0, visible: false });
   const [input, setInput] = createSignal("");
@@ -92,12 +47,6 @@ mount(() => {
     [["PVE", "ssh pve"], ["DEVBOX", "ssh devbox"], ["NAS", "ssh nas"], ["CLAUDE", "tmux attach -t claude"], ["AIDER", "tmux attach -t aider"], ["CODEX", "tmux attach -t codex"], ["Remote Agent", "ssh agent"]],
     ["查看日志", "查看异常", "分析系统状态", "检查存储空间", "检查网络连接", "更新 ROM 库", "生成 SSH 配置", "管理 Workspace", "生成脚本", "生成命令"].map((label) => [label, `请${label}，检查当前系统并给出结论。`]),
   ];
-  const inputEntries = () => inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-  const moveInputSelection = (direction: number) => {
-    const count = inputFunction() === 0 ? INPUT_LAYOUTS[inputLayout()].flatMap((row) => row.split(" ")).length + 3 : inputEntries().length;
-    setInputSelection((index) => count ? (index + direction + count) % count : 0);
-  };
-  const inputListStart = () => Math.max(0, inputSelection() - 7);
   let armed = false;
   let previousButtons = 0;
   const send = (command: string) => host?.__pocketshell?.(command) ?? "";
@@ -151,8 +100,7 @@ mount(() => {
   const submitInput = () => {
     const value = input().trim();
     if (value) setInputHistory((items) => [value, ...items.filter((item) => item !== value)]);
-    if (value) { send(`${active()}\tTEXT ${value}`); send(`${active()}\tKEY ENTER`); }
-    setInput(""); setInputOpen(false);
+    setInput("");
   };
   const selectInputEntry = (index: number) => {
     if (inputFunction() === 0) {
@@ -173,11 +121,9 @@ mount(() => {
   };
 
   onMount(() => {
-    send("RESIZE\t12x46");
     for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
     log("Workspace Created WS1..WS5");
     onTextEvent((event: TextEvent) => {
-      if (active() === 0 && launcherOpen()) { if (event.kind === "key" && event.pressed) launcherKey(event.key); return true; }
       if (event.kind === "commit") {
         if (inputOpen()) setInput((value) => value + event.text);
         else if (commandOpen()) setInput((value) => value + event.text);
@@ -214,15 +160,6 @@ mount(() => {
     if (!armed) { previousButtons = buttons; return; }
     const pressed = buttons & ~previousButtons;
     previousButtons = buttons;
-    if (active() === 0 && launcherOpen()) {
-      if (pressed & BTN.UP) moveLauncher(-1);
-      if (pressed & BTN.DOWN) moveLauncher(1);
-      if (pressed & BTN.CIRCLE) openLauncherEntry();
-      if (pressed & BTN.CROSS) { setLauncherPage("apps"); setLauncherSelection(0); }
-      if (pressed & BTN.LEFT) switchTo(active() - 1);
-      if (pressed & BTN.RIGHT || pressed & BTN.START) switchTo(active() + 1);
-      return;
-    }
     if (inputOpen()) {
       const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
       const selectionCount = inputFunction() === 0
@@ -247,7 +184,7 @@ mount(() => {
     if (pressed & BTN.UP) sendKey("UP");
     if (pressed & BTN.DOWN) sendKey("DOWN");
     if (pressed & BTN.CIRCLE) { sendKey("ENTER"); log(`Process Input WS${active() + 1}`); }
-    if (pressed & BTN.CROSS) { sendKey("ESC"); switchTo(0); setLauncherOpen(true); }
+    if (pressed & BTN.CROSS) { sendKey("ESC"); switchTo(0); }
     if (pressed & BTN.START) switchTo(active() + 1);
     if (pressed & BTN.SELECT) { setInput(""); setInputOpen(true); setInputFunction(0); }
   });
@@ -280,25 +217,15 @@ mount(() => {
   };
 
   return (
-    <View class="w-[360px] h-[240px] bg-slate-950">
-      <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center">
-        <Text class="text-2xl font-bold text-emerald-300">◀ WS{active() + 1}:{active() === 0 && !launcherOpen() ? "TERMINAL" : NAMES[active()]} ▶</Text>
-        <View class="absolute left-[326px] top-[4px] w-[24px] h-[16px] items-center"><Text class="text-base text-emerald-300">{"\uf240"}</Text></View>
+    <View class="w-[720px] h-[480px] bg-slate-950">
+      <View class="absolute left-[20px] top-[8px] w-[680px] h-[31px] items-center">
+        <Text class="text-base font-mono font-bold text-emerald-300">◀ WS{active() + 1}:{NAMES[active()]} ▶</Text>
       </View>
 
-      {active() === 0 && launcherOpen() ? (
-        <View class="absolute left-[10px] top-[28px] w-[340px] h-[192px] flex-col">
-          <Text class="text-xs text-emerald-300">{launcherPage() === "settings" ? "Settings" : "Applications"} · {launcherSelection() + 1}/{launcherRows().length}</Text>
-          <Index each={launcherRows().slice(Math.floor(launcherSelection() / 8) * 8, Math.floor(launcherSelection() / 8) * 8 + 8)}>{(name, i) => (
-            <View class={Math.floor(launcherSelection() / 8) * 8 + i === launcherSelection() ? "w-[340px] h-[19px] bg-slate-700" : "w-[340px] h-[19px]"}><Text class="text-xs font-mono text-white">{Math.floor(launcherSelection() / 8) * 8 + i === launcherSelection() ? "> " : "  "}{name()}</Text></View>
-          )}</Index>
-          <Text class="text-2xs text-emerald-300">{launcherNotice()}</Text>
-        </View>
-      ) : (
-      <View class="absolute left-[10px] top-[28px] w-[340px] h-[192px] flex-col">
+      <View class="absolute left-[20px] top-[45px] w-[648px] h-[384px] flex-col">
         <Index each={lines()}>
           {(runs, rowIndex) => (
-            <View class="w-[340px] h-[16px] flex-row">
+            <View class="w-[648px] h-[16px] flex-row">
               <Index each={withCursor(runs(), rowIndex)}>
                 {(run) => {
                   const c = runColor(run());
@@ -313,38 +240,47 @@ mount(() => {
           )}
         </Index>
         {commandOpen() ? (
-          <View class="absolute left-0 top-[176px] w-[340px] h-[16px] bg-slate-800">
+          <View class="absolute left-0 top-[368px] w-[648px] h-[16px] bg-slate-800">
             <Text class="text-xs font-mono text-white">: {input()}█</Text>
           </View>
-        ) : <View class="w-[0px] h-[0px]" />}
+        ) : <View class="w-[1px] h-[1px]" />}
       </View>
-      )}
       {inputOpen() ? (
-        <View class="absolute left-0 top-0 w-[360px] h-[240px] bg-slate-950 flex-col">
-          <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center"><Text class="text-2xl font-bold text-emerald-300">INPUT</Text></View>
-          <View class="absolute left-[10px] top-[28px] w-[340px] h-[16px] bg-slate-800"><Text class="text-xs font-mono text-white">{">"} {input()}█</Text></View>
-          <View class="absolute left-[10px] top-[48px] w-[340px] h-[152px] flex-col">
+        <View class="absolute left-0 top-0 w-[720px] h-[480px] bg-slate-950 flex-col">
+          <View class="absolute left-[20px] top-[8px] w-[680px] h-[34px] items-center"><Text class="text-base font-mono font-bold text-emerald-300">INPUT</Text></View>
+          <View class="absolute left-[20px] top-[45px] w-[680px] h-[42px] bg-slate-800"><Text class="text-sm font-mono text-white">{"> "}{input()}█</Text></View>
+          <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
             {inputFunction() === 0 ? (
               <>
-                <View class="w-[340px] h-[16px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
-                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[340px] h-[22px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].slice(0, row).reduce((count, line) => count + line.split(" ").length, 0) + col ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
-                <View class="w-[340px] h-[20px] flex-row"><Index each={["SPACE", "BACKSPACE", "ENTER"]}>{(label, i) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{label()}　</Text>}</Index></View>
+                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => inputLayout() === i ? <Text class="text-2xs font-mono text-slate-950 bg-emerald-300">{label()}</Text> : <Text class="text-2xs font-mono text-slate-300 bg-slate-800">{label()}</Text>}</Index></View>
+                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => inputSelection() === row * 7 + col ? <Text class="text-sm font-mono text-slate-950 bg-emerald-300">{key()}</Text> : <Text class="text-sm font-mono text-slate-100 bg-slate-800">{key()}</Text>}</Index></View>}</Index>
+                <View class="w-[680px] h-[40px] flex-row"><Text class="text-xs font-mono text-slate-100 bg-slate-800">SPACE　 BACKSPACE　 ENTER</Text></View>
               </>
             ) : (
-              <Index each={inputEntries().slice(inputListStart(), inputListStart() + 8)}>
-                {(entry, i) => <View class={inputSelection() === i + inputListStart() ? "w-[340px] h-[18px] bg-emerald-300" : "w-[340px] h-[18px] bg-slate-800"}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
+              <Index each={inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()]}>
+                {(entry, i) => inputSelection() === i ? <View class="w-[680px] h-[36px] bg-emerald-300"><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View> : <View class="w-[680px] h-[36px] bg-slate-800"><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
               </Index>
             )}
           </View>
-          <View class="absolute left-[5px] top-[202px] w-[350px] h-[16px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
-          <View class="absolute left-[10px] top-[220px] w-[340px] h-[16px]"><Text class="text-xs text-slate-500">L/R布局 · L1/R1功能 · A选择 · B退出</Text></View>
+          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => inputFunction() === i ? <Text class="text-2xs font-mono text-slate-950 bg-emerald-300">{tab()}</Text> : <Text class="text-2xs font-mono text-slate-300 bg-slate-800">{tab()}</Text>}</Index></View>
+          <View class="absolute left-[20px] top-[466px] w-[680px] h-[14px]"><Text class="text-2xs text-slate-500">L/R Layout　L1/R1 Function　↑↓ Select　A Choose　B Exit　SELECT Submit</Text></View>
         </View>
-      ) : <View class="w-[0px] h-[0px]" />}
+      ) : <View class="w-[1px] h-[1px]" />}
 
-      {!inputOpen() ? <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
-        <Text class="text-xs text-slate-500">START 切换 · SELECT 输入 · A 确认 · B 返回</Text>
-      </View> : null}
+      <View class="absolute left-[20px] top-[440px] w-[680px] h-[24px] items-center">
+        <Text class="text-2xs text-slate-500">L/R WS　L1/R1 PgUp/PgDn　↑↓ 键　A Enter　B Esc/WS1　START 切换　SELECT 命令</Text>
+      </View>
 
+      <ActionHandler button={BTN.LEFT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 3) % 4) : switchTo(active() - 1)} />
+      <ActionHandler button={BTN.RIGHT} onPress={() => inputOpen() ? setInputLayout((inputLayout() + 1) % 4) : switchTo(active() + 1)} />
+      <ActionHandler button={BTN.LTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 5) % 6) : sendKey("PGUP")} />
+      <ActionHandler button={BTN.RTRIGGER} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : sendKey("PGDN")} />
+      <ActionHandler button={BTN.UP} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("UP")} />
+      <ActionHandler button={BTN.DOWN} onPress={() => inputOpen() ? setInputSelection((inputSelection() + 1) % 8) : sendKey("DOWN")} />
+      <ActionHandler button={BTN.CIRCLE} onPress={() => inputOpen() ? selectInputEntry(inputSelection()) : sendKey("ENTER")} />
+      <ActionHandler button={BTN.CROSS} onPress={() => inputOpen() ? setInputOpen(false) : sendKey("ESC")} />
+      <ActionHandler button={BTN.START} onPress={() => inputOpen() ? setInputFunction((inputFunction() + 1) % 6) : switchTo(active() + 1)} />
+      <ActionHandler button={BTN.SELECT} onPress={() => inputOpen() ? submitInput() : (setInput(""), setInputOpen(true), setInputFunction(0))} />
     </View>
   );
 });

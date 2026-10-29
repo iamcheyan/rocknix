@@ -613,7 +613,7 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Window* win = SDL_CreateWindow(
-        "ROCKNIX Handheld Simulator (RG34XX - 720x480)",
+        "PJOS Linux Handheld Simulator (RG34XX - 720x480)",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         SCREEN_WIDTH, SCREEN_HEIGHT,
         SDL_WINDOW_SHOWN
@@ -1160,7 +1160,7 @@ int main(int argc, char* argv[]) {
                 "1GB LPDDR4 @ 1600MHz RAM",
                 "TF1 RootFS + TF2 Storage",
                 "XMPlayer Native PSP XMB",
-                "ROCKNIX Pure 64-bit JeOS"
+                "PJOS Linux (64-bit)"
             };
 
             for (int i = 0; i < info_visible_count; i++) {
