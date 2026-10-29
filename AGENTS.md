@@ -31,6 +31,12 @@
 * **DO** hold the human contributor fully accountable for understanding and validating all code you produce.
 * **DO** require compiled build artifacts (`.img.gz` and `.tar` files) attached/linked in the PR description for all affected target devices.
 
+### E. Launcher / Frontend Change Policy
+
+* **DO** use the PocketJS fast iteration loop (section 7) for **every** launcher/frontend change: compile `boot.pocket` on `hx90`, copy it to `/storage`, restart the kms unit. This is the **default and preferred** workflow.
+* **DO NOT** rebuild `SYSTEM`, run `make docker-H700`, or flash the device merely to see a UI change. A full image build is reserved for a final, reviewed delivery.
+* **DO** keep at most one `/storage` override active and remove it before any image-side acceptance run; a `/storage`-only check is manual-deploy evidence, never image evidence.
+
 ---
 
 ## 2. Mandatory LLM Pre-Flight Checklist
@@ -71,3 +77,48 @@ Before outputting code or finalizing a PR description, you **MUST** run your out
 
 * `main` is the consolidated development branch. Continue work in `~/development/rocknix` on `main`.
 * The 2026-10-27 integration record is `docs/heya-core-minimal/INTEGRATION_2026-10-27.md`. Old worktrees and backup branches are historical references; do not reapply their saved changes blindly.
+
+## 7. PocketJS 前端快速迭代（免 SYSTEM 重编）
+
+**规则：以后凡只改启动器/前端（TSX、样式、文案、页面布局），一律优先走本节流程，不得重建 SYSTEM、不得刷机。** 完整镜像构建只用于最终定稿交付（见 1.E）。
+
+改启动器 UI **不需要**每次重建 SYSTEM，也不需要刷机。
+
+* 只有 TSX/样式/文案改动 → 产物只有一个 `boot.pocket`（约 5 MB）。
+* 同时改了 `scripts/pocketshell-launcher.rs`（bridge）→ 多一个宿主二进制 `pocket-linux-kms`（约 2.2 MB）。
+* `/usr/libexec/pocketjs-session` 读 `POCKETJS_APP`（默认 `/usr/share/pocketjs/apps/boot.pocket`）后 `exec /usr/libexec/pocket-linux-kms --package "$app"`，所以 ` /storage` 覆盖即可生效。
+
+快速循环（编译必须在 hx90）：
+
+```sh
+# 1) hx90：把改动同步进 pinned PocketJS 构建树并只编译 app
+rsync -a --delete <repo>/projects/ROCKNIX/packages/apps/pocketjs-runtime/ hx90:<build>/packages/apps/pocketjs-runtime/
+ssh hx90 'cd <pocketjs-scratch> && bun tools/pocket.ts check  --runtime-config programs/rocknix-h700/pocket.runtime-config.ts --target rocknix-h700-kms --manifest apps/rocknix-h700/pocket.json'
+ssh hx90 'cd <pocketjs-scratch> && bun tools/pocket.ts compile --runtime-config programs/rocknix-h700/pocket.runtime-config.ts --target rocknix-h700-kms --manifest apps/rocknix-h700/pocket.json --output /tmp/boot.pocket'
+
+# 2) 部署到设备覆盖层（SYSTEM 不动）
+scp /tmp/boot.pocket root@192.168.3.57:/storage/pocketjs/apps/boot.pocket
+ssh root@192.168.3.57 'printf "[sleep]\ntimeout = 30m\nPOCKETJS_APP=/storage/pocketjs/apps/boot.pocket\n" > /storage/.config/pocketjs/runtime.conf'
+
+# 3) 重启（restart 会超时：KMS 进程忽略 SIGTERM）
+ssh root@192.168.3.57 'systemctl kill -s SIGKILL pocketjs-kms; sleep 2; systemctl reset-failed pocketjs-kms; systemctl start pocketjs-kms'
+```
+
+宿主二进制同理：放 `/storage/pocketjs/bin/pocket-linux-kms`，用 drop-in 覆盖 `ExecStart`：
+
+```ini
+# /storage/.config/system.d/pocketjs-kms.service.d/90-dev.conf
+[Service]
+ExecStart=
+ExecStart=/storage/pocketjs/bin/pocket-linux-kms --package /storage/pocketjs/apps/boot.pocket --card /dev/dri/card1
+```
+
+验收（无需手碰机器）：
+
+* `pocketshell-dev`（:8080）提供 `GET /device/frame.rgb`（720×480×3 字节）与 `POST /device/key`（裸 body 写键名，如 `DOWN`；`L1`/`R1` 无效，用 `L`/`R`）。
+* `/usr/bin/pocket` 可在设备上做包接纳与无头冒烟：`pocket --package /storage/.../boot.pocket --check`、`--headless --frames 300`。
+* 帧哈希变化 = 注入的键到达了 compositor；帧不变要先查按键映射，而不是怀疑渲染。
+
+只有最终定稿要进镜像时才跑 `OS_BASE_CLEAN=no make docker-H700`（HX90，复用缓存，约 3 分钟），再按第 3 节替换 `SYSTEM`/`SYSTEM.md5`。
+
+注意：`/storage` 覆盖属于「手动部署验证」，不等于镜像验证；交付前必须把 `/storage` 覆盖清掉，确认 argv 指回 `/usr/share/pocketjs/apps/boot.pocket`。
