@@ -126,13 +126,13 @@ pub fn command(value: &str) -> String {
                 }
             }
             if !replaced {
-                if !content.ends_with('\\n') { new_lines.push(String::new()); }
+                if !content.ends_with('\n') { new_lines.push(String::new()); }
                 if !in_section {
                     new_lines.push("[sleep]".to_string());
                 }
                 new_lines.push(format!("timeout = {}", timeout));
             }
-            match std::fs::write(path, new_lines.join("\\n") + "\\n") {
+            match std::fs::write(path, new_lines.join("\n") + "\n") {
                 Ok(_) => {
                     // Reload the daemon if it is running.
                     let _ = Command::new("systemctl").args(["try-restart", "pocketjs-sleep.service"]).output();
