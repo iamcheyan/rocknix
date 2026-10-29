@@ -19,6 +19,7 @@ PKG_BUILD_FLAGS="parallel"
    mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
    cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"
    cp -a "${PKG_DIR}/hello/." "${PKG_BUILD}/apps/rocknix-h700/"
+  bun install --frozen-lockfile --ignore-scripts
   bun tools/pocket.ts profile export --config programs/rocknix-h700/pocket.runtime-config.ts \
     --out "${PKG_BUILD}/generated"
   bun tools/pocket.ts check --runtime-config programs/rocknix-h700/pocket.runtime-config.ts \
