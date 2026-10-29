@@ -56,3 +56,24 @@ systemctl --failed: 仅 pre-existing rocknix-report-stats / rocknix-usbgadget，
 ## 备注
 - 脚本未进镜像（当前设备 SYSTEM 早于 adbd 修复 commit）；实际生效需 P3 出包后部署。
 - `usbgadget disabled` 在设备上会挂起（本次超时 300s），需注意；完整脚本自动接管（非手工 kill）留待镜像版验证。
+
+## E 镜像内复验（2026-10-29，运行镜像已含 adbd 修复）
+
+运行 SYSTEM md5 现为 `3ddb751ff2055f55399b92b7a9848e17`（早于复验更新）。运行镜像**已含**镜像内脚本：
+```
+$ ls -l /usr/bin/adbd-repair /usr/bin/adbd-free-port
+-rwxr-xr-x 1 root root 987 /usr/bin/adbd-repair
+-rwxr-xr-x 1 root root 400 /usr/bin/adbd-free-port
+$ systemctl show adbd -p FragmentPath -p ExecStartPre -p ExecStart
+FragmentPath=/usr/lib/systemd/system/adbd.service
+ExecStartPre={ path=/usr/bin/adbd-free-port ; ... ; code=exited ; status=0 }
+ExecStart={ path=/usr/sbin/adbd ; ... }
+```
+复验（全部使用**镜像内**脚本，非手工部署）：
+- E1: `sh -n /usr/bin/adbd-repair` → OK；`sh -n /usr/bin/adbd-free-port` → OK。
+- E3: `usbgadget=adb` 时 `sh /usr/bin/adbd-repair` → exit 0；listener `1160/adbd` 前后不变（跳过，不误杀）。
+- E4: `systemctl start adbd-repair.service` → exit 0；listener 不变、adbd active。
+- E5: `pocketjs-kms`、`pocketshell-dev`、`pocketjs-sleep`、`sshd` 全 active；`MainPID=1366`；`systemctl --failed` 仅既有失败，无新增。
+- 设备健康截图：`Eimg-01-image-device-healthy.png`（720×480，frame 1,036,800 B）。
+
+> 备注更新：**“脚本未进镜像”已不再成立**——运行镜像已含 `/usr/bin/adbd-repair` 与 `/usr/bin/adbd-free-port`，且 `adbd.service` 含 `ExecStartPre=/usr/bin/adbd-free-port`。E 的“从镜像部署后”验证由此运行镜像满足（PASS）。

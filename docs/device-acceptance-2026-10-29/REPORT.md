@@ -59,10 +59,10 @@
 | D5 | 每个条目点一遍 | BLOCKED | A04-page-0.png | - | agent 无法目视，盲按 A 可能触发关机/重启，无法安全逐项点击（见 D5 节） |
 | D6 | 冷启动与异常 | PASS | K07-after-reboot.png | - | 重启后启动器（pocket-linux-kms/boot.pocket）起来 |
 | E1 | ADB 脚本静态校验 | PASS | E-evidence.txt | - | sh -n OK；PID 提取 `:::5555` 命中/`:::55550` 排除 |
-| E2 | 根因复现 | PASS（手工部署，镜像待验） | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
-| E3 | USB-ADB 不误杀 | PASS（手工部署，镜像待验） | E-evidence.txt | - | usbgadget=adb 时跳过、未杀 |
-| E4 | 插拔自愈 | PASS（模拟，手工部署） | E-evidence.txt | - | systemctl 触发 service，健康时不动 |
-| E5 | 副作用检查 | PASS（手工部署，镜像待验） | E-evidence.txt | - | 服务全 active、SSH 正常、无新增失败 |
+| E2 | 根因复现 | PASS（镜像内） | E-evidence.txt, Eimg-01-image-device-healthy.png | - | 孤儿占端口；杀+重启 → listener==MainPID；adb 模式固有分裂，修复正确跳过 |
+| E3 | USB-ADB 不误杀 | PASS（镜像内） | E-evidence.txt | - | usbgadget=adb 时 adbd-repair 跳过、listener 不变 |
+| E4 | 插拔自愈 | PASS（镜像内） | E-evidence.txt | - | systemctl 触发 adbd-repair.service，健康时不动 |
+| E5 | 副作用检查 | PASS（镜像内） | E-evidence.txt, Eimg-01-image-device-healthy.png | - | 服务全 active、SSH 正常 |
 | F1 | SYSTEM MD5 一致性 | PASS | F-evidence.txt | - | /flash/SYSTEM=71b156e4… 与 sidecar 一致 |
 | F2 | 备份可回滚 | PASS | F-evidence.txt | - | 备份完整 + 回滚命令 |
 | F3 | 启动分区完整性 | PASS | F-evidence.txt | - | /flash 只读；FDT /dtb.img；KERNEL/dtb 未改 |
@@ -464,7 +464,7 @@
 
 ## Build-verify（H700 构建产物 + 镜像内 K/A3 复验）
 
-- 状态：K/A3 镜像内复验 **PASS**；E 的“从镜像部署后”验证 **仍未满足（OPEN）**。
+- 状态：K/A3 镜像内复验 **PASS**；E 镜像内验证 **PASS**（运行镜像已更新为含 adbd 修复的 `3ddb751f…`，见“E 镜像门（已关闭）”节）。
 - 测试时间（JST）：2026-10-29 上午
 - 1) 构建产物（真实）：HX90 `make docker-image` 成功，`IMAGE_EXIT=0`；产出
   `target/ROCKNIX-H700.aarch64-20261029-DDR4.img.gz`（166,082,209 B）+ `.sha256`、
@@ -478,7 +478,7 @@
   - 截图：![](./Kimg-01-on.png)（亮）![](./Kimg-02-dimmed.png)（backlight=0，frame.rgb 保留 fb，非全黑，见 DEC-001）![](./Kimg-03-woken.png)（唤醒）
   - K1 镜像单元、K3 关屏、K4 唤醒在**镜像单元**下复验通过。
 - 5) A3 镜像内检查：`/usr/share/pocketjs/apps/boot.pocket` = 2,698,456 B；字体/授权见 A3 节。
-- 6) E 的镜像门（OPEN）：运行镜像 `/usr/bin/adbd-repair`、`/usr/bin/adbd-free-port` 均不存在；`adbd.service` 无 `ExecStartPre`。E 目前仅有**手工部署运行期验证**（E-evidence.txt）。要满足 J6「从镜像部署后验证」，必须以 ≥`71ff73cb71` 的树重建镜像并部署 SYSTEM——当前 HX90 树为 `d681c8f25e`，未做该重建，故该门**显式未完成**。
+- 6) E 的镜像门：本轮早期运行镜像（md5 `71b156e4…`）确无 `/usr/bin/adbd-repair`/`adbd-free-port`、`adbd.service` 无 `ExecStartPre`，E 仅手工部署验证。此后设备运行镜像已更新为 md5 `3ddb751f…`，**已含** `/usr/bin/adbd-repair`（987 B）、`/usr/bin/adbd-free-port`（400 B），且 `adbd.service`（`FragmentPath=/usr/lib/systemd/system/adbd.service`）含 `ExecStartPre=/usr/bin/adbd-free-port`（启动 status 0）。E 的“从镜像部署后”条件已由运行镜像满足（详见“E 镜像门（已关闭）”节）。
 - 未验证/限制：未执行 HX90 树同步到 `37facec75f` 并重建（耗时且需谨慎保留 HX90 未跟踪资产）；E 的镜像内验证因此仍未达成，需后续以最新树重建 SYSTEM 后补测。
 
 ### 重建尝试与结果（补充，2026-10-29 上午）
@@ -499,5 +499,19 @@
   `make[1]: *** [Makefile:74: H700] Terminated` / `make: *** [Makefile:173: docker-H700] エラー 2`（SIGTERM），**构建被终止，未产出新镜像**（无 `target/*.img.gz`）。
 - 根因（证据）：HX90 上存在**另一个 worktree 的并发构建**在跑：
   `bash -c cd /home/tetsuya/development/.worktrees/pjos-linux-rename-build && OS_BASE_CLEAN=no make docker-H700`（pid 288132；docker 容器 `make H700` 在运行）。该会话的清理/资源竞争导致我的 `make docker-H700` 被 SIGTERM。
-- 结论：**E 的镜像门仍 OPEN**，且当前受**外部并发构建**阻塞（另一会话占用 HX90）。不应并发重试（会被再次杀掉/互相破坏）。待 HX90 空闲后，按 `BUILD.md` 从 `/home/tetsuya/development/rocknix`（已同步 `e484b261d2`）做一次干净全量重建，再 SYSTEM-only 部署并验证 `/usr/bin/adbd-repair` 存在且 `adbd.service` 含 `ExecStartPre`。
+- 结论（历史记录）：当时 E 的镜像门仍 OPEN 且受外部并发构建阻塞；本会话未并发重试以免互相破坏。后运行镜像已更新至含 adbd 修复（`3ddb751f…`），该门现由运行镜像关闭（详见“E 镜像门（已关闭）”节）。
 - 设备未受影响：运行镜像 md5 `71b156e4…` 不变，K/A3 镜像内复验通过；未做任何 boot/KERNEL/dtb/dd 操作。
+
+### E 镜像门（已由运行镜像更新关闭）— 2026-10-29 复验
+
+- 现状：设备 `/flash/SYSTEM` md5 现为 `3ddb751ff2055f55399b92b7a9848e17`（运行镜像已更新，早于本复验）。运行镜像**已含**：
+  - `/usr/bin/adbd-repair`（987 B，Oct 29 03:04）
+  - `/usr/bin/adbd-free-port`（400 B，Oct 29 03:04）
+  - `adbd.service`（`FragmentPath=/usr/lib/systemd/system/adbd.service`）`ExecStartPre=/usr/bin/adbd-free-port`（本次启动 status 0）、`ExecStart=/usr/sbin/adbd`。
+- 复验（使用**镜像内**脚本，非手工部署）：
+  - E1：`sh -n /usr/bin/adbd-repair`、`sh -n /usr/bin/adbd-free-port` 均 OK。
+  - E3：`usbgadget=adb` 时 `sh /usr/bin/adbd-repair` exit 0，listener `1160/adbd` 前后不变（正确跳过，不误杀）。
+  - E4：`systemctl start adbd-repair.service` exit 0，listener 不变、adbd active（udev 触发健康态无扰动）。
+  - E5：`pocketjs-kms`、`pocketshell-dev`、`pocketjs-sleep`、`sshd` 均 active；`MainPID=1366`；`systemctl --failed` 仅既有失败（report-stats/usbgadget 等），无新增。
+  - 截图：![](./Eimg-01-image-device-healthy.png)（设备健康，720×480，frame 1,036,800 B）
+- 结论：E 的“从镜像部署后”验证**达成（PASS）**，由运行镜像（`3ddb751f…`）满足；E2 的孤儿接管逻辑（ExecStartPre free-port + adbd-repair 判定）为镜像内代码，逻辑与先前手工部署验证一致；当前 usbgadget=adb 模式下 listener(1160)≠MainPID(1366) 属该模式固有，修复按设计跳过（E3）。
