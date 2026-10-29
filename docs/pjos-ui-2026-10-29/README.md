@@ -51,6 +51,38 @@
 | `INT-11-tools-apps.png` | Tools 应用清单 | Terminal + 19 个既有应用，入口未丢失 |
 | `INT-14…INT-18` | 五个 workspace | L/R 循环，含回到 APPS 的 wrap |
 
+
+## 镜像态验收（已完成）
+
+镜像：`PJOS_Linux-H700.aarch64-20261029-DDR4.img.gz`（构建 `IMAGE_EXIT=0`）
+SYSTEM md5：`27eed9610317494d6df1c11f56298e56`
+boot.pocket（镜像内）：`9b547e88a4bbd5c520810ac24d51d060`
+heya-tool（镜像内）：`7753ef9c564e20ff8622e8811d7128b3`
+kms（镜像内）：`5ef9f96ba025435e9bae538d227a649a`
+
+刷入 `/flash/SYSTEM` + `SYSTEM.md5`，删除 `/storage` 覆盖（drop-in、`/storage/pocketjs/bin/pocket-linux-kms`、`/storage/pocketjs/apps/boot.pocket`），重启后确认：
+
+- `OS_NAME="PJOS Linux"`
+- `pocketjs-kms` active，argv 为 `/usr/libexec/pocket-linux-kms --package /usr/share/pocketjs/apps/boot.pocket`（镜像路径，非 /storage）
+
+镜像态截图（`IMG-*`）与手动 deploy 截图帧哈希一致，说明两者运行的是同一份包：
+
+| 文件 | 内容 |
+|---|---|
+| `IMG-01-overview.png` | 镜像态首页（`システム / 選択中`，日文汉字正常） |
+| `IMG-02-apps-list.png` | 应用清单 |
+| `IMG-03-settings-display.png` | 设置 DISPLAY |
+| `IMG-04-settings-audio.png` | AUDIO（音量 60%） |
+| `IMG-05-settings-system.png` | SYSTEM（表示言語 = 日本語） |
+| `IMG-06-tools-apps.png` | Tools 应用清单（20 项） |
+| `IMG-07-workspace-files.png` | FILES workspace |
+| `IMG-08-workspace-wrap.png` | 五页循环回到 APPS |
+
+## 仍未完成
+
+- `system-info` 紧凑摘要（CPR96）已在镜像内，但未进入终端页截图（需要切到终端 workspace 执行 `heya-tool system-info` 并抓屏）。
+- TopBar 右侧系统状态图标仍按设计留空（runtime 无 Wi-Fi/蓝牙/电量查询契约）。
+
 ## 已知限制
 
 - 本轮为 **手动 deploy 验证**：新 `boot.pocket` 与 `pocket-linux-kms` 放在 `/storage` 覆盖层（drop-in `90-integration-test.conf`），尚未进镜像；镜像构建完成并刷入后才算 image 验证。
