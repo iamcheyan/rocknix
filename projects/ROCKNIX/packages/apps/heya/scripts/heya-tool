@@ -18,6 +18,36 @@ printf 'SELECT: return to launcher | A: Enter | B: Escape | Y: q | START: F10\n\
 confirm() {
   dialog --title "$1" --defaultno --yesno "$2" 10 60
 }
+system_info() {
+  local report
+  report=$(rocknix-info 2>&1 || true)
+  local cyan=$'\033[38;5;51m' green=$'\033[38;5;48m' amber=$'\033[38;5;214m' pale=$'\033[38;5;195m' reset=$'\033[0m'
+  local device os version kernel cpu temp freq ram_available ram_capacity storage network battery
+  device=$(awk -F': ' '$1=="DEVICE" {print $2; exit}' <<<"$report")
+  os=$(awk -F': ' '$1=="OPERATING SYSTEM" {print $2; exit}' <<<"$report")
+  version=$(awk -F': ' '$1=="VERSION" {print $2; exit}' <<<"$report")
+  kernel=$(awk -F': ' '$1=="KERNEL" {print $2; exit}' <<<"$report")
+  cpu=$(awk -F': ' '$1=="CPU" {print $2; exit}' <<<"$report")
+  temp=$(awk -F': ' '$1=="CPU TEMPERATURE" {print $2; exit}' <<<"$report")
+  freq=$(awk -F': ' '$1=="THREADS 0-3" {print $2; exit}' <<<"$report")
+  ram_available=$(awk -F': ' '$1=="RAM AVAILABLE" {print $2; exit}' <<<"$report")
+  ram_capacity=$(awk -F': ' '$1=="RAM CAPACITY" {print $2; exit}' <<<"$report")
+  storage=$(awk -F': ' '$1=="/storage/games-internal" {print $2; exit}' <<<"$report")
+  network=$(awk -F': ' '$1=="IP ADDRESS" {print $2; exit}' <<<"$report")
+  battery=$(awk -F': ' '$1=="BATTERY REMAINING" {print $2; exit}' <<<"$report")
+  {
+    printf '%s┌─ SYSTEM ───────────────────────────────────────────────┐%s\n' "$cyan" "$reset"
+    printf '%s│ DEVICE   %s%s\n' "$cyan" "${device:-UNKNOWN}" "$reset"
+    printf '%s│ OS %s %s%s\n' "$cyan" "${os:-unavailable}" "${version:-}" "$reset"
+    printf '%s│ KERNEL %s%s\n' "$cyan" "${kernel:-unavailable}" "$reset"
+    printf '%s├─ CPU ─────────────────────── RAM ──────────────────────┤%s\n' "$amber" "$reset"
+    printf '%s│ %s · %s · %s%s\n' "$pale" "${cpu:---}" "${temp:---}" "${freq:---}" "$reset"
+    printf '%s│ RAM %s / %s   DISK %s%s\n' "$green" "${ram_available:---}" "${ram_capacity:---}" "${storage:---}" "$reset"
+    printf '%s│ NET %s   BAT %s%s\n' "$green" "${network:---}" "${battery:---}" "$reset"
+    printf '%s└─ FULL REPORT BELOW ────────────────────────────────────┘%s\n\n' "$cyan" "$reset"
+    printf '%s\n' "$report"
+  } | pager
+}
 pager() {
   { printf 'SELECT: Return | Y: Quit | D-Pad: Scroll | L/R: Page\n\n'; cat; } | less -R
 }
@@ -29,7 +59,7 @@ case "$tool" in
   monitor) exec btop ;;
   processes) exec htop ;;
   audio-mixer) exec alsamixer ;;
-  system-info) report rocknix-info ;;
+  system-info) system_info ;;
   storage-info) { df -h; printf '\nMounts\n'; cat /proc/mounts; } | pager ;;
   network-info) { nmcli device status; nmcli connection show --active; printf '\nAddresses\n'; nmcli -f GENERAL.DEVICE,IP4.ADDRESS,IP4.GATEWAY device show; } | pager ;;
   usb-info) report lsusb ;;

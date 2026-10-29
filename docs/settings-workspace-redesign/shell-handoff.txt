@@ -1,0 +1,10 @@
+RESIZE	12x46
+0	START
+1	START
+2	START
+3	START
+4	START
+LOG	Workspace Created WS1..WS5
+RESET	0
+0	TEXT /usr/libexec/pocketjs-legacy-settings
+0	KEY ENTER
