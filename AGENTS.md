@@ -139,3 +139,25 @@ ExecStart=/storage/pocketjs/bin/pocket-linux-kms --package /storage/pocketjs/app
 只有最终定稿要进镜像时才跑 `OS_BASE_CLEAN=no make docker-H700`（HX90，复用缓存，约 3 分钟），再按第 3 节替换 `SYSTEM`/`SYSTEM.md5`。
 
 注意：`/storage` 覆盖属于「手动部署验证」，不等于镜像验证；交付前必须把 `/storage` 覆盖清掉，确认 argv 指回 `/usr/share/pocketjs/apps/boot.pocket`。
+
+## 8. 用户内容目录契约（游戏/音乐/视频/书）
+
+用户把文件放进下列固定目录，启动器自动索引；**不依赖任何第三方前端**（不使用 RetroArch / EmulationStation / ES-DE）。
+
+| 内容 | 目录 |
+|---|---|
+| 游戏 | `/storage/content/games/<system>/`（`<system>` = gba/snes/psx…；直接放 `games/` 根记为 misc） |
+| 音乐 | `/storage/content/music/` |
+| 视频 | `/storage/content/videos/` |
+| 书/文档 | `/storage/content/books/` |
+| 外置盘 | `/media/<卷标>/content/<同类目录>/` |
+
+兼容的历史路径同样会被扫描：`/storage/games-internal/roms`、`/storage/games-external/roms`、`/storage/roms`、`/storage/music`、`/storage/videos`、`/media/<卷标>/roms`。
+
+实现（`feat/pocketshell-games-scan`）：
+
+* `scripts/pocketshell-games`（python3）——`scan` 写 `/storage/pocketshell/library/library.json`（原子替换）；`watch` 启动即扫，之后每 10 秒比对签名，`SIGUSR1` 立即重扫。
+* `system.d/pocketshell-games.service`——`Restart=always`、`Nice=10`、`CPUQuota=20%`、`MemoryMax=64M`，扫描不得与 UI 渲染抢资源。
+* bridge：`ROMS` 只读 JSON（渲染线程绝不扫盘）、`ROMSCAN` 触发重扫、`ROMLAUNCH\t<path>` 交给 `/usr/bin/pocketshell-play`。
+* 启动器：应用列表出现 `Library / ライブラリ / 资料库`，进入即自动刷新，首行 `Scan now` 是手动重扫。
+* 新增媒体/游戏类型时，只改 `EXTENSIONS` 与 `SECTION_ROOTS`，不要在前端里写死路径。
