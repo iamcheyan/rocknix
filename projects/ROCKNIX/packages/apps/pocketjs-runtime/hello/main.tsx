@@ -110,11 +110,6 @@ mount(() => {
     }
   };
 
-  // Frame-driven page transition state machine (no setTimeout)
-  let transitionPhase: "idle" | "exiting" | "entering" = "idle";
-  let transitionTarget = 0;
-  let transitionDirection = 1;
-  let transitionFrames = 0;
 
   // -------------------------------------------------------------------------
   // Native Terminal & Input Workspace State (Preserved)
@@ -234,18 +229,19 @@ mount(() => {
   const switchScreen = (target: number, direction: number) => {
     try {
       const next = (target + 5) % 5;
-      if (next === currentScreen() && transitionPhase === "idle") return;
+      if (next === currentScreen()) return;
 
-      transitionTarget = next;
-      transitionDirection = direction;
-      transitionPhase = "exiting";
-      transitionFrames = 0;
+      setCurrentScreen(next);
 
-      // Start fade out on permanent page container
-      safeAnimate(pageNode, "opacity", 0, { dur: 60, easing: "out" });
+      if (next <= 2) {
+        updateCardPosition(currentCardIndex(), false);
+      }
+
+      safeAnimate(pageNode, "translateX", direction * 24, { dur: 0 });
+      safeAnimate(pageNode, "translateX", 0, { dur: 200, easing: "out-back" });
+      safeAnimate(pageNode, "opacity", 1, { dur: 180, easing: "out" });
     } catch {
-      setCurrentScreen((target + 5) % 5);
-      transitionPhase = "idle";
+      // ignore
     }
   };
 
@@ -629,39 +625,6 @@ mount(() => {
       syncHardwareStatus();
     }
 
-    // Advance frame-driven screen transition
-    if (transitionPhase === "exiting") {
-      transitionFrames++;
-      if (transitionFrames >= 4) {
-        try {
-          cardNodes.clear();
-          carouselNode = undefined;
-          setCurrentScreen(transitionTarget);
-          transitionPhase = "entering";
-          transitionFrames = 0;
-        } catch {
-          transitionPhase = "idle";
-        }
-      }
-    } else if (transitionPhase === "entering") {
-      transitionFrames++;
-      if (transitionFrames === 1) {
-        try {
-          safeAnimate(pageNode, "translateX", transitionDirection * 24, { dur: 0 });
-          safeAnimate(pageNode, "translateX", 0, { dur: 220, easing: "out-back" });
-          safeAnimate(pageNode, "opacity", 1, { dur: 200, easing: "out" });
-
-          if (transitionTarget <= 2) {
-            updateCardPosition(currentCardIndex(), false);
-          }
-        } catch {
-          // ignore
-        }
-      } else if (transitionFrames >= 14) {
-        transitionPhase = "idle";
-      }
-    }
-
     // Advance frame-driven toast
     if (toastFrames > 0) {
       toastFrames--;
@@ -682,10 +645,15 @@ mount(() => {
     // Native Switch Launcher Input Mode
     // -------------------------------------------------------------------------
     if (active() === 0 && launcherOpen()) {
-      // Shoulder triggers: smooth screen transition
-      if (pressed & BTN.LTRIGGER) switchScreen(currentScreen() - 1, -1);
-      if (pressed & BTN.RTRIGGER) switchScreen(currentScreen() + 1, 1);
-      if (pressed & BTN.START) switchScreen(currentScreen() + 1, 1);
+      // Screen transition triggers: R/ZR/START forward cycle, L/ZL reverse cycle
+      if (pressed & (BTN.RTRIGGER | BTN.ZR | BTN.START)) {
+        switchScreen(currentScreen() + 1, 1);
+        return;
+      }
+      if (pressed & (BTN.LTRIGGER | BTN.ZL)) {
+        switchScreen(currentScreen() - 1, -1);
+        return;
+      }
 
       // Select: open virtual keyboard
       if (pressed & BTN.SELECT) {
@@ -903,7 +871,7 @@ mount(() => {
                 {/* Action Feedback Bar */}
                 <View class="w-[344px] h-[20px] flex-row items-center justify-between">
                   <Text class="text-xs text-slate-500">
-                    {currentCardIndex() + 1} / {currentApps().length} · 方向键选择 · A 确认
+                    {currentCardIndex() + 1} / {currentApps().length} · 方向键选择 · A 启动
                   </Text>
                   <View
                     ref={(node: NodeMirror) => {
@@ -935,7 +903,7 @@ mount(() => {
             <View class="w-[360px] h-[1px] bg-[#1f2d3d]" />
             <View class="w-[360px] h-[19px] flex-row items-center justify-between px-2">
               <Text class="text-xs text-slate-400">
-                L/R 切屏 · 方向键选择 · A 确认 · B 返回
+                L/R 切屏 · 方向键选择 · A 启动 · B 返回
               </Text>
               <Text class="text-xs text-[#38bdf8]">
                 SELECT 输入

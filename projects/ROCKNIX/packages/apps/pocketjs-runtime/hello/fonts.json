@@ -1,4 +1,7 @@
 {
   "characterFiles": ["launcher-characters.txt"],
-  "fallback": ["fonts/SymbolsNerdFontMono-Regular.ttf"]
+  "fallback": [
+    "fonts/FusionPixel-12px-monospaced-zh_hans.ttf",
+    "fonts/SymbolsNerdFontMono-Regular.ttf"
+  ]
 }
