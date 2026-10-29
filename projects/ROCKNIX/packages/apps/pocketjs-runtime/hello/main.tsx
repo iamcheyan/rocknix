@@ -84,11 +84,37 @@ mount(() => {
   const [batteryLevel, setBatteryLevel] = createSignal(-1);
   const [toastMessage, setToastMessage] = createSignal("");
 
-  // Animation Node Mirrors
+  // Animation Node Mirrors & Safe Wrappers
   let pageNode: NodeMirror | undefined;
   let carouselNode: NodeMirror | undefined;
   let toastNode: NodeMirror | undefined;
-  const cardNodes: Map<number, NodeMirror> = new Map();
+  let toastFrames = 0;
+
+  interface CardNodeEntry {
+    node: NodeMirror;
+    screen: number;
+  }
+  const cardNodes: Map<number, CardNodeEntry> = new Map();
+
+  const safeAnimate = (
+    node: NodeMirror | undefined | null,
+    prop: any,
+    to: number | string,
+    opts?: any,
+  ): number => {
+    if (!node || typeof node.id !== "number" || node.id <= 0) return 0;
+    try {
+      return animate(node, prop, to, opts);
+    } catch {
+      return 0;
+    }
+  };
+
+  // Frame-driven page transition state machine (no setTimeout)
+  let transitionPhase: "idle" | "exiting" | "entering" = "idle";
+  let transitionTarget = 0;
+  let transitionDirection = 1;
+  let transitionFrames = 0;
 
   // -------------------------------------------------------------------------
   // Native Terminal & Input Workspace State (Preserved)
@@ -170,19 +196,14 @@ mount(() => {
   // -------------------------------------------------------------------------
   // Toast & Animation Helpers
   // -------------------------------------------------------------------------
-  let toastTimer: any = null;
   const showToast = (message: string) => {
-    setToastMessage(message);
-    if (toastNode) {
-      animate(toastNode, "opacity", 1, { dur: 120, easing: "out" });
-      animate(toastNode, "translateY", 0, { dur: 150, easing: "out-back" });
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
-        if (toastNode) {
-          animate(toastNode, "opacity", 0, { dur: 300, easing: "out" });
-          animate(toastNode, "translateY", 6, { dur: 300, easing: "out" });
-        }
-      }, 1400);
+    try {
+      setToastMessage(message);
+      toastFrames = 80; // ~1.3s at 60fps
+      safeAnimate(toastNode, "opacity", 1, { dur: 100, easing: "out" });
+      safeAnimate(toastNode, "translateY", 0, { dur: 120, easing: "out-back" });
+    } catch {
+      // ignore
     }
   };
 
@@ -196,47 +217,36 @@ mount(() => {
   };
 
   const updateCardPosition = (idx: number, smooth = true) => {
-    const targetX = -Math.max(0, idx - 2) * 112;
-    if (carouselNode) {
-      if (smooth) {
-        animate(carouselNode, "translateX", targetX, { dur: 220, easing: "out-back" });
-      } else {
-        animate(carouselNode, "translateX", targetX, { dur: 0 });
+    try {
+      const targetX = -Math.max(0, idx - 2) * 112;
+      if (carouselNode) {
+        if (smooth) {
+          safeAnimate(carouselNode, "translateX", targetX, { dur: 220, easing: "out-back" });
+        } else {
+          safeAnimate(carouselNode, "translateX", targetX, { dur: 0 });
+        }
       }
+    } catch {
+      // ignore
     }
   };
 
   const switchScreen = (target: number, direction: number) => {
-    const next = (target + 5) % 5;
-    if (next === currentScreen()) return;
-    cardNodes.clear();
+    try {
+      const next = (target + 5) % 5;
+      if (next === currentScreen() && transitionPhase === "idle") return;
 
-    if (pageNode) {
-      animate(pageNode, "opacity", 0, { dur: 80, easing: "out" });
+      transitionTarget = next;
+      transitionDirection = direction;
+      transitionPhase = "exiting";
+      transitionFrames = 0;
+
+      // Start fade out on permanent page container
+      safeAnimate(pageNode, "opacity", 0, { dur: 60, easing: "out" });
+    } catch {
+      setCurrentScreen((target + 5) % 5);
+      transitionPhase = "idle";
     }
-
-    setCurrentScreen(next);
-
-    setTimeout(() => {
-      if (pageNode) {
-        animate(pageNode, "translateX", direction * 28, { dur: 0 });
-        animate(pageNode, "translateX", 0, { dur: 220, easing: "out-back" });
-        animate(pageNode, "opacity", 1, { dur: 200, easing: "out" });
-      }
-
-      // Restore carousel position
-      if (next <= 2) {
-        updateCardPosition(currentCardIndex(), false);
-      }
-
-      // Stagger entrance animation
-      cardNodes.forEach((node, i) => {
-        animate(node, "translateY", 12, { dur: 0 });
-        animate(node, "opacity", 0, { dur: 0 });
-        animate(node, "translateY", 0, { dur: 220, delay: i * 35, easing: "out-back" });
-        animate(node, "opacity", 1, { dur: 200, delay: i * 35, easing: "out" });
-      });
-    }, 90);
   };
 
   const moveCard = (delta: number) => {
@@ -246,11 +256,18 @@ mount(() => {
     let cur = currentCardIndex();
     const next = (cur + delta + apps.length) % apps.length;
 
-    // Pop animation
-    const oldNode = cardNodes.get(cur);
-    const newNode = cardNodes.get(next);
-    if (oldNode) animate(oldNode, "scale", 1.0, { dur: 160, easing: "out" });
-    if (newNode) animate(newNode, "scale", 1.06, { dur: 200, easing: "spring-bouncy" });
+    try {
+      const oldEntry = cardNodes.get(cur);
+      const newEntry = cardNodes.get(next);
+      if (oldEntry && oldEntry.screen === s) {
+        safeAnimate(oldEntry.node, "scale", 1.0, { dur: 160, easing: "out" });
+      }
+      if (newEntry && newEntry.screen === s) {
+        safeAnimate(newEntry.node, "scale", 1.06, { dur: 200, easing: "spring-bouncy" });
+      }
+    } catch {
+      // ignore
+    }
 
     if (s === 0) setHomeCardIndex(next);
     else if (s === 1) setMediaCardIndex(next);
@@ -330,13 +347,13 @@ mount(() => {
 
   const launchApp = (app: LauncherApp) => {
     showToast(`启动: ${app.shortName || app.name}...`);
-    // Pulse animation
-    const node = cardNodes.get(currentCardIndex());
-    if (node) {
-      animate(node, "scale", 1.15, { dur: 90, easing: "out" });
-      setTimeout(() => {
-        if (node) animate(node, "scale", 1.06, { dur: 140, easing: "spring-bouncy" });
-      }, 100);
+    try {
+      const entry = cardNodes.get(currentCardIndex());
+      if (entry && entry.screen === currentScreen()) {
+        safeAnimate(entry.node, "scale", 1.15, { dur: 90, easing: "out" });
+      }
+    } catch {
+      // ignore
     }
 
     if (app.kind === "native") {
@@ -612,6 +629,48 @@ mount(() => {
       syncHardwareStatus();
     }
 
+    // Advance frame-driven screen transition
+    if (transitionPhase === "exiting") {
+      transitionFrames++;
+      if (transitionFrames >= 4) {
+        try {
+          cardNodes.clear();
+          carouselNode = undefined;
+          setCurrentScreen(transitionTarget);
+          transitionPhase = "entering";
+          transitionFrames = 0;
+        } catch {
+          transitionPhase = "idle";
+        }
+      }
+    } else if (transitionPhase === "entering") {
+      transitionFrames++;
+      if (transitionFrames === 1) {
+        try {
+          safeAnimate(pageNode, "translateX", transitionDirection * 24, { dur: 0 });
+          safeAnimate(pageNode, "translateX", 0, { dur: 220, easing: "out-back" });
+          safeAnimate(pageNode, "opacity", 1, { dur: 200, easing: "out" });
+
+          if (transitionTarget <= 2) {
+            updateCardPosition(currentCardIndex(), false);
+          }
+        } catch {
+          // ignore
+        }
+      } else if (transitionFrames >= 14) {
+        transitionPhase = "idle";
+      }
+    }
+
+    // Advance frame-driven toast
+    if (toastFrames > 0) {
+      toastFrames--;
+      if (toastFrames === 0) {
+        safeAnimate(toastNode, "opacity", 0, { dur: 250, easing: "out" });
+        safeAnimate(toastNode, "translateY", 6, { dur: 250, easing: "out" });
+      }
+    }
+
     if (!armed) {
       previousButtons = buttons;
       return;
@@ -837,7 +896,7 @@ mount(() => {
                     carouselNode = node;
                   }}
                   onMountCard={(idx, node) => {
-                    cardNodes.set(idx, node);
+                    cardNodes.set(idx, { node, screen: currentScreen() });
                   }}
                 />
 
