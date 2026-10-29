@@ -48,7 +48,7 @@ export function LauncherHome(props: Props) {
           <Text class="text-4xl text-emerald-300">{WORKSPACES[props.workspace].icon}</Text>
           <Text class="text-2xl font-bold text-white">{LAUNCHER_LOCALES[localeIndex()].names[props.workspace]}</Text>
           <Text class="text-xs text-slate-300">{WORKSPACES[props.workspace].description[localeIndex()]}</Text>
-          <Text class="text-xs font-mono text-emerald-300">{WORKSPACES[props.workspace].type[localeIndex()]} · {LAUNCHER_LOCALES[localeIndex()].labels.selected}</Text>
+          <Text class="text-xs font-mono text-emerald-300">{WORKSPACES[props.workspace].type[localeIndex()]} / {LAUNCHER_LOCALES[localeIndex()].labels.selected}</Text>
         </View>
       ) : (
         <View class="absolute left-[18px] top-[30px] w-[324px] h-[150px] flex-col">
@@ -66,7 +66,7 @@ export function LauncherHome(props: Props) {
         <Index each={WORKSPACES}>{(workspace, index) => <View class="w-[56px] h-[26px] items-center justify-center" ref={index === props.workspace ? (node: NodeMirror) => { selectedIcon = node; } : undefined}><Text class={props.workspace === index ? "text-2xl text-emerald-300" : "text-xl text-slate-600"}>{workspace().icon}</Text></View>}</Index>
       </View>
       <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
-        <Text class="text-xs text-slate-500">L/R {LAUNCHER_LOCALES[localeIndex()].labels.move} · A {LAUNCHER_LOCALES[localeIndex()].labels.open} · B {LAUNCHER_LOCALES[localeIndex()].labels.back} · START/SELECT</Text>
+        <Text class="text-xs text-slate-500">L/R {LAUNCHER_LOCALES[localeIndex()].labels.move}  A {LAUNCHER_LOCALES[localeIndex()].labels.open}  B {LAUNCHER_LOCALES[localeIndex()].labels.back}</Text>
       </View>
     </>
   );

@@ -126,7 +126,7 @@ mount(() => {
       return `${"●".repeat(Math.round(staged / 10))}${"·".repeat(10 - Math.round(staged / 10))} ${staged}%${levelPending() ? " *" : ""}`;
     }
     if (item.kind === "timeout") return timeoutPending() ? `${value} → ${timeouts[timeoutSelection()]}` : value;
-    if (item.kind === "language") return LAUNCHER_LOCALES[localeIndex()].names[0];
+    if (item.kind === "language") return locale() === "ja" ? "日本語" : locale() === "zh" ? "中文" : "English";
     if (item.kind === "tools") return "A OPEN";
     if (item.kind === "radio" || item.kind === "service") return value === "1" || value === "on" ? "● ON" : value === "0" || value === "off" ? "○ OFF" : "? UNKNOWN";
     return "A OPEN";
@@ -167,7 +167,13 @@ mount(() => {
       refreshSettingValues();
       return;
     }
-    if (activeItem().id === "settings") { setLauncherPage("settings"); setLauncherCategory(0); setLauncherSelection(0); refreshSettingValues(); return; }
+    if (selected >= LAUNCHER_APPS.length) {
+      setLauncherPage("settings");
+      setLauncherCategory(0);
+      setLauncherSelection(0);
+      refreshSettingValues();
+      return;
+    }
     const app = LAUNCHER_APPS[selected];
     if (!app) return;
     if (app.kind === "native") { launcherCommand(`LAUNCH\t${app.id}`); return; }
@@ -357,6 +363,10 @@ mount(() => {
         else if (pressed & BTN.LEFT) changeWorkspace(selectedWorkspace() - 1);
         if (pressed & BTN.RIGHT && launcherPage() === "settings") moveSettingValue(1);
         else if (pressed & BTN.RIGHT) changeWorkspace(selectedWorkspace() + 1);
+        if (launcherPage() === "settings") {
+          if (pressed & BTN.LTRIGGER) changeCategory(-1);
+          if (pressed & BTN.RTRIGGER) changeCategory(1);
+        }
         if (pressed & BTN.UP) moveLauncher(-1);
         if (pressed & BTN.DOWN) moveLauncher(1);
         if (pressed & BTN.CIRCLE) openLauncherEntry();
@@ -474,8 +484,8 @@ mount(() => {
         </View>
       ) : <View class="w-[0px] h-[0px]" />}
 
-      {!inputOpen() ? <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
-        <Text class="text-xs text-slate-500">START 切换 · SELECT 输入 · A 确认 · B 返回</Text>
+      {!inputOpen() && !launcherOpen() ? <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
+        <Text class="text-xs text-slate-500">START WS  SELECT INPUT</Text>
       </View> : null}
 
     </View>

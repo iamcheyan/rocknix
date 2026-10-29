@@ -18,7 +18,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps) {
     <View class="absolute left-[10px] top-[27px] w-[340px] h-[190px] flex-col">
       <View class="h-[20px] flex-row items-center justify-between">
         <Text class="text-sm font-bold text-[#3ECFFF]">SYSTEM SETTINGS</Text>
-        <Text class="text-xs text-[#D8E8FF] transition-colors duration-200">L1 ◀ {props.categories[props.category]} ▶ R1</Text>
+        <Text class="text-xs text-[#D8E8FF] transition-colors duration-200">L ◀ {props.categories[props.category]} ▶ R</Text>
       </View>
       <Text class="text-xs text-[#00FF99]">{props.selected + 1}/{props.rows.length} ITEMS</Text>
       <Index each={props.rows.slice(Math.max(0, Math.min(props.selected - 1, props.rows.length - 4)), Math.max(0, Math.min(props.selected - 1, props.rows.length - 4)) + 4)}>{(item, visibleIndex) => {
@@ -33,7 +33,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps) {
         );
       }}</Index>
       <Text class="text-xs text-[#D8E8FF]">{props.detail(props.rows[props.selected])}</Text>
-      <Text class="text-xs text-[#D8E8FF]">↑↓ ITEM · ←→ VALUE · A APPLY · B BACK · START WORKSPACE · SELECT INPUT</Text>
+      <Text class="text-xs text-[#D8E8FF]">↑↓ ITEM  ←→ VALUE  A APPLY  B BACK</Text>
       <Text class="text-xs text-[#FFB400]">{props.notice}</Text>
     </View>
   );
