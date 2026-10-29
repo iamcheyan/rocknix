@@ -18,9 +18,84 @@ fn run(program: &str, args: &[&str]) -> Option<String> {
     }
 }
 
+const LANGUAGE_PATH: &str = "/storage/pocketshell/launcher/settings.json";
+
+fn language_command(fields: &[&str]) -> String {
+    match fields {
+        ["LANGUAGE"] => std::fs::read_to_string(LANGUAGE_PATH)
+            .ok()
+            .and_then(|value| {
+                let language = value.trim().trim_matches('"');
+                ["ja", "zh", "en"].contains(&language).then(|| language.to_owned())
+            })
+            .unwrap_or_else(|| "ja".into()),
+        ["LANGUAGE", language] if ["ja", "zh", "en"].contains(language) => {
+            let path = std::path::Path::new(LANGUAGE_PATH);
+            let Some(parent) = path.parent() else { return "Unable to save language".into() };
+            if std::fs::create_dir_all(parent).is_err() { return "Unable to save language".into() }
+            let temporary = parent.join("settings.json.new");
+            if std::fs::write(&temporary, format!("\"{language}\"\n")).is_err()
+                || std::fs::rename(&temporary, path).is_err() {
+                let _ = std::fs::remove_file(temporary);
+                return "Unable to save language".into();
+            }
+            (*language).into()
+        }
+        _ => "Invalid language".into(),
+    }
+}
+
 pub fn command(value: &str) -> String {
     let fields: Vec<&str> = value.split('\t').collect();
     match fields.as_slice() {
+        ["LANGUAGE"] | ["LANGUAGE", _] => language_command(&fields),
+        ["STATE", "brightness"] => {
+            if let Ok(entries) = std::fs::read_dir("/sys/class/backlight") {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let read = |name| std::fs::read_to_string(path.join(name)).ok()?.trim().parse::<u32>().ok();
+                    if let (Some(current), Some(max)) = (read("brightness"), read("max_brightness")) {
+                        if max > 0 { return (current * 100 / max).to_string(); }
+                    }
+                }
+            }
+            "unknown".into()
+        }
+        ["STATE", "volume"] => {
+            for (program, args) in [("amixer", vec!["get", "Master"]), ("pactl", vec!["get-sink-volume", "@DEFAULT_SINK@"])] {
+                let Some(text) = run(program, &args) else { continue };
+                for word in text.split_whitespace() {
+                    let token = word.trim_matches(|c| c == '[' || c == ']');
+                    if let Some(n) = token.strip_suffix('%').and_then(|s| s.parse::<u32>().ok()) { return n.min(100).to_string(); }
+                }
+            }
+            "unknown".into()
+        }
+        ["STATE", "wifi"] => match run("rocknix-settings", &["--command", "load", "--key", "wifi.enabled"]) {
+            Some(text) if !text.trim().is_empty() => text.trim().to_string(),
+            _ => "unknown".into(),
+        },
+        ["STATE", "bluetooth"] => std::fs::read_to_string("/storage/.config/system/configs/system.cfg")
+            .ok()
+            .and_then(|text| text.lines().find_map(|line| line.trim().strip_prefix("controllers.bluetooth.enabled=").map(str::to_string)))
+            .unwrap_or_else(|| "unknown".into()),
+        ["STATE", "timeout"] => {
+            let content = std::fs::read_to_string("/storage/.config/pocketjs/runtime.conf").unwrap_or_default();
+            let mut in_section = false;
+            let configured = content.lines().find_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') { in_section = trimmed == "[sleep]"; return None; }
+                if in_section { return trimmed.split_once('=').filter(|(name, _)| name.trim() == "timeout").map(|(_, value)| value.trim().to_string()); }
+                None
+            });
+            configured.unwrap_or_else(|| "30m".into())
+        }
+        ["STATE", key] if ["adbusb", "ssh", "avahi", "ftp", "http", "rsyncd", "samba", "syncthing", "telnet", concat!("pocket", "shell-dev")].contains(key) => {
+            match run("rocknix-services", &["status", &format!("{key}.enabled")]) {
+                Some(text) => text.trim().split('=').nth(1).unwrap_or("unknown").to_string(),
+                None => "unknown".into(),
+            }
+        }
         ["LEVEL", "brightness"] => {
             if let Ok(entries) = std::fs::read_dir("/sys/class/backlight") {
                 for entry in entries.flatten() {
@@ -119,7 +194,7 @@ pub fn command(value: &str) -> String {
                 None => "Service change failed".into(),
             }
         }
-        ["SLEEP", timeout] => {
+        ["SLEEP", timeout] if ["never", "10s", "30s", "1m", "5m", "15m", "30m", "1h"].contains(timeout) => {
             let path = std::path::Path::new("/storage/.config/pocketjs/runtime.conf");
             let mut content = std::fs::read_to_string(path).unwrap_or_default();
             let mut in_section = false;
