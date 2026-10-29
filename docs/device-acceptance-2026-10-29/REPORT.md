@@ -480,3 +480,14 @@
 - 5) A3 镜像内检查：`/usr/share/pocketjs/apps/boot.pocket` = 2,698,456 B；字体/授权见 A3 节。
 - 6) E 的镜像门（OPEN）：运行镜像 `/usr/bin/adbd-repair`、`/usr/bin/adbd-free-port` 均不存在；`adbd.service` 无 `ExecStartPre`。E 目前仅有**手工部署运行期验证**（E-evidence.txt）。要满足 J6「从镜像部署后验证」，必须以 ≥`71ff73cb71` 的树重建镜像并部署 SYSTEM——当前 HX90 树为 `d681c8f25e`，未做该重建，故该门**显式未完成**。
 - 未验证/限制：未执行 HX90 树同步到 `37facec75f` 并重建（耗时且需谨慎保留 HX90 未跟踪资产）；E 的镜像内验证因此仍未达成，需后续以最新树重建 SYSTEM 后补测。
+
+### 重建尝试与结果（补充，2026-10-29 上午）
+
+- HX90 已 `git fetch` 并用 `git merge --ff-only origin/main` 对齐到 **`e484b261d2`**（保留方式：`git diff` 导出 `/tmp/hx90-pre-rebuild-*.patch`、`git stash push`（stash@{0}）、冲突未跟踪文件备份至 `/tmp/hx90-untracked-*/` 后删除，见 HX90_TREE_AUDIT.md）。对齐后 sleep/adbd 修复文件已为 tracked。
+- 变更包识别：`git diff --name-only d681c8f25e HEAD -- projects/` → 仅 `pocketjs-runtime` 与 `adbd`。
+- **错误操作**：误用 `make docker-clean PACKAGE=adbd`——Makefile 的 `clean:` 目标**忽略 `PACKAGE`**、执行 `./scripts/clean`（全量 clean），且被 sonata 根属 `.gopath` 文件 `Permission denied` 阻塞，导致 `build.ROCKNIX-H700.aarch64/build/` 被大范围删除（现仅剩 `adbd-1.0.4`）、`install_pkg/` 仅 1 项。`image/` staging 也被破坏。
+- 修正尝试：`sudo rm -rf` 移除 sonata 与损坏的 `image/`，重跑 `make docker-image`（HX90 有 sudo）。仍在 `[139/286] install bash:target` 失败：
+  `ln: failed to create symbolic link '.../image/system/usr/bin/sh': No such file or directory`（image staging 目录结构不完整）。
+- 结论：要产出含 adbd 修复的镜像，需在一次**完整、干净的全量重建**（工具链/LLVM/Rust/286 包，约 1–2 小时，且需先修复 staging 结构）之后进行；本轮未执行该长时间重建，也未部署任何新镜像（避免回归/砖机）。**E 的“从镜像部署后”门因此仍 OPEN。**
+- 设备未被改动：运行中 SYSTEM 仍为 md5 `71b156e4…`，K/A3 已在**运行镜像**内复验通过；仅停用了本会话早先的 `/storage` sleep override（`pocketjs-sleep.service.disabled-20261029`），由镜像单元接管。
+- 影响范围：HX90 的 `build.ROCKNIX-H700.aarch64/build/` 被清空大半，下次构建需按 `BUILD.md` 执行全量重建；源码树与 stash 均保留，未丢失用户改动。

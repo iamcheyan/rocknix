@@ -58,3 +58,11 @@ AGENTS.md、docs/heya-core-minimal/CPR77_PHASE3_IMPLEMENTATION.md、devices/H700
   - 26 个未提交改动全部保存于 `attachments/hx90-rocknix-20261029T003343.patch`，并另有 `git stash@{0}` 备份。
 - 结论：S3 的 `git checkout build_distro` 只把该文件还原到 HEAD；没有证据表明它冲掉了其他 agent 对 `build_distro` 的未提交改动（该文件不在 26 文件存档内，且现与 HEAD 一致）。其他 26 个未提交文件均已完整留档，**无不可恢复丢失**。
 - 残留风险/限制：无法从会话 JSONL 逐字节还原 S3 checkout 前的 `build_distro` 瞬时状态；但当前树该文件与 origin/main 一致，功能完整（`OS_BASE_CLEAN` 等开关仍在，见 G 组）。
+
+## P2b 再同步（2026-10-29 上午，为 E 镜像验证重建）
+
+- HX90 原 HEAD `d681c8f25e`（早于 sleep `faacfe0e6a`、adbd `71ff73cb71`、launcher `084cca71b4` 等）。
+- 操作：`git fetch`；`git diff > /tmp/hx90-pre-rebuild-20261029T103741.patch`；`git stash push`（stash@{0} "pre-rebuild"）；备份/删除 5 个与新提交冲突的未跟踪文件到 `/tmp/hx90-untracked-20261029T103741/`；`git merge --ff-only origin/main` → HX90 HEAD 现为 **`e484b261d2`**（= origin/main）。sleep/adbd 修复文件已 tracked。剩余未跟踪 50 个（非冲突用户资产，保留）。
+- 已跟踪但被 stash 的改动（5）：`hello/fonts.json`、`hello/launcher-characters.txt`、`hello/main.tsx`、`pocketjs-runtime/package.mk`、`scripts/patch-runtime.py`。stash 未丢弃。
+- **损坏**：误执行 `make docker-clean PACKAGE=adbd`（Makefile `clean:` 忽略 PACKAGE → `./scripts/clean` 全量 clean），叠加 sonata 根属 `.gopath` 权限错误，导致 `build.ROCKNIX-H700.aarch64/build/` 仅剩 `adbd-1.0.4`、`install_pkg/` 仅 1 项、`image/` staging 损坏。`sudo` 可用，已 `sudo rm -rf` sonata 与损坏 image 目录。
+- 后果：需按 `BUILD.md` 做一次干净全量重建（约 1–2h）才能出含 adbd 修复的镜像；源码与 stash 均保留，未丢用户改动。E 的镜像验证因此仍 OPEN（详见 REPORT.md Build-verify 节）。
