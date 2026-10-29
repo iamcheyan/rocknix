@@ -98,11 +98,28 @@ ssh hx90 'cd <pocketjs-scratch> && bun tools/pocket.ts compile --runtime-config 
 
 # 2) 部署到设备覆盖层（SYSTEM 不动）
 scp /tmp/boot.pocket root@192.168.3.57:/storage/pocketjs/apps/boot.pocket
-ssh root@192.168.3.57 'printf "[sleep]\ntimeout = 30m\nPOCKETJS_APP=/storage/pocketjs/apps/boot.pocket\n" > /storage/.config/pocketjs/runtime.conf'
+# 指向覆盖包：必须用 drop-in 的 Environment=，不要写进 runtime.conf
+ssh root@192.168.3.57 'mkdir -p /storage/.config/system.d/pocketjs-kms.service.d
+cat > /storage/.config/system.d/pocketjs-kms.service.d/91-dev-app.conf <<EOF
+[Service]
+Environment=POCKETJS_APP=/storage/pocketjs/apps/boot.pocket
+EOF
+systemctl daemon-reload'
 
 # 3) 重启（restart 会超时：KMS 进程忽略 SIGTERM）
 ssh root@192.168.3.57 'systemctl kill -s SIGKILL pocketjs-kms; sleep 2; systemctl reset-failed pocketjs-kms; systemctl start pocketjs-kms'
 ```
+
+**`POCKETJS_APP` 不能写进 `/storage/.config/pocketjs/runtime.conf`**：那是给 `pocketjs-sleep` 读的 INI（含 `[sleep]` 段），单元的 `EnvironmentFile=-` 解析不了段头，整条会静默失效，kms 仍跑 `/usr/share` 的镜像包。必须用上面的 drop-in。
+
+部署后确认 argv 真的换了：
+
+```sh
+ssh root@192.168.3.57 'pgrep -af "pocket-linux-kms --package"'
+# 期望：/usr/libexec/pocket-linux-kms --package /storage/pocketjs/apps/boot.pocket --card /dev/dri/card1
+```
+
+**保持只有一个 kms 进程**：手动起过 `pocket`/`pocket-linux-kms` 后（例如 `pocket` 不带参数会阻塞并占用 DRM），会残留孤儿进程抢 DRM，截图会拍到旧界面。用 `ps -eo pid,ppid,args | grep pocket-linux-kms` 核对，只保留 systemd 单元那一个。
 
 宿主二进制同理：放 `/storage/pocketjs/bin/pocket-linux-kms`，用 drop-in 覆盖 `ExecStart`：
 
