@@ -14,7 +14,7 @@ export function CardCarousel(props: CardCarouselProps) {
     <View class="w-[360px] h-[116px] overflow-hidden relative">
       <View
         ref={(node: NodeMirror) => props.onMountCarousel?.(node)}
-        class="flex-row items-center absolute left-0 top-0 h-[116px] px-[136px]"
+        class="flex-row items-center absolute left-0 top-0 h-[116px] px-4"
       >
         <Index each={props.apps}>
           {(app, index) => {
@@ -24,8 +24,8 @@ export function CardCarousel(props: CardCarouselProps) {
                 ref={(node: NodeMirror) => props.onMountCard?.(index, node)}
                 class={
                   isSelected()
-                    ? "w-[84px] h-[108px] rounded-lg mr-2 p-1 flex-col items-center justify-between bg-[#1e3042] border-2 border-[#38bdf8]"
-                    : "w-[84px] h-[108px] rounded-lg mr-2 p-1 flex-col items-center justify-between bg-[#14202c] border border-[#273a4b] opacity-80"
+                    ? "w-[104px] h-[108px] rounded-lg mr-2 p-1 flex-col items-center justify-between bg-[#1e3042] border-2 border-[#38bdf8]"
+                    : "w-[104px] h-[108px] rounded-lg mr-2 p-1 flex-col items-center justify-between bg-[#14202c] border border-[#273a4b] opacity-80"
                 }
               >
                 {/* Icon box */}
@@ -42,9 +42,9 @@ export function CardCarousel(props: CardCarouselProps) {
                 </View>
 
                 {/* App Name */}
-                <View class="w-[78px] items-center justify-center">
+                <View class="w-[96px] items-center justify-center">
                   <Text class="text-xs font-bold text-center text-slate-100">
-                    {app().name.length > 10 ? `${app().name.slice(0, 9)}…` : app().name}
+                    {app().shortName || app().name}
                   </Text>
                 </View>
 

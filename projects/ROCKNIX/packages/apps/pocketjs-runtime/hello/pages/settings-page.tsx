@@ -37,13 +37,13 @@ export const SERVICE_KEYS = [
 
 export function SettingsPage(props: { state: SettingsState }) {
   const allRows = [
-    { type: "brightness", label: "Brightness 亮度" },
-    { type: "volume", label: "Volume 音量" },
-    { type: "wifi", label: "Wi-Fi 无线网络" },
-    { type: "bluetooth", label: "Bluetooth 蓝牙" },
-    { type: "timeout", label: "Screen Timeout 屏幕超时" },
+    { type: "brightness", label: "Brightness" },
+    { type: "volume", label: "Volume" },
+    { type: "wifi", label: "Wi-Fi" },
+    { type: "bluetooth", label: "Bluetooth" },
+    { type: "timeout", label: "Screen Timeout" },
     ...SERVICE_KEYS.map((s) => ({ type: "service", key: s.key, label: s.name })),
-    { type: "legacy", label: "Network & USB Settings 高级设置" },
+    { type: "legacy", label: "Advanced Settings" },
   ];
 
   const visibleWindow = () => {
@@ -102,13 +102,13 @@ export function SettingsPage(props: { state: SettingsState }) {
                 {row().type === "brightness" ? (
                   <View class="flex-row items-center gap-1">
                     <Text class="text-xs font-mono text-cyan-300">
-                      {`◀ ${renderProgressBar(props.state.brightness)} ${props.state.brightness}% ▶`}
+                      {`${renderProgressBar(props.state.brightness)} ${props.state.brightness}%`}
                     </Text>
                   </View>
                 ) : row().type === "volume" ? (
                   <View class="flex-row items-center gap-1">
                     <Text class="text-xs font-mono text-cyan-300">
-                      {`◀ ${renderProgressBar(props.state.volume)} ${props.state.volume}% ▶`}
+                      {`${renderProgressBar(props.state.volume)} ${props.state.volume}%`}
                     </Text>
                   </View>
                 ) : row().type === "wifi" ? (
@@ -150,7 +150,7 @@ export function SettingsPage(props: { state: SettingsState }) {
                 ) : row().type === "timeout" ? (
                   <View class="flex-row items-center gap-1">
                     <Text class="text-xs font-mono text-cyan-300">
-                      {`◀ ${TIMEOUT_OPTIONS[props.state.timeoutIndex].label} ▶`}
+                      {`[ ${TIMEOUT_OPTIONS[props.state.timeoutIndex].label} ]`}
                     </Text>
                   </View>
                 ) : row().type === "service" ? (
@@ -168,7 +168,7 @@ export function SettingsPage(props: { state: SettingsState }) {
                           : "text-xs font-bold text-slate-500"
                       }
                     >
-                      {props.state.services[(row() as any).key] ? "ENABLED 已启用" : "DISABLED 已停用"}
+                      {props.state.services[(row() as any).key] ? "ENABLED 开启" : "DISABLED 关闭"}
                     </Text>
                   </View>
                 ) : (
@@ -187,7 +187,7 @@ export function SettingsPage(props: { state: SettingsState }) {
         <View class="w-[344px] h-[1px] bg-[#1e2d3d]" />
         <View class="flex-row items-center justify-between w-full">
           <Text class="text-xs text-slate-500">
-            ▲▼ 移动 · ◀▶ 调节 · A 切换
+            方向键选择 · A 切换 · B 返回
           </Text>
           <Text class="text-xs text-[#38bdf8] font-mono">
             SLEEP runtime.conf

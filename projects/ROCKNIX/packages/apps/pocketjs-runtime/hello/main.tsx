@@ -196,7 +196,7 @@ mount(() => {
   };
 
   const updateCardPosition = (idx: number, smooth = true) => {
-    const targetX = -idx * 92;
+    const targetX = -Math.max(0, idx - 2) * 112;
     if (carouselNode) {
       if (smooth) {
         animate(carouselNode, "translateX", targetX, { dur: 220, easing: "out-back" });
@@ -288,14 +288,14 @@ mount(() => {
     const next = Math.max(5, Math.min(100, brightness() + delta));
     setBrightness(next);
     const res = host?.__launcher?.(`CONTROL\tbrightness\t${next}`) ?? "OK";
-    showToast(`Brightness 亮度: ${next}%`);
+    showToast(`Brightness: ${next}%`);
   };
 
   const changeVolume = (delta: number) => {
     const next = Math.max(0, Math.min(100, volume() + delta));
     setVolume(next);
     const res = host?.__launcher?.(`CONTROL\tvolume\t${next}`) ?? "OK";
-    showToast(`Volume 音量: ${next}%`);
+    showToast(`Volume: ${next}%`);
   };
 
   const toggleWifi = () => {
@@ -309,7 +309,7 @@ mount(() => {
     const next = !bluetoothEnabled();
     setBluetoothEnabled(next);
     host?.__launcher?.(`CONTROL\tbluetooth\t${next ? "on" : "off"}`);
-    showToast(`Bluetooth 蓝牙: ${next ? "ON 开启" : "OFF 关闭"}`);
+    showToast(`Bluetooth: ${next ? "ON 开启" : "OFF 关闭"}`);
   };
 
   const cycleTimeout = (delta: number) => {
@@ -317,7 +317,7 @@ mount(() => {
     setTimeoutIndex(nextIdx);
     const opt = TIMEOUT_OPTIONS[nextIdx];
     const res = host?.__launcher?.(`SLEEP\t${opt.value}`) ?? `Screen timeout set to ${opt.value}`;
-    showToast(`Timeout 屏幕超时: ${opt.label}`);
+    showToast(`Screen Timeout: ${opt.label}`);
   };
 
   const toggleService = (key: string) => {
@@ -325,11 +325,11 @@ mount(() => {
     const next = !current;
     setServices((prev) => ({ ...prev, [key]: next }));
     const res = host?.__launcher?.(`SERVICE\t${key}.enabled`) ?? "Toggled";
-    showToast(`${key}: ${next ? "ENABLED 已启用" : "DISABLED 已停用"}`);
+    showToast(`${key}: ${next ? "ENABLED 开启" : "DISABLED 关闭"}`);
   };
 
   const launchApp = (app: LauncherApp) => {
-    showToast(`启动应用: ${app.name}...`);
+    showToast(`启动: ${app.shortName || app.name}...`);
     // Pulse animation
     const node = cardNodes.get(currentCardIndex());
     if (node) {
@@ -354,7 +354,7 @@ mount(() => {
   };
 
   const launchDiagnosticTool = (tool: LauncherApp) => {
-    showToast(`启动诊断工具: ${tool.name}...`);
+    showToast(`启动: ${tool.shortName || tool.name}...`);
     setLauncherOpen(false);
     send("RESET\t0");
     send(`0\tTEXT /usr/bin/heya-tool ${tool.id} --inside`);
@@ -381,7 +381,7 @@ mount(() => {
         toggleService(SERVICE_KEYS[sel - 5].key);
       } else if (sel === 5 + SERVICE_KEYS.length) {
         // Legacy settings
-        showToast("打开高级设置...");
+        showToast("打开设置...");
         setLauncherOpen(false);
         send("RESET\t0");
         send("0\tTEXT /usr/libexec/pocketjs-legacy-settings");
@@ -820,7 +820,7 @@ mount(() => {
                             : "text-xs font-bold text-sky-400"
                         }
                       >
-                        {selectedApp()?.kind === "native" ? "[ 原生 NATIVE ]" : "[ 终端 VT100 ]"}
+                        {selectedApp()?.kind === "native" ? "[ 内置 NATIVE ]" : "[ 终端 VT100 ]"}
                       </Text>
                     </View>
                   </View>
@@ -844,7 +844,7 @@ mount(() => {
                 {/* Action Feedback Bar */}
                 <View class="w-[344px] h-[20px] flex-row items-center justify-between">
                   <Text class="text-xs text-slate-500">
-                    {currentCardIndex() + 1} / {currentApps().length} · A 确认 · ◀▶ 移动
+                    {currentCardIndex() + 1} / {currentApps().length} · 方向键选择 · A 确认
                   </Text>
                   <View
                     ref={(node: NodeMirror) => {
@@ -876,10 +876,10 @@ mount(() => {
             <View class="w-[360px] h-[1px] bg-[#1f2d3d]" />
             <View class="w-[360px] h-[19px] flex-row items-center justify-between px-2">
               <Text class="text-xs text-slate-400">
-                L/R 切屏 · ◀▶ 选择 · A 确认 · B 返回
+                L/R 切屏 · 方向键选择 · A 确认 · B 返回
               </Text>
               <Text class="text-xs text-[#38bdf8]">
-                SELECT 输入键盘
+                SELECT 输入
               </Text>
             </View>
           </View>

@@ -9,8 +9,6 @@ export interface StatusBarProps {
   batteryLevel: number;
 }
 
-const TAB_NAMES = ["HOME", "MEDIA", "GAMES", "SETTINGS", "SYSTEM"];
-
 export function StatusBar(props: StatusBarProps) {
   const batteryKnown = () => props.batteryLevel >= 0;
   const batteryIcon = () => {
@@ -39,15 +37,15 @@ export function StatusBar(props: StatusBarProps) {
           </Text>
         </View>
 
-        {/* Center: Switch 5-screen tabs */}
+        {/* Center: Switch 5-screen compact indicators */}
         <View class="flex-row items-center gap-1">
-          <Index each={TAB_NAMES}>
-            {(name, index) => (
+          <Index each={["1", "2", "3", "4", "5"]}>
+            {(num, index) => (
               <View
                 class={
                   props.currentScreen === index
-                    ? "px-1 h-[16px] items-center justify-center rounded-sm bg-[#164e63] border border-[#38bdf8]"
-                    : "px-1 h-[16px] items-center justify-center rounded-sm bg-transparent"
+                    ? "w-[15px] h-[15px] items-center justify-center rounded-sm bg-[#164e63] border border-[#38bdf8]"
+                    : "w-[15px] h-[15px] items-center justify-center rounded-sm bg-transparent"
                 }
               >
                 <Text
@@ -57,7 +55,7 @@ export function StatusBar(props: StatusBarProps) {
                       : "text-xs font-bold text-slate-500"
                   }
                 >
-                  {name()}
+                  {num()}
                 </Text>
               </View>
             )}

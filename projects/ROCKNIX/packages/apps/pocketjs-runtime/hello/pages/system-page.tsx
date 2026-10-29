@@ -81,7 +81,7 @@ export function SystemPage(props: SystemPageProps) {
       <View class="flex-col gap-1 w-full">
         <View class="w-[344px] h-[1px] bg-[#1e2d3d]" />
         <Text class="text-xs font-bold text-slate-400">
-          DIAGNOSTIC TOOLS 系统诊断工具 (◀▶ 选择 · A 启动):
+          DIAGNOSTIC TOOLS 系统检测 (方向键选择 · A 启动):
         </Text>
         <View class="flex-row items-center gap-1 overflow-hidden w-[344px] h-[22px]">
           <Index each={props.systemTools}>
@@ -105,7 +105,7 @@ export function SystemPage(props: SystemPageProps) {
                         : "text-xs font-bold text-slate-400"
                     }
                   >
-                    {tool().name}
+                    {tool().shortName || tool().name}
                   </Text>
                 </View>
               );
