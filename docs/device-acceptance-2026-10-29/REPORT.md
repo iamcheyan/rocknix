@@ -491,3 +491,13 @@
 - 结论：要产出含 adbd 修复的镜像，需在一次**完整、干净的全量重建**（工具链/LLVM/Rust/286 包，约 1–2 小时，且需先修复 staging 结构）之后进行；本轮未执行该长时间重建，也未部署任何新镜像（避免回归/砖机）。**E 的“从镜像部署后”门因此仍 OPEN。**
 - 设备未被改动：运行中 SYSTEM 仍为 md5 `71b156e4…`，K/A3 已在**运行镜像**内复验通过；仅停用了本会话早先的 `/storage` sleep override（`pocketjs-sleep.service.disabled-20261029`），由镜像单元接管。
 - 影响范围：HX90 的 `build.ROCKNIX-H700.aarch64/build/` 被清空大半，下次构建需按 `BUILD.md` 执行全量重建；源码树与 stash 均保留，未丢失用户改动。
+
+### 重建第二次尝试（干净重建，被并发构建终止）— 2026-10-29 中午
+
+- 操作：`sudo rm -rf build.ROCKNIX-H700.aarch64/{.stamps,install_pkg,image}`（仅清构建产物，不动源码），随后 `DEVICE=H700 ARCH=aarch64 PROJECT=ROCKNIX make docker-H700` 全量重建。
+- 进展：到达 `[260/286] install wireplumber` 后，日志出现
+  `make[1]: *** [Makefile:74: H700] Terminated` / `make: *** [Makefile:173: docker-H700] エラー 2`（SIGTERM），**构建被终止，未产出新镜像**（无 `target/*.img.gz`）。
+- 根因（证据）：HX90 上存在**另一个 worktree 的并发构建**在跑：
+  `bash -c cd /home/tetsuya/development/.worktrees/pjos-linux-rename-build && OS_BASE_CLEAN=no make docker-H700`（pid 288132；docker 容器 `make H700` 在运行）。该会话的清理/资源竞争导致我的 `make docker-H700` 被 SIGTERM。
+- 结论：**E 的镜像门仍 OPEN**，且当前受**外部并发构建**阻塞（另一会话占用 HX90）。不应并发重试（会被再次杀掉/互相破坏）。待 HX90 空闲后，按 `BUILD.md` 从 `/home/tetsuya/development/rocknix`（已同步 `e484b261d2`）做一次干净全量重建，再 SYSTEM-only 部署并验证 `/usr/bin/adbd-repair` 存在且 `adbd.service` 含 `ExecStartPre`。
+- 设备未受影响：运行镜像 md5 `71b156e4…` 不变，K/A3 镜像内复验通过；未做任何 boot/KERNEL/dtb/dd 操作。
