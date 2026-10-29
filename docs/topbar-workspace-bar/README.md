@@ -84,6 +84,6 @@ WorkspaceBar probe 使用 HX90 临时 pinned PocketJS checkout 的官方 compile
 真机基线 `screenshots/rg34xx-baseline-720x480.png` 和新抓取设备帧均显示未集成 CPR98 的旧 Launcher 状态栏（IP、数字 workspace、电量百分比），不是 CPR98 成果图。新组件未 mount 到正式 app，故真机/设备尺寸行为未验收。
 
 ## 当前未解决项
-1. CPR95 Launcher 尚未引入 CPR98 `workspace-bar.tsx`，其当前 descriptors 还没有 pixel `glyph`，`main.tsx` 仍绘制旧状态行。CPR98 已向 CPR95 owner 发送精确 props/替换接口；根据文件所有权不编辑其 worktree。
+1. CPR95 Launcher 尚未引入 CPR98 `workspace-bar.tsx`；其 `main.tsx` 仍绘制旧状态行，描述符也没有 pixel `glyph`。CPR95 与 read-only coordinator 均确认文件属于 Launcher owner，不会由 CPR98 改写。集成 owner 需在五个既有 descriptors 添加单色 8×8 glyph、import WorkspaceBar，并在旧 status row 位置调用 `<WorkspaceBar workspaces={WORKSPACES} activeId={WORKSPACES[selectedWorkspace()].id} />`，保留现有切换与输入逻辑。
 2. PocketJS runtime 没有 Wi‑Fi、Bluetooth、电池或 developer-mode 状态 query；不显示、不合成状态。
-3. 已完成三尺寸独立 renderer probe；完整 Launcher wiring、真机新界面截图、浏览器外壳等效缩放、整页裁切、既有输入/导航回归与实际 150ms 动画验收仍待最终集成。
+3. 已完成三尺寸独立 renderer probe；正式 Launcher wiring、真机新界面截图、浏览器外壳等效缩放、整页裁切、既有输入/导航回归与实际 150ms 动画验收仍待最终集成。
