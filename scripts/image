@@ -96,10 +96,13 @@ TARGET_VERSION="${DISTRO_ARCH}-${DISTRO_VERSION}"
 if [ -n "${CUSTOM_IMAGE_NAME}" ]; then
   IMAGE_NAME="${CUSTOM_IMAGE_NAME}"
 else
+  # Image and artifact names must stay shell-safe: DISTRONAME is a display name and
+  # may contain spaces (e.g. "PJOS Linux"), so prefer the optional build name.
+  DISTRO_ARTIFACT_NAME="${DISTRO_BUILD_NAME:-${DISTRONAME}}"
   if [ "${DEVEL_VERSION}" = "devel" ]; then
-    IMAGE_NAME="${DISTRONAME}-${DISTRO_ARCH}-${OS_VERSION}"
+    IMAGE_NAME="${DISTRO_ARTIFACT_NAME}-${DISTRO_ARCH}-${OS_VERSION}"
   else
-    IMAGE_NAME="${DISTRONAME}-${TARGET_VERSION}"
+    IMAGE_NAME="${DISTRO_ARTIFACT_NAME}-${TARGET_VERSION}"
   fi
 
   if [ -n "${UBOOT_SYSTEM}" ] && [ "${UBOOT_SYSTEM}" != "${DEVICE:-${PROJECT}}" ]; then
