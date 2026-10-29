@@ -8,6 +8,7 @@ script_dir = Path(__file__).resolve().parent
 guest = root / "engine/guest-rquickjs/src/lib.rs"
 (root / "engine/guest-rquickjs/src/pocketshell_terminal.rs").write_text((script_dir / "pocketshell-terminal.rs").read_text())
 (root / "engine/guest-rquickjs/src/pocketshell_library.rs").write_text((script_dir / "pocketshell-library.rs").read_text())
+(root / "engine/guest-rquickjs/src/pocketshell_launcher.rs").write_text((script_dir / "pocketshell-launcher.rs").read_text())
 
 cargo = root / "engine/guest-rquickjs/Cargo.toml"
 cargo_text = cargo.read_text()
@@ -26,7 +27,7 @@ def replace(old: str, new: str) -> None:
 
 replace(
     "use rquickjs::{\n    function::Rest, Array, ArrayBuffer, Coerced, Context, Ctx, Exception, FromJs, Function, IntoJs,\n    Object, Runtime, Value,\n};",
-    "mod pocketshell_library;\nmod pocketshell_terminal;\n\nuse pocketshell_terminal::PocketShell;\nuse rquickjs::{\n    function::Rest, Array, ArrayBuffer, Coerced, Context, Ctx, Exception, FromJs, Function, IntoJs,\n    Object, Runtime, Value,\n};\nuse std::sync::{Arc, Mutex};",
+    "mod pocketshell_launcher;\nmod pocketshell_library;\nmod pocketshell_terminal;\n\nuse pocketshell_terminal::PocketShell;\nuse rquickjs::{\n    function::Rest, Array, ArrayBuffer, Coerced, Context, Ctx, Exception, FromJs, Function, IntoJs,\n    Object, Runtime, Value,\n};\nuse std::sync::{Arc, Mutex};",
 )
 replace("    last_error: Option<String>,\n}", "    last_error: Option<String>,\n    pocketshell: Arc<Mutex<PocketShell>>,\n}")
 replace("            last_error: None,\n        }", "            last_error: None,\n            pocketshell: Arc::new(Mutex::new(PocketShell::new())),\n        }")
@@ -41,6 +42,7 @@ replace(
                 if command.len() > 16384 { return String::new(); }
                 command_shell.lock().map(|mut state| state.command(&command)).unwrap_or_default()
             })?)?;
+            ui.set("__launcher", Function::new(ctx.clone(), |command: String| pocketshell_launcher::command(&command))?)?;
             ui.set("__library", Function::new(ctx.clone(), |command: String| pocketshell_library::command(&command))?)?;
             let frame_shell = shell.clone();
             ctx.globals().set("__pocketshellFrame", Function::new(ctx.clone(), move || {
