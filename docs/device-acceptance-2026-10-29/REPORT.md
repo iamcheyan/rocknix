@@ -38,7 +38,7 @@
 | P4 | 可重复构建命令文档 | PASS | BUILD.md | - | 命令 + DEVICE gotcha + 计时说明 |
 | A1 | 启动器中文字体 | PASS（帧已产出，待目视） | A01-launcher-main.png | - | 设备主界面帧；中文字形由用户目视确认 |
 | A2 | 电池 Nerd 图标 | PASS（帧已产出，待目视） | A02-battery.png | - | 右上电池区裁剪(4x) |
-| A3 | 字体子集可复现 | PASS | - | - | patch-build-fonts.py 在；两份 license 在；boot.pocket 1.45MB |
+| A3 | 字体子集可复现 | PASS（静态/构建证据，无截图适用） | - | - | patch-build-fonts.py 存在且接入构建；镜像 boot.pocket 2.57MB、/storage 3.19MB（均非数十 MB）；字体 license 在源码树；镜像仅装 runtime MIT LICENSE（见 A3 节） |
 | A4 | 全页面巡检 | PASS（导航） | A04-page-0.png, A04-page-1.png, A04-page-2.png, A04-page-3.png | - | RIGHT 切换页面 64.62% 变化；逐页帧已产出 |
 | B1 | 抓帧字节正确 | PASS | B01-lcd-frame-rgb-correct.png | - | 1036800 字节 ✓ |
 | B2 | 浏览器显示真实画面 | PASS | B02-browser-shows-device.png | - | DOM 确认 LCD live |
@@ -59,16 +59,16 @@
 | D5 | 每个条目点一遍 | BLOCKED | A04-page-0.png | - | agent 无法目视，盲按 A 可能触发关机/重启，无法安全逐项点击（见 D5 节） |
 | D6 | 冷启动与异常 | PASS | K07-after-reboot.png | - | 重启后启动器（pocket-linux-kms/boot.pocket）起来 |
 | E1 | ADB 脚本静态校验 | PASS | E-evidence.txt | - | sh -n OK；PID 提取 `:::5555` 命中/`:::55550` 排除 |
-| E2 | 根因复现 | PASS | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
-| E3 | USB-ADB 不误杀 | PASS | E-evidence.txt | - | usbgadget=adb 时跳过、未杀 |
-| E4 | 插拔自愈 | PASS（模拟） | E-evidence.txt | - | systemctl 触发 service，健康时不动 |
-| E5 | 副作用检查 | PASS | E-evidence.txt | - | 服务全 active、SSH 正常、无新增失败 |
+| E2 | 根因复现 | PASS（手工部署，镜像待验） | E-evidence.txt | - | 孤儿占端口；杀+重启 → listener==MainPID |
+| E3 | USB-ADB 不误杀 | PASS（手工部署，镜像待验） | E-evidence.txt | - | usbgadget=adb 时跳过、未杀 |
+| E4 | 插拔自愈 | PASS（模拟，手工部署） | E-evidence.txt | - | systemctl 触发 service，健康时不动 |
+| E5 | 副作用检查 | PASS（手工部署，镜像待验） | E-evidence.txt | - | 服务全 active、SSH 正常、无新增失败 |
 | F1 | SYSTEM MD5 一致性 | PASS | F-evidence.txt | - | /flash/SYSTEM=71b156e4… 与 sidecar 一致 |
 | F2 | 备份可回滚 | PASS | F-evidence.txt | - | 备份完整 + 回滚命令 |
 | F3 | 启动分区完整性 | PASS | F-evidence.txt | - | /flash 只读；FDT /dtb.img；KERNEL/dtb 未改 |
 | F4 | 重启回归 | PASS | K07-after-reboot.png | - | 重启后服务 active（复用 K7） |
 | G1 | 快速路径跳过 clean | PASS（静态） | BUILD.md | - | OS_BASE_CLEAN=no 跳过 8 组（build_distro:78） |
-| G2 | 真的出包 | PASS | P3-evidence.txt | - | integration 出 DDR4 镜像 |
+| G2 | 真的出包 | PASS | BUILD.md | - | 20261029 出 DDR4 镜像 166MB + tar 181MB（IMAGE_EXIT=0） |
 | G3 | 耗时对比 | PARTIAL（实测下界） | BUILD.md | - | 实测全量从零 ≥23min 仍在工具链阶段；快速路径单包=文档分钟级（未独立实测） |
 | G4 | 文档一致 | PASS | BUILD.md | - | 与 build-iteration-fastpath.md 一致 |
 | H1 | mirror 功能验证 | PASS | H01-mirror-frame.jpg, H-evidence.txt | - | JPEG 720×480 抓帧 + evdev 注入 ok |
@@ -76,7 +76,7 @@
 | I1 | 连续使用场景 | PASS | I1-01-shell.png, I1-02-ls.png, I1-03-uname.png, I1-04-ws2-files.png, I1-05-input-before.png, I1-06-input-after.png, I1-07-back-shell.png | - | 7 步连续会话（终端→ls→uname→切工作区→输入提交→返回），每步画面有变化 |
 | I2 | 无残留异常 | PASS | - | - | 0 僵尸；仅 2 个既有失败；storage 1% |
 | I3 | 已知限制清单 | PASS | REPORT 本节 | - | 见文末已知限制 |
-| K1 | 屏幕休眠守护进程 | PASS | K02-default.png | f0821e95fa | is-active=active，进程在跑 |
+| K1 | 屏幕休眠守护进程 | PASS | Kimg-01-on.png, K02-default.png, Kimg-02-dimmed.png, Kimg-03-woken.png | f0821e95fa | 镜像单元 `/usr/libexec/pocketjs-sleep` active；镜像内复验 dim/wake |
 | K2 | 默认 30m | PASS | K02-default.png | - | 无 [sleep]→timeout=1800s |
 | K3 | 1m 档关屏 | PASS（机制）/ 截图限制 | K03-on.png, K03-dimmed.png | f0821e95fa | backlight 1249→0；frame.rgb 保留 fb，见 DEC-001 |
 | K4 | 按键唤醒 | PASS | K04-woken.png | - | 唤醒→backlight=1249 |
@@ -336,10 +336,14 @@
 - 截图：![](./A02-battery.png)
 - 未验证/限制：图标是否为正确 Nerd 字形由用户目视。
 
-### A3 字体子集可复现
-- 状态：PASS（静态）
-- 实测：`scripts/patch-build-fonts.py` 存在；`hello/fonts/LICENSE-OFL-FusionPixel.txt`、`LICENSE-NerdFonts.txt` 均已入库；设备 `/storage/pocketjs/apps/boot.pocket` = 1,523,832 B(~1.45MB)，未回退到数十 MB。
-- 未验证/限制：脚本重跑需 HX90 构建（P3 构建中）。
+### A3 字体子集可复现（静态/构建验证；本项非可视项，无截图适用）
+- 状态：PASS（静态/构建证据）
+- 证据方式：命令与产物输出（非截图）。
+- 1) 构建接入脚本存在（`projects/ROCKNIX/packages/apps/pocketjs-runtime/scripts/patch-build-fonts.py`）：它把 `tools/build.ts` 的字体声明改为读 `POCKETJS_FONT_REGULAR/BOLD/MONO` 环境变量（`cat` 已核对）。package.mk 的 `make_host` 在 `bun ... compile` 前以 FusionPixel 路径导出这三个变量并调用该脚本。
+- 2) 构建实际产出：HX90 `make docker-image` 成功（`IMAGE_EXIT=0`），生成 `target/ROCKNIX-H700.aarch64-20261029-DDR4.img.gz`（166,082,209 B）与 `.tar`（181,760,000 B）；构建期 `bun tools/pocket.ts compile` 生成 `boot.pocket`。说明字体子集 bake 在真实构建中跑通。
+- 3) 体积：设备镜像 `/usr/share/pocketjs/apps/boot.pocket` = **2,698,456 B（2.57 MB）**；`/storage/pocketjs/apps/boot.pocket` = 3,344,280 B（3.19 MB）；旧备份 `.bak-20261029` = 1,523,832 B（1.45 MB）。均在合理范围，未回退到数十 MB。
+- 4) License：源码树 `hello/fonts/LICENSE-OFL-FusionPixel.txt`（4,418 B）、`LICENSE-NerdFonts.txt`（1,082 B）均已入库；镜像内 `/usr/share/licenses/pocketjs-runtime/LICENSE` 仅 1,075 B（PocketJS runtime 的 MIT License），**未单独安装两份字体 license 文本**。
+- 未验证/限制：未独立重跑 `bun compile` 生成对比（依赖 HX90 构建，已随整镜像构建跑通）；字体 license 未随镜像安装（仅源码树存在）——如需合规分发，应在 package.mk 增加字体 license 的 install（列为待办，非本次阻塞）。
 
 ### A4 全页面巡检
 - 状态：PASS（导航有效，逐页帧已产出）
@@ -457,3 +461,22 @@
 - 截图：![](./I1-01-shell.png) ![](./I1-02-ls.png) ![](./I1-03-uname.png) ![](./I1-04-ws2-files.png) ![](./I1-05-input-before.png) ![](./I1-06-input-after.png) ![](./I1-07-back-shell.png)
 - 问题与根因：无（会话连贯，无崩溃/错位）。
 - 未验证/限制：本会话在 Dev Center（真实 server PTY + 真实浏览器 UI）中进行；设备 LCD 侧为启动器界面（A/D 组已单独截帧）。`htop` 因目标端无对应 terminfo 报 TERM 错（见 I3），改用 `ls`/`uname` 演示终端输出。
+
+## Build-verify（H700 构建产物 + 镜像内 K/A3 复验）
+
+- 状态：K/A3 镜像内复验 **PASS**；E 的“从镜像部署后”验证 **仍未满足（OPEN）**。
+- 测试时间（JST）：2026-10-29 上午
+- 1) 构建产物（真实）：HX90 `make docker-image` 成功，`IMAGE_EXIT=0`；产出
+  `target/ROCKNIX-H700.aarch64-20261029-DDR4.img.gz`（166,082,209 B）+ `.sha256`、
+  `target/ROCKNIX-H700.aarch64-20261029.tar`（181,760,000 B）+ `.sha256`。
+- 2) HX90 树基线：`git rev-parse --short HEAD` = **`d681c8f25e`**（落后本机 `37facec75f`；缺 `71ff73cb71` adbd 修复、`084cca71b4` launcher bridge）。该 20261029 构建树的镜像树内**不含** `adbd-repair`/`adbd-free-port`，也未见 `pocketjs-sleep`。
+  → 因此**未部署该构建**（部署会相对运行镜像回归，且不含 E 修复），符合“仅在必要时、安全地部署 SYSTEM”。
+- 3) 运行镜像 K 前置检查：运行中 SYSTEM（`/flash/SYSTEM` md5 `71b156e43467587e7b418097e3e2fb0d`）内**已含** `/usr/libexec/pocketjs-sleep`（md5 `b92777a11e…`，即含修复的手写解析版本）与 `/usr/lib/systemd/system/pocketjs-sleep.service`。
+- 4) K 镜像内复验（禁用 `/storage` 手工 override，改用镜像单元）：
+  - `systemctl cat pocketjs-sleep` → `# /usr/lib/systemd/system/pocketjs-sleep.service`，`ExecStart=/usr/libexec/pocketjs-sleep`，`is-active=active`。
+  - 设 `[sleep] timeout=10s`、亮度 2499 → 静置 12s：`brightness=0`，日志 `screen dimmed`；`/device/key RIGHT` 唤醒：`brightness=2499`，日志 `screen restored`。
+  - 截图：![](./Kimg-01-on.png)（亮）![](./Kimg-02-dimmed.png)（backlight=0，frame.rgb 保留 fb，非全黑，见 DEC-001）![](./Kimg-03-woken.png)（唤醒）
+  - K1 镜像单元、K3 关屏、K4 唤醒在**镜像单元**下复验通过。
+- 5) A3 镜像内检查：`/usr/share/pocketjs/apps/boot.pocket` = 2,698,456 B；字体/授权见 A3 节。
+- 6) E 的镜像门（OPEN）：运行镜像 `/usr/bin/adbd-repair`、`/usr/bin/adbd-free-port` 均不存在；`adbd.service` 无 `ExecStartPre`。E 目前仅有**手工部署运行期验证**（E-evidence.txt）。要满足 J6「从镜像部署后验证」，必须以 ≥`71ff73cb71` 的树重建镜像并部署 SYSTEM——当前 HX90 树为 `d681c8f25e`，未做该重建，故该门**显式未完成**。
+- 未验证/限制：未执行 HX90 树同步到 `37facec75f` 并重建（耗时且需谨慎保留 HX90 未跟踪资产）；E 的镜像内验证因此仍未达成，需后续以最新树重建 SYSTEM 后补测。
