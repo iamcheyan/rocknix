@@ -39,8 +39,8 @@ TopBar 高 12px logical（2× profile 下 24px physical）。五个 workspace �
 
 ## 图标、颜色与尺寸规范
 
-- Component 从正式 navigation descriptor 的 `glyph` 数据渲染 8×8 logical 单色像素图案，profile 2×后为 16×16 physical；无 Emoji、Material、Fluent 或混合来源。
-- 五个 glyph 对应现有 APPS、FILES、VIM、TOP、LOG workspace；顺序由调用方传入的 workspace 数组决定，TopBar 不加条目或标签。
+- Component 从正式 navigation descriptor 的 `icon` codepoint 渲染 8×8 logical 单色像素图案，profile 2×后为 16×16 physical；无 Emoji、Material、Fluent 或混合来源。
+- 五个 pixel glyph 映射当前 catalog 的 APPS、FILES、VIM、TOP、LOG icon codepoint；顺序由调用方传入的 workspace 数组决定，TopBar 不加条目或标签。
 - 主焦点 Cyber Blue `#3ECFFF`；次级可用亮色 `#D8E8FF`；关闭/不可用 `#64748B`；警告 `#FFB400`；错误 `#FF4D5A`。状态图标不闪烁，面积与亮度均低于 workspace lane。
 - 背景沿用 `#06111B` / 当前 runtime 深色底。最多一条 1px 分隔线，不使用按钮边框、传统 tab 卡片或大块状态徽标。
 
@@ -48,7 +48,7 @@ TopBar 高 12px logical（2× profile 下 24px physical）。五个 workspace �
 
 ```text
 ├── WorkspaceBar (height 12 logical / 24 physical px)
-│   └── PixelWorkspaceGlyph × workspaces.length (navigation `{id, glyph}` + activeId)
+│   └── PixelWorkspaceGlyph × workspaces.length (catalog `icon` → pixel map; activeId)
 ├── ActiveWorkspaceContent
 └── InputOverlay?            // existing behavior and priority retained
 ```
