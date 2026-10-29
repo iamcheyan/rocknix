@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""PocketShell library scanner (own implementation, no third-party frontend).
+
+Indexes the agreed user content directories into one JSON catalogue that the
+launcher reads. The render thread never walks the filesystem: scanning happens
+here, in a low-priority service.
+
+Directory contract (what the user copies files into):
+
+  /storage/content/games/<system>/      games, one folder per system (gba, snes, psx…)
+  /storage/content/music/               audio
+  /storage/content/videos/              video
+  /storage/content/books/               epub / txt / pdf / md
+  /media/<volume>/content/...           same layout on an external drive
+
+Legacy roots stay supported so existing cards keep working:
+  /storage/games-internal/roms/<system>/, /storage/games-external/roms/<system>/,
+  /storage/roms/<system>/, /storage/music/, /storage/videos/
+
+Usage:
+  pocketshell-games scan     # scan once and write the catalogue
+  pocketshell-games watch    # scan at start, rescan when anything changes
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+STATE_DIR = Path(os.environ.get("POCKETSHELL_GAMES_STATE", "/storage/pocketshell/library"))
+LIBRARY = STATE_DIR / "library.json"
+
+CONTENT_ROOT = Path("/storage/content")
+MEDIA_ROOT = Path("/media")
+
+# section -> ordered candidate directories (first hit wins for the primary root)
+SECTION_ROOTS = {
+    "games": [
+        CONTENT_ROOT / "games",
+        Path("/storage/games-internal/roms"),
+        Path("/storage/games-external/roms"),
+        Path("/storage/roms"),
+    ],
+    "music": [CONTENT_ROOT / "music", Path("/storage/music"), Path("/storage/roms/music")],
+    "videos": [CONTENT_ROOT / "videos", Path("/storage/videos")],
+    "books": [CONTENT_ROOT / "books", Path("/storage/books")],
+}
+
+EXTENSIONS = {
+    "games": {
+        ".gba", ".gbc", ".gb", ".nes", ".sfc", ".smc", ".md", ".gen", ".sms", ".gg",
+        ".pce", ".ngp", ".ngc", ".ws", ".wsc", ".lnx", ".a26", ".a78", ".cue", ".chd",
+        ".pbp", ".iso", ".zip", ".7z", ".cso", ".rvz", ".gcm", ".n64", ".z64", ".v64",
+        ".nds", ".3ds", ".cia", ".xci", ".nsp", ".vb", ".min", ".col", ".int",
+        # Native PocketJS application packages: launched by the PocketJS runtime,
+        # not by an emulator frontend.
+        ".pocket",
+    },
+    "music": {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".wma", ".ape", ".dsf"},
+    "videos": {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".ts", ".mpg", ".mpeg"},
+    "books": {".epub", ".pdf", ".txt", ".md", ".mobi", ".azw3", ".cbz", ".cbr"},
+}
+
+SKIP_DIRS = {"images", "media", "gamelist", "downloaded_images", "videos", "manuals", "cheats", "system", "saves"}
+
+_force_rescan = False
+
+
+def _on_signal(_signum, _frame):
+    global _force_rescan
+    _force_rescan = True
+
+
+def _roots_for(section: str):
+    roots = list(SECTION_ROOTS[section])
+    if section == "games" and MEDIA_ROOT.is_dir():
+        for mount in sorted(MEDIA_ROOT.iterdir()):
+            for candidate in (mount / "content" / "games", mount / "roms"):
+                if candidate.is_dir():
+                    roots.append(candidate)
+    elif MEDIA_ROOT.is_dir():
+        for mount in sorted(MEDIA_ROOT.iterdir()):
+            candidate = mount / "content" / section
+            if candidate.is_dir():
+                roots.append(candidate)
+    return [root for root in roots if root.is_dir()]
+
+
+def _collect_section(section: str):
+    """Return {group: [entries]}. Groups are system folders for games, else 'all'."""
+    groups: dict[str, list[dict[str, object]]] = {}
+    allowed = EXTENSIONS[section]
+    for root in _roots_for(section):
+        directories = [(root, None)]
+        if section == "games":
+            directories.extend(
+                (entry, entry.name)
+                for entry in sorted(root.iterdir())
+                if entry.is_dir() and entry.name.lower() not in SKIP_DIRS and not entry.name.startswith(".")
+            )
+        for directory, group in directories:
+            try:
+                entries = list(directory.iterdir())
+            except OSError:
+                continue
+            for path in entries:
+                if not path.is_file() or path.name.startswith("."):
+                    continue
+                if path.suffix.lower() not in allowed:
+                    continue
+                key = group or ("misc" if section == "games" else "all")
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    size = 0
+                groups.setdefault(key, []).append(
+                    {
+                        "title": path.stem,
+                        "path": str(path),
+                        "size": size,
+                        "kind": "pocketjs" if path.suffix.lower() == ".pocket" else "rom",
+                    }
+                )
+    for items in groups.values():
+        items.sort(key=lambda item: str(item["title"]).lower())
+    return groups
+
+
+def scan() -> dict:
+    sections = {}
+    for section in SECTION_ROOTS:
+        groups = _collect_section(section)
+        if not groups:
+            continue
+        sections[section] = [
+            {"name": name, "count": len(groups[name]), "items": groups[name]}
+            for name in sorted(groups)
+        ]
+    payload = {
+        "generated": int(time.time()),
+        "sections": sections,
+        "total": sum(item["count"] for groups in sections.values() for item in groups),
+    }
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = LIBRARY.with_suffix(".json.new")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.replace(temporary, LIBRARY)
+    return payload
+
+
+def _signature(payload: dict) -> str:
+    parts = []
+    for section, groups in sorted(payload["sections"].items()):
+        for group in groups:
+            parts.append(f"{section}/{group['name']}:{group['count']}")
+            parts.extend(str(item["path"]) for item in group["items"])
+    return "|".join(parts)
+
+
+def watch() -> int:
+    signal.signal(signal.SIGUSR1, _on_signal)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    last = None
+    while True:
+        global _force_rescan
+        try:
+            payload = scan()
+            signature = _signature(payload)
+            if signature != last:
+                last = signature
+                summary = ", ".join(f"{k}={sum(g['count'] for g in v)}" for k, v in sorted(payload["sections"].items()))
+                print(f"library: {payload['total']} items ({summary or 'empty'})", flush=True)
+            _force_rescan = False
+        except Exception as error:  # keep the service alive on transient IO errors
+            print(f"library: scan failed: {error}", flush=True)
+            time.sleep(5)
+            continue
+        deadline = time.time() + 10
+        while time.time() < deadline and not _force_rescan:
+            time.sleep(0.5)
+
+
+def main(argv: list[str]) -> int:
+    command = argv[1] if len(argv) > 1 else "scan"
+    if command == "scan":
+        payload = scan()
+        print(json.dumps({"total": payload["total"], "sections": list(payload["sections"])}))
+        return 0
+    if command == "watch":
+        return watch()
+    print("usage: pocketshell-games scan|watch", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

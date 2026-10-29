@@ -45,10 +45,60 @@ fn language_command(fields: &[&str]) -> String {
     }
 }
 
+
+// ── Games library ───────────────────────────────────────────────────────────
+// The scanner is our own service (scripts/pocketshell-games); the render thread
+// only reads its JSON catalogue so a big library never stalls the UI.
+const GAMES_LIBRARY: &str = "/storage/pocketshell/library/library.json";
+
+fn games_library() -> String {
+    std::fs::read_to_string(GAMES_LIBRARY).unwrap_or_else(|_| "{\"total\":0,\"systems\":[]}".into())
+}
+
+fn games_scan() -> String {
+    let scanner = ["/usr/bin/pocketshell-games", "/storage/dev/usr/bin/pocketshell-games"]
+        .iter()
+        .find(|candidate| std::path::Path::new(candidate).exists())
+        .copied()
+        .unwrap_or("/usr/bin/pocketshell-games");
+    match run(scanner, &["scan"]) {
+        Some(text) => {
+            // Nudge the watcher so its cached signature also refreshes.
+            let _ = run("pkill", &["-USR1", "-f", "pocketshell-games watch"]);
+            text.trim().to_string()
+        }
+        None => "Scan failed".into(),
+    }
+}
+
+fn games_launch(path: &str) -> String {
+    let rom = std::path::Path::new(path);
+    if !rom.is_file() {
+        return "ROM not found".into();
+    }
+    let player = ["/storage/dev/usr/bin/pocketshell-play", "/usr/bin/pocketshell-play"]
+        .iter()
+        .find(|candidate| std::path::Path::new(candidate).exists())
+        .copied();
+    let Some(player) = player else {
+        return "No player configured".into();
+    };
+    match run(
+        "systemd-run",
+        &["--unit=pocketshell-game", "--collect", "--no-block", player, path],
+    ) {
+        Some(_) => "Starting game".into(),
+        None => "Unable to start player".into(),
+    }
+}
+
 pub fn command(value: &str) -> String {
     let fields: Vec<&str> = value.split('\t').collect();
     match fields.as_slice() {
         ["LANGUAGE"] | ["LANGUAGE", _] => language_command(&fields),
+        ["ROMS"] => games_library(),
+        ["ROMSCAN"] => games_scan(),
+        ["ROMLAUNCH", path] => games_launch(path),
         ["STATE", "brightness"] => {
             if let Ok(entries) = std::fs::read_dir("/sys/class/backlight") {
                 for entry in entries.flatten() {

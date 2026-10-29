@@ -1,0 +1,54 @@
+#!/bin/sh
+# PocketShell content launcher: the single entry point the library bridge hands
+# a catalogue item to (`ROMLAUNCH <path>`). Own implementation; no third-party
+# frontend is involved.
+#
+#   *.pocket  a native PocketJS application package, run by the PocketJS Linux
+#             KMS runtime through the session wrapper that owns the display
+#             lock, VT switch, service handover and recovery.
+#   other     ROM/audio/video content, which needs an emulator or media player
+#             that this image does not ship yet. Reported instead of silently
+#             doing nothing.
+set -eu
+
+log() { printf 'pocketshell-play: %s\n' "$*" >&2; }
+
+if [ "$#" -lt 1 ]; then
+    log "usage: pocketshell-play <content-path>"
+    exit 2
+fi
+
+target=$1
+if [ ! -f "$target" ]; then
+    log "content not found: $target"
+    exit 3
+fi
+
+case "$target" in
+    *.pocket|*.POCKET)
+        runtime=
+        for candidate in /storage/pocketjs/bin/pocket-linux-kms /usr/libexec/pocket-linux-kms; do
+            [ -x "$candidate" ] && { runtime=$candidate; break; }
+        done
+        [ -n "$runtime" ] || { log "PocketJS runtime not found"; exit 4; }
+
+        wrapper=
+        for candidate in /usr/bin/pocket-session-run /storage/pocketjs/session-run; do
+            [ -x "$candidate" ] && { wrapper=$candidate; break; }
+        done
+        [ -n "$wrapper" ] || { log "PocketJS session runner not found"; exit 5; }
+
+        card=
+        for candidate in /dev/dri/card1 /dev/dri/card0; do
+            [ -e "$candidate" ] && { card=$candidate; break; }
+        done
+
+        if [ -n "$card" ]; then
+            exec "$wrapper" "$runtime" --package "$target" --card "$card"
+        fi
+        exec "$wrapper" "$runtime" --package "$target"
+        ;;
+esac
+
+log "no emulator or media player handles this content type"
+exit 6
