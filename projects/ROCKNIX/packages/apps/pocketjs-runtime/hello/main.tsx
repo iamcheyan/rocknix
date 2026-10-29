@@ -252,17 +252,17 @@ mount(() => {
           <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
             {inputFunction() === 0 ? (
               <>
-                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={`text-2xs font-mono ${inputLayout() === i ? "text-slate-950 bg-emerald-300" : "text-slate-300 bg-slate-800"}`}>{label()}</Text>}</Index></View>
-                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={`text-sm font-mono ${inputSelection() === row * 7 + col ? "text-slate-950 bg-emerald-300" : "text-slate-100 bg-slate-800"}`}>{key()}</Text>}</Index></View>}</Index>
+                <View class="w-[680px] h-[24px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => inputLayout() === i ? <Text class="text-2xs font-mono text-slate-950 bg-emerald-300">{label()}</Text> : <Text class="text-2xs font-mono text-slate-300 bg-slate-800">{label()}</Text>}</Index></View>
+                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[680px] h-[45px] flex-row"><Index each={line().split(" ")}>{(key, col) => inputSelection() === row * 7 + col ? <Text class="text-sm font-mono text-slate-950 bg-emerald-300">{key()}</Text> : <Text class="text-sm font-mono text-slate-100 bg-slate-800">{key()}</Text>}</Index></View>}</Index>
                 <View class="w-[680px] h-[40px] flex-row"><Text class="text-xs font-mono text-slate-100 bg-slate-800">SPACE　 BACKSPACE　 ENTER</Text></View>
               </>
             ) : (
               <Index each={inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()]}>
-                {(entry, i) => <View class={`w-[680px] h-[36px] ${inputSelection() === i ? "bg-emerald-300" : "bg-slate-800"}`}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
+                {(entry, i) => inputSelection() === i ? <View class="w-[680px] h-[36px] bg-emerald-300"><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View> : <View class="w-[680px] h-[36px] bg-slate-800"><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
               </Index>
             )}
           </View>
-          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={`text-2xs font-mono ${inputFunction() === i ? "text-slate-950 bg-emerald-300" : "text-slate-300 bg-slate-800"}`}>{tab()}</Text>}</Index></View>
+          <View class="absolute left-[10px] top-[425px] w-[700px] h-[42px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => inputFunction() === i ? <Text class="text-2xs font-mono text-slate-950 bg-emerald-300">{tab()}</Text> : <Text class="text-2xs font-mono text-slate-300 bg-slate-800">{tab()}</Text>}</Index></View>
           <View class="absolute left-[20px] top-[466px] w-[680px] h-[14px]"><Text class="text-2xs text-slate-500">L/R Layout　L1/R1 Function　↑↓ Select　A Choose　B Exit　SELECT Submit</Text></View>
         </View>
       ) : <View class="w-[1px] h-[1px]" />}
