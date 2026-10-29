@@ -1,0 +1,18 @@
+[Unit]
+Description=PocketShell games library scanner
+After=local-fs.target storage.mount
+Wants=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pocketshell-games watch
+Restart=always
+RestartSec=10
+Nice=10
+IOSchedulingClass=idle
+# Never let a large library scan compete with the UI render thread.
+CPUQuota=20%
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

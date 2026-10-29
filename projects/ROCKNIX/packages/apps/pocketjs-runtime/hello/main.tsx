@@ -1,6 +1,7 @@
 import { isLauncherLocale, LAUNCHER_LOCALES, launcherLocaleIndex, type LauncherLocale } from "./launcher-localization";
 import { LauncherHome } from "./launcher-home";
 import { SettingsWorkspace } from "./settings-workspace";
+import { LibraryWorkspace, type LibraryRow } from "./library-workspace";
 import { WorkspaceBar } from "./workspace-bar";
 import { createSignal, Index, onMount } from "solid-js";
 import { LAUNCHER_APPS } from "./launcher-catalog";
@@ -51,6 +52,12 @@ mount(() => {
   const [timeoutSelection, setTimeoutSelection] = createSignal(5);
   const [timeoutPending, setTimeoutPending] = createSignal(false);
   const [settingsValues, setSettingsValues] = createSignal<Record<string, string>>({});
+  const [library, setLibrary] = createSignal<LibraryRow[]>([]);
+  const [librarySelected, setLibrarySelected] = createSignal(0);
+  const [libraryScanning, setLibraryScanning] = createSignal(false);
+  const [libraryNotice, setLibraryNotice] = createSignal("");
+  const [libraryTotal, setLibraryTotal] = createSignal(0);
+  const libraryLabel = () => locale() === "ja" ? "ライブラリ" : locale() === "zh" ? "资料库" : "Library";
   const [volume, setVolume] = createSignal(50);
   const LOCALES = LAUNCHER_LOCALES;
   const localeIndex = () => launcherLocaleIndex(locale());
@@ -89,8 +96,41 @@ mount(() => {
     return entry ? entry[localeIndex()] : id;
   };
   const settingRows = (): SettingItem[] => settingGroups[launcherCategory()].map((item) => ({ ...item, label: settingLabel(item.id) }));
-  const appRows = () => [...translatedApps(), labels().settings];
+  const appRows = () => [...translatedApps(), libraryLabel(), labels().settings];
   const toolRows = () => systemTools.map((tool) => tool.label);
+  const refreshLibrary = () => {
+    setLibraryScanning(true);
+    const raw = host?.__launcher?.("ROMS") ?? "";
+    try {
+      const payload = JSON.parse(raw) as {
+        total?: number;
+        sections?: Record<string, { name: string; count: number; items: { title: string; path: string }[] }[]>;
+      };
+      const rows: LibraryRow[] = [];
+      let total = 0;
+      for (const section of ["games", "music", "videos", "books"]) {
+        const groups = payload.sections?.[section] ?? [];
+        if (groups.length === 0) continue;
+        const count = groups.reduce((sum, group) => sum + group.count, 0);
+        total += count;
+        rows.push({ kind: "header", section, count });
+        for (const group of groups) {
+          for (const item of group.items) {
+            rows.push({ kind: "item", section, group: group.name, title: item.title, path: item.path });
+          }
+        }
+      }
+      setLibrary(rows);
+      setLibraryTotal(total);
+      setLibrarySelected((current) => Math.min(current, rows.length));
+      setLibraryNotice(total > 0 ? `${total} item / ${Object.keys(payload.sections ?? {}).length} section` : "Empty — copy files into /storage/content");
+    } catch {
+      setLibrary([]);
+      setLibraryTotal(0);
+      setLibraryNotice("Library scan failed");
+    }
+    setLibraryScanning(false);
+  };
   const launcherRows = () => launcherPage() === "tools" ? toolRows() : launcherPage() === "settings" ? settingRows().map((item) => item.label) : appRows();
   const moveLauncher = (step: number) => setLauncherSelection((launcherSelection() + step + launcherRows().length) % launcherRows().length);
   const launcherCommand = (value: string) => setLauncherNotice(host?.__launcher?.(value) ?? "Launcher bridge unavailable");
@@ -167,7 +207,14 @@ mount(() => {
       refreshSettingValues();
       return;
     }
-    if (selected >= LAUNCHER_APPS.length) {
+    if (selected === LAUNCHER_APPS.length) {
+      setLauncherPage("library");
+      setLauncherSelection(0);
+      setLibraryNotice("");
+      refreshLibrary();
+      return;
+    }
+    if (selected > LAUNCHER_APPS.length) {
       setLauncherPage("settings");
       setLauncherCategory(0);
       setLauncherSelection(0);
@@ -180,6 +227,23 @@ mount(() => {
     setLauncherOpen(false); send("RESET\t0");
     if (app.id !== "terminal") { send(`0\tTEXT ${app.id === "gamepad" ? "/usr/bin/evtest /dev/input/event3" : `/usr/bin/heya-tool ${app.id} --inside`}`); send("0\tKEY ENTER"); }
   };
+  const activateLibraryRow = () => {
+    const row = library()[librarySelected()];
+    if (!row) { refreshLibrary(); return; }
+    if (row.kind === "scan") {
+      const result = host?.__launcher?.("ROMSCAN") ?? "Scan failed";
+      setLibraryNotice(result);
+      refreshLibrary();
+      return;
+    }
+    if (row.kind === "header") return;
+    const result = host?.__launcher?.(`ROMLAUNCH\t${row.path}`) ?? "No player configured";
+    setLibraryNotice(row.section === "games" ? result : `Open: ${row.title} (${result})`);
+  };
+  const moveLibrary = (step: number) => {
+    const count = library().length + 1;
+    setLibrarySelected((current) => (current + step + count) % count);
+  };
   const moveSettingValue = (direction: number) => {
     const item = activeItem();
     if (item.kind === "timeout") { setTimeoutSelection((timeoutSelection() + direction + timeouts.length) % timeouts.length); setTimeoutPending(true); }
@@ -191,6 +255,13 @@ mount(() => {
       else if (key === "ArrowRight") changeWorkspace(selectedWorkspace() + 1);
       else if (key === "ArrowUp" || key === "ArrowDown") { setOverview(false); setLauncherSelection(0); }
       else if (key === "Enter") { if (selectedWorkspace() === 0) { setOverview(false); setLauncherSelection(0); } else { switchTo(selectedWorkspace()); setLauncherOpen(false); } }
+      return;
+    }
+    if (launcherPage() === "library") {
+      if (key === "ArrowUp") moveLibrary(-1);
+      else if (key === "ArrowDown") moveLibrary(1);
+      else if (key === "Enter") activateLibraryRow();
+      else if (key === "Escape") { setLauncherPage("apps"); setLauncherSelection(LAUNCHER_APPS.length); }
       return;
     }
     if (key === "ArrowUp") moveLauncher(-1);
@@ -358,6 +429,11 @@ mount(() => {
         if (pressed & BTN.UP || pressed & BTN.DOWN) { setOverview(false); setLauncherSelection(0); }
         if (pressed & BTN.CIRCLE) { if (selectedWorkspace() === 0) { setOverview(false); setLauncherSelection(0); } else { switchTo(selectedWorkspace()); setLauncherOpen(false); } }
         if (pressed & BTN.CROSS) setSelectedWorkspace(active());
+      } else if (launcherPage() === "library") {
+        if (pressed & BTN.UP) moveLibrary(-1);
+        if (pressed & BTN.DOWN) moveLibrary(1);
+        if (pressed & BTN.CIRCLE) activateLibraryRow();
+        if (pressed & BTN.CROSS) { setLauncherPage("apps"); setLauncherSelection(LAUNCHER_APPS.length); }
       } else {
         if (pressed & BTN.LEFT && launcherPage() === "settings") moveSettingValue(-1);
         else if (pressed & BTN.LEFT) changeWorkspace(selectedWorkspace() - 1);
@@ -442,6 +518,20 @@ mount(() => {
           </View>
           {overview() ? (
             <LauncherHome locale={locale()} workspace={selectedWorkspace()} overview={true} page="apps" selection={launcherSelection()} rows={launcherRows()} notice={launcherNotice()} onNavigate={(direction) => changeWorkspace(selectedWorkspace() + direction)} onEnterList={() => setOverview(false)} onOpen={openLauncherEntry} onBack={() => setOverview(true)} onLanguage={() => setLanguage(LAUNCHER_LOCALES[(localeIndex() + 1) % LAUNCHER_LOCALES.length].id)} />
+          ) : launcherPage() === "library" ? (
+            <LibraryWorkspace
+              rows={library()}
+              selected={librarySelected()}
+              scanning={libraryScanning()}
+              notice={libraryNotice()}
+              total={libraryTotal()}
+              labels={{
+                title: libraryLabel(),
+                scan: locale() === "ja" ? "スキャン" : locale() === "zh" ? "重新扫描" : "Scan now",
+                empty: locale() === "ja" ? "コンテンツなし" : locale() === "zh" ? "没有内容" : "No content",
+                hint: "A OPEN  B BACK",
+              }}
+            />
           ) : launcherPage() === "settings" ? (
             <SettingsWorkspace category={launcherCategory()} categories={categoryNames()} rows={settingRows()} selected={launcherSelection()} value={valueLabel} detail={(item) => item.kind === "level" ? "Adjust output level in 5% steps." : item.kind === "service" ? "Toggle the existing system service." : item.kind === "timeout" ? "Select and save display timeout." : item.kind === "radio" ? "Toggle the saved wireless state." : "Open the existing system utility."} notice={launcherNotice()} />
           ) : (
