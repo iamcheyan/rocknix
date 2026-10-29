@@ -1,5 +1,4 @@
 import { View, Text } from "@pocketjs/framework/solid/components";
-import { Index } from "solid-js";
 
 export interface StatusBarProps {
   currentScreen: number;
@@ -8,6 +7,8 @@ export interface StatusBarProps {
   bluetoothOn: boolean;
   batteryLevel: number;
 }
+
+const WORKSPACES = ["HOME", "MEDIA", "GAMES", "SETUP", "SYSTEM"];
 
 export function StatusBar(props: StatusBarProps) {
   const batteryKnown = () => props.batteryLevel >= 0;
@@ -22,58 +23,43 @@ export function StatusBar(props: StatusBarProps) {
   };
 
   return (
-    <View class="w-[360px] h-[22px] bg-[#0c131a] flex-col justify-between">
+    <View class="w-[360px] h-[22px] flex-col justify-between" style={{ bgColor: "#06111B" }}>
       <View class="w-[360px] h-[21px] flex-row items-center justify-between px-2">
-        {/* Left: Wi-Fi, Bluetooth, IP */}
         <View class="flex-row items-center gap-1">
-          <Text class={props.wifiConnected ? "text-xs text-emerald-400" : "text-xs text-slate-600"}>
+          <Text class="text-xs font-mono" style={{ textColor: props.wifiConnected ? "#00FF99" : "#41586B" }}>
             {"\uf1eb"}
           </Text>
-          <Text class={props.bluetoothOn ? "text-xs text-sky-400" : "text-xs text-slate-600"}>
+          <Text class="text-xs font-mono" style={{ textColor: props.bluetoothOn ? "#3ECFFF" : "#41586B" }}>
             {"\uf293"}
           </Text>
-          <Text class="text-xs font-mono text-slate-300">
+          <Text class="text-xs font-mono" style={{ textColor: "#D8E8FF" }}>
             {props.wifiConnected ? props.ipAddress : "--"}
           </Text>
         </View>
 
-        {/* Center: Switch 5-screen compact indicators */}
         <View class="flex-row items-center gap-1">
-          <Index each={["1", "2", "3", "4", "5"]}>
-            {(num, index) => (
-              <View
-                class={
-                  props.currentScreen === index
-                    ? "w-[15px] h-[15px] items-center justify-center rounded-sm bg-[#164e63] border border-[#38bdf8]"
-                    : "w-[15px] h-[15px] items-center justify-center rounded-sm bg-transparent"
-                }
-              >
-                <Text
-                  class={
-                    props.currentScreen === index
-                      ? "text-xs font-bold text-[#38bdf8]"
-                      : "text-xs font-bold text-slate-500"
-                  }
-                >
-                  {num()}
-                </Text>
-              </View>
-            )}
-          </Index>
+          <Text class="text-xs font-mono" style={{ textColor: "#7893A8" }}>WS</Text>
+          <Text class="text-xs font-bold font-mono" style={{ textColor: "#3ECFFF" }}>
+            {props.currentScreen + 1}/5
+          </Text>
+          <Text class="text-xs font-bold tracking-wide" style={{ textColor: "#00FF99" }}>
+            {WORKSPACES[props.currentScreen] ?? "--"}
+          </Text>
         </View>
 
-        {/* Right: Battery */}
         <View class="flex-row items-center gap-1">
-          <Text class={!batteryKnown() ? "text-xs text-slate-600" : props.batteryLevel > 20 ? "text-xs text-emerald-400" : "text-xs text-amber-400"}>
+          <Text
+            class="text-xs font-mono"
+            style={{ textColor: !batteryKnown() ? "#41586B" : props.batteryLevel > 20 ? "#00FF99" : "#FFB400" }}
+          >
             {batteryIcon()}
           </Text>
-          <Text class="text-xs font-mono text-slate-300">
+          <Text class="text-xs font-mono" style={{ textColor: "#D8E8FF" }}>
             {batteryKnown() ? `${props.batteryLevel}%` : "--"}
           </Text>
         </View>
       </View>
-      {/* 1px clean bottom divider line */}
-      <View class="w-[360px] h-[1px] bg-[#1f2d3d]" />
+      <View class="w-[360px] h-[1px]" style={{ bgColor: "#1B3345" }} />
     </View>
   );
 }

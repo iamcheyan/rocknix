@@ -17,10 +17,108 @@ fn run(program: &str, args: &[&str]) -> Option<String> {
         _ => None,
     }
 }
+fn read(path: &str) -> Option<String> {
+    std::fs::read_to_string(path).ok().map(|value| value.trim_matches('\0').trim().to_owned())
+}
+
+fn os_release(key: &str) -> Option<String> {
+    read("/etc/os-release")?.lines().find_map(|line| {
+        let (name, value) = line.split_once('=')?;
+        (name == key).then(|| value.trim_matches('"').to_owned())
+    })
+}
+
+fn cpu_frequency_mhz() -> Option<u64> {
+    let mut best = 0;
+    for entry in std::fs::read_dir("/sys/devices/system/cpu/cpufreq").ok()?.flatten() {
+        let path = entry.path().join("scaling_cur_freq");
+        if let Some(khz) = read(path.to_str()?).and_then(|value| value.parse::<u64>().ok()) {
+            best = best.max(khz / 1000);
+        }
+    }
+    (best > 0).then_some(best)
+}
+
+fn memory_kb(key: &str) -> Option<u64> {
+    read("/proc/meminfo")?.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name != key { return None; }
+        value.split_whitespace().next()?.parse().ok()
+    })
+}
+
+fn storage_usage() -> Option<(u64, u64, u64)> {
+    use std::ffi::CString;
+    let path = CString::new("/storage").ok()?;
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(path.as_ptr(), &mut stat) } != 0 { return None; }
+    let total = stat.f_blocks.saturating_mul(stat.f_frsize);
+    let available = stat.f_bavail.saturating_mul(stat.f_frsize);
+    let used = total.saturating_sub(available);
+    Some((used, total, if total > 0 { used * 100 / total } else { 0 }))
+}
+
+fn system_snapshot() -> String {
+    let model = read("/proc/device-tree/model").unwrap_or_default();
+    let hardware = os_release("HW_CPU").unwrap_or_default();
+    let kernel = read("/proc/sys/kernel/osrelease").map(|release| format!("Linux {release} ({})", std::env::consts::ARCH)).unwrap_or_default();
+    let os = match (os_release("OS_NAME"), os_release("OS_VERSION")) {
+        (Some(name), Some(version)) => format!("{name} {version}"),
+        (Some(name), None) => name,
+        _ => os_release("PRETTY_NAME").unwrap_or_default(),
+    };
+    let temperature = read("/sys/class/thermal/thermal_zone0/temp")
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|milli| format!("{}C", milli / 1000))
+        .unwrap_or_default();
+    let frequency = cpu_frequency_mhz().map(|mhz| format!("{mhz}MHz")).unwrap_or_default();
+    let ram_total = memory_kb("MemTotal");
+    let ram_available = memory_kb("MemAvailable");
+    let storage = storage_usage();
+    let ram_variant = if std::path::Path::new("/usr/share/bootloader/H700_DDR4_u-boot-sunxi-with-spl.bin").exists() {
+        "H700 DDR4"
+    } else {
+        ""
+    };
+    let display = read("/sys/class/graphics/fb0/virtual_size")
+        .or_else(|| std::fs::read_dir("/sys/class/drm").ok().and_then(|entries| {
+            entries.flatten().find_map(|entry| {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !name.contains("DSI") { return None; }
+                read(path.join("modes").to_str()?)
+            })
+        }))
+        .map(|value| value.lines().next().unwrap_or("").replace(',', "×").replace('x', "×"))
+        .unwrap_or_default();
+    let field = |key: &str, value: String| format!("{key}\t{}\n", value.replace('\t', " ").replace('\n', " "));
+    let mut out = String::new();
+    out.push_str(&field("model", model));
+    out.push_str(&field("hardware", hardware.clone()));
+    out.push_str(&field("cpu", hardware));
+    out.push_str(&field("ramVariant", ram_variant.into()));
+    if let Some(value) = os_release("OS_NAME") { out.push_str(&field("osName", value)); }
+    if let Some(value) = os_release("OS_VERSION") { out.push_str(&field("osVersion", value)); }
+    out.push_str(&field("os", os));
+    out.push_str(&field("kernel", kernel));
+    out.push_str(&field("temperature", temperature));
+    out.push_str(&field("frequency", frequency));
+    if let Some(value) = ram_available { out.push_str(&field("ramAvailableKb", value.to_string())); }
+    if let Some(value) = ram_total { out.push_str(&field("ramTotalKb", value.to_string())); }
+    if let Some((used, total, percent)) = storage {
+        out.push_str(&field("storageUsed", format!("{:.1}G", used as f64 / 1_073_741_824.0)));
+        out.push_str(&field("storageTotal", format!("{:.1}G", total as f64 / 1_073_741_824.0)));
+        out.push_str(&field("storagePercent", percent.to_string()));
+    }
+    out.push_str(&field("display", display));
+    out.push_str(&field("runtime", "PocketJS".into()));
+    out
+}
 
 pub fn command(value: &str) -> String {
     let fields: Vec<&str> = value.split('\t').collect();
     match fields.as_slice() {
+        ["SYSTEM"] => system_snapshot(),
         ["LEVEL", "brightness"] => {
             if let Ok(entries) = std::fs::read_dir("/sys/class/backlight") {
                 for entry in entries.flatten() {

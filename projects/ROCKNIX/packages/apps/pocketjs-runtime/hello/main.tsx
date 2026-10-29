@@ -19,6 +19,7 @@ import {
   type SettingsState,
 } from "./pages/settings-page";
 import { SystemPage } from "./pages/system-page";
+import { parseSystemSnapshot, type SystemSnapshot } from "./system-status";
 
 type HostUI = {
   __launcher?: (command: string) => string;
@@ -82,6 +83,7 @@ mount(() => {
   // Hardware Status State
   const [ipAddress, setIpAddress] = createSignal("--");
   const [batteryLevel, setBatteryLevel] = createSignal(-1);
+  const [systemSnapshot, setSystemSnapshot] = createSignal<SystemSnapshot | null>(null);
   const [toastMessage, setToastMessage] = createSignal("");
 
   // Animation Node Mirrors & Safe Wrappers
@@ -296,6 +298,10 @@ mount(() => {
     const addr = ip.includes("|") ? ip.split("|")[1] : "";
     setIpAddress(addr || "--");
   };
+  const syncSystemStatus = () => {
+    const snapshot = parseSystemSnapshot(host?.__launcher?.("SYSTEM") ?? "");
+    if (snapshot) setSystemSnapshot(snapshot);
+  };
 
   const changeBrightness = (delta: number) => {
     const next = Math.max(5, Math.min(100, brightness() + delta));
@@ -508,6 +514,7 @@ mount(() => {
     log("Workspace Created WS1..WS5");
     syncHardwareLevels();
     syncHardwareStatus();
+    syncSystemStatus();
 
     onTextEvent((event: TextEvent) => {
       if (active() === 0 && launcherOpen()) {
@@ -622,6 +629,7 @@ mount(() => {
       syncHardwareLevels();
     }
     if (frameCounter % 300 === 0) {
+      syncSystemStatus();
       syncHardwareStatus();
     }
 
@@ -894,18 +902,20 @@ mount(() => {
                 selectedToolIndex={systemToolIndex()}
                 systemTools={getAppsForScreen(4)}
                 ipAddress={ipAddress()}
+                wifiConnected={wifiEnabled()}
+                snapshot={systemSnapshot()}
               />
             )}
           </View>
 
           {/* Bottom Navigation Hint Bar */}
-          <View class="w-[360px] h-[20px] bg-[#0c131a] flex-col justify-between">
-            <View class="w-[360px] h-[1px] bg-[#1f2d3d]" />
+          <View class="w-[360px] h-[20px] flex-col justify-between" style={{ bgColor: "#06111B" }}>
+            <View class="w-[360px] h-[1px]" style={{ bgColor: "#1B3345" }} />
             <View class="w-[360px] h-[19px] flex-row items-center justify-between px-2">
-              <Text class="text-xs text-slate-400">
+              <Text class="text-xs" style={{ textColor: "#D8E8FF" }}>
                 L/R 切屏 · 方向键选择 · A 启动 · B 返回
               </Text>
-              <Text class="text-xs text-[#38bdf8]">
+              <Text class="text-xs font-bold" style={{ textColor: "#3ECFFF" }}>
                 SELECT 输入
               </Text>
             </View>
