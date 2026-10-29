@@ -81,7 +81,7 @@ WorkspaceBar probe 使用 HX90 临时 pinned PocketJS checkout 的官方 compile
 | 1280×720 | `screenshots/workspace-bar-1280x720.png` |
 不同 `activeId` 的渲染证据：`screenshots/workspace-bar-active-apps-720x480.png` 与 `screenshots/workspace-bar-active-log-720x480.png`。两张均由当前 `{workspaces, activeId}` probe bundle + 官方 WASM renderer 生成，draw hash 不同，像素统计非空。
 
-真机基线 `screenshots/rg34xx-baseline-720x480.png` 和新抓取设备帧均显示未集成 CPR98 的旧 Launcher 状态栏（IP、数字 workspace、电量百分比），不是 CPR98 成果图。新组件未 mount 到正式 app，故真机/设备尺寸行为未验收。
+RG34XX 官方 PocketJS KMS 当前 frame endpoint 在最近检查时返回 1,036,800 字节（720×480 RGB），PNG mean=0.130449、stddev=0.126468；但设备显示的是未集成 CPR98 的旧 Launcher 状态栏。出于隐私，设备原始帧不随文档发布；其中存在网络与电池信息。KMS service 当前 inactive，因此未对其重启或改写。新组件尚未 mount 到正式 app，真机/设备尺寸验收未完成。
 
 ## 当前未解决项
 1. 最新审计（2026-10-29）显示 CPR95 branch 远端仍无 integration commit；其 worktree 的 dirty `main.tsx` 仍有 `09:41 / Wi‑Fi / 78%` 文本状态行，且 descriptors 无 pixel `glyph`。CPR95/协调 agent 确认该文件归 Launcher owner/最终集成所有，CPR98 不改其他 worktree。接线接口为在五个既有 descriptors 添加 8×8 `glyph`，再传入 `<WorkspaceBar workspaces={WORKSPACES} activeId={WORKSPACES[selectedWorkspace()].id} />`。
