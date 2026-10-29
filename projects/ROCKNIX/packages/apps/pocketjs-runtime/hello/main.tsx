@@ -248,7 +248,7 @@ mount(() => {
       {inputOpen() ? (
         <View class="absolute left-0 top-0 w-[720px] h-[480px] bg-slate-950 flex-col">
           <View class="absolute left-[20px] top-[8px] w-[680px] h-[34px] items-center"><Text class="text-base font-mono font-bold text-emerald-300">INPUT</Text></View>
-          <View class="absolute left-[20px] top-[45px] w-[680px] h-[42px] bg-slate-800"><Text class="text-sm font-mono text-white">&gt; {input()}█</Text></View>
+          <View class="absolute left-[20px] top-[45px] w-[680px] h-[42px] bg-slate-800"><Text class="text-sm font-mono text-white">{"> "}{input()}█</Text></View>
           <View class="absolute left-[20px] top-[94px] w-[680px] h-[324px] flex-col">
             {inputFunction() === 0 ? (
               <>
