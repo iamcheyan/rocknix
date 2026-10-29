@@ -1,10 +1,11 @@
 import { For, createMemo } from "solid-js";
 import { View } from "@pocketjs/framework/solid/components";
 
-type WorkspaceId = "apps" | "files" | "vim" | "top" | "log";
-type Workspace = { id: WorkspaceId; glyph: readonly string[] };
-
-export function WorkspaceBar(props: { workspaces: readonly Workspace[]; activeId: WorkspaceId }) {
+type Workspace = {
+  id: string;
+  glyph: readonly string[];
+};
+export function WorkspaceBar(props: { workspaces: readonly Workspace[]; activeId: string }) {
   const workspaces = createMemo(() => props.workspaces.map((workspace) => ({ workspace, pixels: workspace.glyph.map((row) => [...row].map((pixel) => pixel === "1")) })));
   return (
     <View class="w-[360px] h-[12px] flex-row items-center justify-between">
