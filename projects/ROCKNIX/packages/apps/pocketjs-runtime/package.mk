@@ -14,7 +14,7 @@ PKG_BUILD_FLAGS="parallel"
 
  make_host() {
    cd "${PKG_BUILD}"
-   export HOME="${PKG_BUILD}/.home"
+   export HOME="${PKG_BUILD}/../.pocketjs-home"
    mkdir -p "${HOME}/.cache/pocket-nexus/transforms"
    mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
    cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"
