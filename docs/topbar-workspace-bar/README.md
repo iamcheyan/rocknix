@@ -1,10 +1,10 @@
 ## CPR98 实现组件
 
-`projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/workspace-bar.tsx` 导出 `WorkspaceBar({ workspaces, activeId })`。调用方传入导航定义中的顺序数组，每项包含稳定 `id` 与 8×8 单色位图 `glyph`；组件按传入顺序绘制，active workspace 由 `activeId` 指定。当前项为 Cyber Blue，其他项为低对比灰蓝；图标无按钮框，组件不接管输入/切换。2× profile 下 8×8 logical glyph 呈现为 16×16 physical pixels。
+`projects/ROCKNIX/packages/apps/pocketjs-runtime/hello/workspace-bar.tsx` 导出 `WorkspaceBar({ workspaces, activeId })`。调用方传入正式导航 descriptors（`id` + 当前 catalog 的 `icon` codepoint），组件按数组顺序绘制。CPR98 将现有五种 launcher icon codepoint 映射为统一的 8×8 单色像素图案，不显示 font glyph；active workspace 使用 Cyber Blue 和同槽弱 cyan 背景，150ms transition，其他图标为低对比灰蓝。2× profile 下图案为 16×16 physical pixels。组件不处理输入和页面切换。
 
-CPR95 当前描述符有 `id` 与 Nerd Font `icon` codepoint，但无 pixel `glyph`。最终集成时，Launcher owner 需在同一份现有五项 workspace descriptors 增加 pixel glyph，并把该数组和当前 id 传入 WorkspaceBar。PocketJS 当前无真实 Wi‑Fi/Bluetooth/battery/developer-mode query，因此右侧状态 lane 保持空白。
+CPR95 已有五个 workspace icon codepoint 与本组件映射一致，不需改 catalog schema。最终 wiring 只需传入现有 `WORKSPACES` 数组与当前项 id。当前没有真实 Wi‑Fi/Bluetooth/battery/developer-mode query，右侧状态 lane 保持空白。
 
-该 props 版本已通过官方 `pocket check`、`pocket compile`，并由官方 Rust/WASM renderer 运行三尺寸 probe。正式 app wiring 归 CPR95/最终 integration owner；CPR98 不改共享 `hello/main.tsx`。
+此 props 版本已通过官方 `pocket check`、`pocket compile`，并以实际 CPR95 五个 codepoint 经官方 Rust/WASM renderer 做三尺寸 probe。正式 app wiring 归 CPR95/最终 integration owner；CPR98 不改共享 `hello/main.tsx`。
 
 ## CPR98 — PocketShell Workspace Bar 设计与共享组件
 
@@ -22,7 +22,7 @@ workspace 导航由同文件 `NAMES = ["APPS", "FILES", "VIM", "TOP", "LOG"]`、
 
 CPR95 Launcher 与 CPR97 Settings 的 worktree 都含 `hello/main.tsx` 未提交改动；CPR96 负责 System 页面。用户明确文件所有权：CPR95 管 Launcher/locale，CPR96 管 System，CPR97 管 Settings，CPR98 管共享 TopBar。CPR98 只在本 worktree 修改独立 WorkspaceBar 和本 issue 文档，不触碰共享 `main.tsx` 或其他 worktree。
 
-当前组件契约：`WorkspaceBar({ workspaces, activeId })`；每项 descriptor 是 `{ id, glyph }`，顺序由正式 launcher/navigation 提供。组件纯显示，不接管方向/Start 输入或页面切换。真实状态 API 未提供，不传 status props，不显示状态 glyph。
+当前组件契约：`WorkspaceBar({ workspaces, activeId })`；每项 descriptor 直接来自 launcher catalog，包含 `{ id, icon }`。数组顺序和当前 active 状态由导航提供，组件只渲染 icon 对应的 pixel mapping，不处理方向/Start 输入或页面切换。真实状态 API 未提供，不传 status props、不显示状态 glyph。
 
 ## 新布局
 
@@ -84,6 +84,6 @@ WorkspaceBar probe 使用 HX90 临时 pinned PocketJS checkout 的官方 compile
 RG34XX 官方 PocketJS KMS 当前 frame endpoint 在最近检查时返回 1,036,800 字节（720×480 RGB），PNG mean=0.130449、stddev=0.126468；但设备显示的是未集成 CPR98 的旧 Launcher 状态栏。出于隐私，设备原始帧不随文档发布；其中存在网络与电池信息。KMS service 当前 inactive，因此未对其重启或改写。新组件尚未 mount 到正式 app，真机/设备尺寸验收未完成。
 
 ## 当前未解决项
-1. 最新审计（2026-10-29）显示 CPR95 branch 远端仍无 integration commit；其 worktree 的 dirty `main.tsx` 仍有 `09:41 / Wi‑Fi / 78%` 文本状态行，且 descriptors 无 pixel `glyph`。CPR95/协调 agent 确认该文件归 Launcher owner/最终集成所有，CPR98 不改其他 worktree。接线接口为在五个既有 descriptors 添加 8×8 `glyph`，再传入 `<WorkspaceBar workspaces={WORKSPACES} activeId={WORKSPACES[selectedWorkspace()].id} />`。
+1. CPR95 Launcher 尚未引入 CPR98 `workspace-bar.tsx`；其 dirty `main.tsx` 仍绘制旧状态行。CPR95/协调 agent 确认该文件归 Launcher owner/最终集成所有，CPR98 不改其他 worktree。最小接线：`import { WorkspaceBar } from "./workspace-bar"`，以 `<WorkspaceBar workspaces={WORKSPACES} activeId={WORKSPACES[selectedWorkspace()].id} />` 替换旧 status row，复用现有 catalog icon 值，无需更改输入/切换行为。
 2. 最新 RG34XX frame 经 HX90 `/device/frame.rgb` 捕获，为 720×480、1,036,800 字节 RGB，PNG mean=0.130449、stddev=0.126468；画面仍含 IP、数字 workspace 与 `100%` 电量，不是 CPR98 新 UI。PocketJS runtime 没有可查询的 Wi‑Fi、Bluetooth、电池或 developer-mode 状态 API；不显示、不合成状态。
 3. CPR98 独立 component probe 已完成三尺寸 renderer 检查；正式 Launcher wiring、RG34XX 新界面截图、浏览器外壳缩放、整页裁切、输入/导航回归与实际 150ms 动画验收仍待集成 owner 提供稳定 ref。
