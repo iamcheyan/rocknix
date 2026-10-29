@@ -38,7 +38,7 @@ mkimage_extlinux() {
     mkdir -p "${IMG_TMP}/extlinux"
 
     cat << EOF > "${IMG_TMP}/extlinux/extlinux.conf"
-LABEL ${DISTRO}
+LABEL PJOS Linux
   LINUX /${KERNEL_NAME}
   ${fdt_type} /$(get_fdt)
   APPEND boot=LABEL=${DISTRO_BOOTLABEL} disk=LABEL=${DISTRO_DISKLABEL} ${EXTRA_CMDLINE}

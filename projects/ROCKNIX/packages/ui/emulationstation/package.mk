@@ -83,7 +83,7 @@ makeinstall_target() {
         <system>
                 <name>tools</name>
                 <fullname>Tools</fullname>
-                <manufacturer>ROCKNIX</manufacturer>
+                <manufacturer>PJOS Linux</manufacturer>
                 <release>2024</release>
                 <hardware>system</hardware>
                 <path>/storage/.config/modules</path>

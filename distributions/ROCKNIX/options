@@ -18,7 +18,7 @@
   GIT_REPO="distribution"
 
 # Name of the Distro to build (full name, without special characters)
-  DISTRONAME="ROCKNIX"
+  DISTRONAME="PJOS Linux"
 
 # Name of the OS to build (full name, lower case, without special characters)
   OSNAME="rocknix"

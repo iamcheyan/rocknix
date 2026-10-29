@@ -272,7 +272,7 @@ static void launcher_open_settings(SDL_Renderer* ren)
             draw_string(ren, items[i], 60, y + 8, 2, i == selected ? tool_white : tool_gray);
         }
 
-        draw_string(ren, "Backup and restore use ROCKNIX system tools.", 60, 430, 1, tool_gray);
+        draw_string(ren, "Backup and restore use PJOS Linux tools.", 60, 430, 1, tool_gray);
         SDL_RenderPresent(ren);
         SDL_Delay(16);
     }
