@@ -1,116 +1,226 @@
-export const LAUNCHER_APPS = [
+export interface LauncherApp {
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+  kind: "native" | "terminal";
+  category: "home" | "media" | "games" | "system";
+  icon: string;
+  tag: string;
+}
+
+export const LAUNCHER_APPS: readonly LauncherApp[] = [
   {
-    "id": "xmplayer",
-    "name": "XMPlayer",
-    "description": "Music and video player",
-    "kind": "native"
+    id: "terminal",
+    name: "Terminal",
+    shortName: "Terminal",
+    description: "Interactive command shell",
+    kind: "terminal",
+    category: "home",
+    icon: "\uf120",
+    tag: "SHELL"
   },
   {
-    "id": "audio-mixer",
-    "name": "Audio Mixer",
-    "description": "ALSA device and volume controls",
-    "kind": "terminal"
+    id: "disk",
+    name: "File Manager",
+    shortName: "Files",
+    description: "Browse files and storage volumes",
+    kind: "native",
+    category: "home",
+    icon: "\uf07b",
+    tag: "NATIVE"
   },
   {
-    "id": "clean-mac-files",
-    "name": "Clean macOS Metadata",
-    "description": "Remove ._* files from the ROM directory",
-    "kind": "terminal"
+    id: "xmplayer",
+    name: "XMPlayer",
+    shortName: "XMPlayer",
+    description: "Music and video player",
+    kind: "native",
+    category: "media",
+    icon: "\uf001",
+    tag: "NATIVE"
   },
   {
-    "id": "cloud-backup",
-    "name": "Cloud Backup",
-    "description": "KoroOS rclone backup",
-    "kind": "terminal"
+    id: "monitor",
+    name: "System Monitor",
+    shortName: "Monitor",
+    description: "CPU, memory and process monitor",
+    kind: "terminal",
+    category: "home",
+    icon: "\uf0e4",
+    tag: "TOP"
   },
   {
-    "id": "cloud-restore",
-    "name": "Cloud Restore",
-    "description": "KoroOS rclone restore, with confirmation",
-    "kind": "terminal"
+    id: "file-manager-text",
+    name: "Midnight Commander",
+    shortName: "MC",
+    description: "Classic dual-pane visual file manager",
+    kind: "terminal",
+    category: "home",
+    icon: "\uf115",
+    tag: "MC"
   },
   {
-    "id": "disk",
-    "name": "File Manager",
-    "description": "Browse files and storage volumes",
-    "kind": "native"
+    id: "notes",
+    name: "Text Editor",
+    shortName: "Notes",
+    description: "Edit persistent notes with nano",
+    kind: "terminal",
+    category: "home",
+    icon: "\uf044",
+    tag: "NANO"
   },
   {
-    "id": "file-manager-text",
-    "name": "Midnight Commander",
-    "description": "Midnight Commander",
-    "kind": "terminal"
+    id: "audio-mixer",
+    name: "Audio Mixer",
+    shortName: "Mixer",
+    description: "ALSA device and volume controls",
+    kind: "terminal",
+    category: "media",
+    icon: "\uf028",
+    tag: "ALSA"
   },
   {
-    "id": "gamepad",
-    "name": "Gamepad Test",
-    "description": "Test buttons and directional controls",
-    "kind": "terminal"
+    id: "gamepad",
+    name: "Gamepad Test",
+    shortName: "Gamepad",
+    description: "Test buttons and directional controls",
+    kind: "terminal",
+    category: "games",
+    icon: "\uf11b",
+    tag: "TEST"
   },
   {
-    "id": "input-info",
-    "name": "Input Devices",
-    "description": "Input devices recognized by libinput",
-    "kind": "terminal"
+    id: "clean-mac-files",
+    name: "Clean macOS Metadata",
+    shortName: "Cleaner",
+    description: "Remove ._* files from the ROM directory",
+    kind: "terminal",
+    category: "games",
+    icon: "\uf1f8",
+    tag: "TOOL"
   },
   {
-    "id": "kernel-log",
-    "name": "Kernel Logs",
-    "description": "Kernel and driver messages",
-    "kind": "terminal"
+    id: "cloud-backup",
+    name: "Cloud Backup",
+    shortName: "Backup",
+    description: "PJOS Linux rclone backup",
+    kind: "terminal",
+    category: "games",
+    icon: "\uf0ee",
+    tag: "SYNC"
   },
   {
-    "id": "monitor",
-    "name": "System Monitor",
-    "description": "CPU, memory and process monitor",
-    "kind": "terminal"
+    id: "cloud-restore",
+    name: "Cloud Restore",
+    shortName: "Restore",
+    description: "PJOS Linux rclone restore, with confirmation",
+    kind: "terminal",
+    category: "games",
+    icon: "\uf0ed",
+    tag: "SYNC"
   },
   {
-    "id": "network-info",
-    "name": "Network Information",
-    "description": "Network devices and active connections",
-    "kind": "terminal"
+    id: "system-info",
+    name: "System Information",
+    shortName: "SysInfo",
+    description: "PJOS Linux hardware and software information",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf2db",
+    tag: "INFO"
   },
   {
-    "id": "notes",
-    "name": "Text Editor",
-    "description": "Edit a persistent notes file with nano",
-    "kind": "terminal"
+    id: "processes",
+    name: "Process Manager",
+    shortName: "Processes",
+    description: "Process list and resource usage",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf085",
+    tag: "PS"
   },
   {
-    "id": "processes",
-    "name": "Process Manager",
-    "description": "Process list and resource usage",
-    "kind": "terminal"
+    id: "storage-info",
+    name: "Storage Information",
+    shortName: "Storage",
+    description: "Filesystem usage and mounted volumes",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf0a0",
+    tag: "DISK"
   },
   {
-    "id": "storage-info",
-    "name": "Storage Information",
-    "description": "Filesystem usage and mounted volumes",
-    "kind": "terminal"
+    id: "network-info",
+    name: "Network Information",
+    shortName: "Network",
+    description: "Network devices and active connections",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf012",
+    tag: "NET"
   },
   {
-    "id": "system-info",
-    "name": "System Information",
-    "description": "KoroOS hardware and software information",
-    "kind": "terminal"
+    id: "usb-info",
+    name: "USB Devices",
+    shortName: "USB",
+    description: "Connected USB devices",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf287",
+    tag: "USB"
   },
   {
-    "id": "system-log",
-    "name": "System Logs",
-    "description": "Recent logs from the current boot",
-    "kind": "terminal"
+    id: "input-info",
+    name: "Input Devices",
+    shortName: "Input",
+    description: "Input devices recognized by libinput",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf11c",
+    tag: "INPUT"
   },
   {
-    "id": "terminal",
-    "name": "Terminal",
-    "description": "Command shell",
-    "kind": "terminal"
+    id: "kernel-log",
+    name: "Kernel Logs",
+    shortName: "Dmesg",
+    description: "Kernel and driver messages",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf188",
+    tag: "DMESG"
   },
   {
-    "id": "usb-info",
-    "name": "USB Devices",
-    "description": "Connected USB devices",
-    "kind": "terminal"
+    id: "system-log",
+    name: "System Logs",
+    shortName: "Logs",
+    description: "Recent logs from the current boot",
+    kind: "terminal",
+    category: "system",
+    icon: "\uf02d",
+    tag: "LOGS"
   }
 ] as const;
+
+export function getAppsForScreen(screen: number): LauncherApp[] {
+  switch (screen) {
+    case 0: // Screen 0: Home primary shortcuts
+      return LAUNCHER_APPS.filter((app) =>
+        ["terminal", "disk", "xmplayer", "monitor", "file-manager-text", "notes", "audio-mixer"].includes(app.id)
+      );
+    case 1: // Screen 1: Media apps
+      return LAUNCHER_APPS.filter((app) =>
+        ["xmplayer", "audio-mixer", "disk"].includes(app.id)
+      );
+    case 2: // Screen 2: Games and ROM utilities
+      return LAUNCHER_APPS.filter((app) =>
+        ["gamepad", "clean-mac-files", "cloud-backup", "cloud-restore"].includes(app.id)
+      );
+    case 4: // Screen 4: System tools
+      return LAUNCHER_APPS.filter((app) =>
+        ["system-info", "monitor", "processes", "storage-info", "network-info", "usb-info", "input-info", "kernel-log", "system-log"].includes(app.id)
+      );
+    default:
+      return [];
+  }
+}
