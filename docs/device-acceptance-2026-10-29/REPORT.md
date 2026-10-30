@@ -1,9 +1,9 @@
 # ROCKNIX / PocketShell / PocketJS 实机验收报告（2026-10-29）
 
-- 设备：Anbernic RG34XX（Rockchip H700，DDR4），hostname `H700`，内核 `7.2.0 aarch64`，LAN `192.168.3.57`
-- 构建机：HX90（`192.168.3.188` / `hx90`），NixOS
-- 本机仓库：`/home/tetsuya/development/rocknix`，分支 `main`，起点 HEAD `174727d4a4`（本次验收与修复提交见 `git log`）
-- 截图通道：`http://192.168.3.57:8080/device/frame.rgb` → RGB24 720×480（1,036,800 字节）
+- 设备：Anbernic RG34XX（Rockchip H700，DDR4），hostname `H700`，内核 `7.2.0 aarch64`，LAN `192.168.x.57`
+- 构建机：HX90（`192.168.x.188` / `hx90`），NixOS
+- 本机仓库：`~/development/rocknix`，分支 `main`，起点 HEAD `174727d4a4`（本次验收与修复提交见 `git log`）
+- 截图通道：`http://192.168.x.57:8080/device/frame.rgb` → RGB24 720×480（1,036,800 字节）
 - 截图纪律：每张图由本次测试当场产生；设备类=LCD 真实扫描输出；浏览器类=真实浏览器渲染；命名 `NN-<项>-<步骤>-<状态>.png`。
 
 ## 为什么这次要重测（三会话教训，J8）
@@ -92,7 +92,7 @@
 - 状态：PASS
 - 测试时间（JST）：2026-10-29 00:46
 - 设备状态：H700 / 7.2.0 / pocketshell-dev active / 服务全部 active
-- 操作步骤：`curl -s http://192.168.3.57:8080/device/frame.rgb | wc -c`
+- 操作步骤：`curl -s http://192.168.x.57:8080/device/frame.rgb | wc -c`
 - 预期 / 实测：恰好 1,036,800 字节（720×480×3 RGB24）。实测 = 1036800 ✓。人眼无法判图，已用脚本校验 PNG 720×480 且像素有变化（sum_std=92，非空帧）。
 - 截图：![](./B01-lcd-frame-rgb-correct.png)
 - 问题与根因：无。
@@ -102,8 +102,8 @@
 - 状态：PASS
 - 测试时间（JST）：2026-10-29 00:47
 - 设备状态：同上；Dev Center 打开即自动拉取 `/device/frame.rgb`（每 250ms 轮询）。
-- 操作步骤：Playwright 打开 `http://192.168.3.57:8080/`，等待 6s 后截图 `B02-browser-shows-device.png`；并用 DOM 探针读取 `#link` 文本与 canvas 像素。
-- 预期 / 实测：画布显示设备当前 LCD。DOM 探针确认 `link="handheld LCD live · 192.168.3.57:8080"`，canvas 720×480 非黑像素 100%，说明渲染的是真实 LCD 而非主机 PTY 模型。控制台 0 错误。
+- 操作步骤：Playwright 打开 `http://192.168.x.57:8080/`，等待 6s 后截图 `B02-browser-shows-device.png`；并用 DOM 探针读取 `#link` 文本与 canvas 像素。
+- 预期 / 实测：画布显示设备当前 LCD。DOM 探针确认 `link="handheld LCD live · 192.168.x.57:8080"`，canvas 720×480 非黑像素 100%，说明渲染的是真实 LCD 而非主机 PTY 模型。控制台 0 错误。
 - 截图：![](./B02-browser-shows-device.png)
 - 问题与根因：无。
 - 未验证/限制：浏览器侧画面为设备 LCD 的 RGB 镜像（约 4fps，见 B5），非原生逐帧同步。
@@ -137,12 +137,12 @@
 ### B6 断线恢复 + SupplementaryGroups 校验
 - 状态：PASS
 - 测试时间（JST）：2026-10-29 01:01
-- 设备状态：H700 / pocketshell-dev（运行 `/storage/pocketshell-dev.new --bind 192.168.3.57 --port 8080`）
+- 设备状态：H700 / pocketshell-dev（运行 `/storage/pocketshell-dev.new --bind 192.168.x.57 --port 8080`）
 - 操作步骤：浏览器保持打开；`systemctl stop pocketshell-dev` → 等待 → 截图；`systemctl start pocketshell-dev` → 等待 8s → 截图。并用 `systemctl show pocketshell-dev -p SupplementaryGroups` 校验权限组。
 - 预期 / 实测：页面应能自恢复。实测 DOM `#link` 文本：
-  - 停服前：`handheld LCD live · 192.168.3.57:8080`
+  - 停服前：`handheld LCD live · 192.168.x.57:8080`
   - 停服后：`handheld unavailable · Failed to fetch`
-  - 重启后：`handheld LCD live · 192.168.3.57:8080`，且 `systemctl is-active pocketshell-dev` = `active`
+  - 重启后：`handheld LCD live · 192.168.x.57:8080`，且 `systemctl is-active pocketshell-dev` = `active`
   → 浏览器侧 WebSocket 断线后自动重连、frame 轮询恢复，页面自恢复成功。`OnFailure=` 为空，停服未触发 recovery 抢占 tty7。
 - SupplementaryGroups 校验：`systemctl show pocketshell-dev -p SupplementaryGroups` → `SupplementaryGroups=video input`；单元文件第 27 行 `SupplementaryGroups=video input`。证明读 DRM/写输入设备的权限组由 systemd 单元提供，而非手动 export。
 - 截图：![](./B12-recovery-mirror-live.png) / ![](./B13-recovery-stopped.png) / ![](./B14-recovery-recovered.png)
@@ -498,7 +498,7 @@
 - 进展：到达 `[260/286] install wireplumber` 后，日志出现
   `make[1]: *** [Makefile:74: H700] Terminated` / `make: *** [Makefile:173: docker-H700] エラー 2`（SIGTERM），**构建被终止，未产出新镜像**（无 `target/*.img.gz`）。
 - 根因（证据）：HX90 上存在**另一个 worktree 的并发构建**在跑：
-  `bash -c cd /home/tetsuya/development/.worktrees/pjos-linux-rename-build && OS_BASE_CLEAN=no make docker-H700`（pid 288132；docker 容器 `make H700` 在运行）。该会话的清理/资源竞争导致我的 `make docker-H700` 被 SIGTERM。
+  `bash -c cd ~/development/.worktrees/pjos-linux-rename-build && OS_BASE_CLEAN=no make docker-H700`（pid 288132；docker 容器 `make H700` 在运行）。该会话的清理/资源竞争导致我的 `make docker-H700` 被 SIGTERM。
 - 结论（历史记录）：当时 E 的镜像门仍 OPEN 且受外部并发构建阻塞；本会话未并发重试以免互相破坏。后运行镜像已更新至含 adbd 修复（`3ddb751f…`），该门现由运行镜像关闭（详见“E 镜像门（已关闭）”节）。
 - 设备未受影响：运行镜像 md5 `71b156e4…` 不变，K/A3 镜像内复验通过；未做任何 boot/KERNEL/dtb/dd 操作。
 
@@ -536,3 +536,7 @@
 - 设备彻底离线（2026-10-31 03:02 JST，supervisor 只读复核）：构建机 `adb devices` 已**看不到掌机**（唯一设备是 Android 模拟器 `occam/Nexus_4`），本机 `ping`/`ssh` 均 `No route to host`，USB 网卡与串行均无掌机痕迹。相比 10-30 20:25 的「USB 在、跑 BaseOS」，设备现已断电或拔线；连 BaseOS 侧的 adb 通道也不在了。
 - 处置：不重启 goal（无介质、无设备，重启只会撞墙，且会与其它设备使用者抢 adb）；未触碰源码、未做任何 boot/KERNEL/dd 操作。工作树仍保留 3 个未提交源文件与未跟踪 `origin/`、`.playwright-mcp/` 原样。
 - 恢复条件（唯一，需人工一步）：给掌机通电并以 **ROCKNIX 卡**启动；若卡已被 BaseOS 占用，需先批准一次完整镜像重建（1–2h）+ 写卡。设备拿到 LAN 地址（或在构建机 adb 可见）后本 goal 即可续跑 D5 之外的全部剩余项。
+- 设备状态更新（2026-10-31 03:40 JST，supervisor 只读复核）：掌机已重新出现在构建机 adb 中（`5c0010894414c802512`，adbd 走 USB，`uptime` 2h14m），但**仍在跑 BaseOS，且已从 1.4.0 升级到 `Base OS 1.5.2 (h700)`**；`/proc/cmdline` 仍是原厂分区表（`root=/dev/mmcblk0p5`），`/flash`、`/etc/rocknix` 不存在，网络仍只有 `lo`（无 wlan0 上行）→ LAN/ssh 侧仍不可达。
+- 设备 `/storage`（LABEL=BASEOS）当前是 BaseOS 的 PocketJS 前端载荷 + 大量 `fb-*.raw` 抓帧与 `baseos.conf`，说明**另一条 BaseOS/PJOS 工作流正在实时使用这台设备**（构建机同时有 `dpkg-deb`/`qemu`/`make` 在跑，负载 ≈8.9）。
+- 结论：ROCKNIX 介质依然不在设备内，D5 之外无法续跑；且此时抢 adb 会打断别人的在跑的验证，故本轮继续不重启 goal、不碰设备。
+- 顺带记录：构建机 `~/Downloads/ROCKNIX-H700.aarch64-20261001-DDR4.img.gz` 是 10-01 的旧全量镜像，**不含** 10-28 的 PocketJS/PocketShell 改动，不能用来做本次验收的刷卡介质。
