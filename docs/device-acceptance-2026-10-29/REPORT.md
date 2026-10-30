@@ -528,3 +528,5 @@
 - 恢复条件（需人工一步）：把 ROCKNIX 卡插回设备（或明确批准重刷 ROCKNIX 镜像到该卡）；设备以 ROCKNIX 启动并拿到 LAN 地址后即可续跑本 goal。
 - 本轮边界：按项目硬规则**未**做任何 U-Boot / KERNEL / 整卡 dd 操作，未改动设备与构建树；工作树既有未提交改动（3 文件）与未跟踪 `origin/`、`.playwright-mcp/` 保持原样未提交。
 - 仍未完成项：D5（BLOCKED，需人眼逐项确认）、DEC-001…DEC-004（WAITING，见 `DECISIONS_PENDING.md`）。
+- 介质追查（2026-10-30 20:35 JST）：本机与构建机 `by-label`/`lsblk` 均无 ROCKNIX 分区，唯一可插卡槽位为空；构建机上设备当前系统来自 `/tmp/baseos-rg34xx.img`（loop0 挂载，用于注入 PocketJS 前端载荷），即**同一张卡已被 BaseOS 取代**。
+- 因此恢复不是「插回卡」这么简单：构建机 `target/` 无任何 `*.img.gz`/`*.tar` 产物（早前全量重建被并发构建 SIGTERM 终止），要回到 ROCKNIX 需先完成一次完整镜像构建（1–2h，且需先修 staging）再刷卡——属破坏性写卡，须用户明确批准，本轮未执行。
