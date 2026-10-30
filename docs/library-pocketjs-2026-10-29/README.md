@@ -11,7 +11,7 @@ without a third-party frontend.
 | `scripts/pocketshell-games` | `.pocket` added to the game extensions; every entry now carries `"kind": "pocketjs"` or `"kind": "rom"` |
 | `scripts/pocketshell-play` | new launcher helper: `.pocket` → `pocket-session-run` + `pocket-linux-kms`; other content reports that no player handles it |
 | `scripts/pocketshell-launcher.rs` | `ROMS` / `ROMSCAN` / `ROMLAUNCH` bridge commands (reads the catalogue, never scans on the render thread) |
-| `hello/library-workspace.tsx` | library list page |
+| `hello/library-workspace.tsx` | library list page (removed in Launcher V2; see `docs/launcher-v2/`) |
 | `hello/main.tsx` | Library entry, auto refresh, and row activation |
 | `system.d/pocketshell-games.service` | scanner service (`Nice=10`, `CPUQuota=20%`, `MemoryMax=64M`) |
 | `package.mk` | installs the scanner, the helper and the unit |

@@ -1,24 +1,89 @@
-# PocketShell Library
+# PocketShell Launcher V2 (boot app)
 
-PocketShell Library is the content consumption workspace for TXT, Markdown, LOG, README, Agent reports, and technical documents on the 720×480 RG34XX panel. It uses PocketJS-native Solid UI and the native filesystem bridge. It does not launch a Linux reader process.
+The handheld home screen for the RG34XX: 360×240 logical pixels presented at an
+exact 2x to the 720×480 panel. Nintendo Switch information architecture — a 12 px
+status bar, one horizontal content flow, a persistent bottom navigation — on a
+pixel-art visual language.
 
-## Architecture
+Design source of truth: issue #92 (information architecture) and issue #93 (single
+icon language). The audit, conflict resolution and acceptance record live in
+`docs/launcher-v2/`.
 
-- `library-model.ts`: pure document/state types, lazy section extraction, progress, search, and UTF-8 chunk helpers behind `FileSystem`.
-- `library.tsx`: PocketJS Solid Library UI, controller state machine, OSK search, reading, bookmarks, and settings.
-- `pocketshell-library.rs`: host bridge with roots `/storage/docs`, `/storage/books`, `/storage/reports`, `/storage/library`; each read window is capped at 16 KiB.
-- Persistence: `/storage/pocketshell/library/{progress,bookmarks,history,settings}.json`.
+## Layout
 
-Markdown headings become lazy chapter entries. Paragraphs, lists, code fences, quotes and links remain readable plain text. A/B navigate and select, D-pad scrolls lines, left/right jump, L1/R1 page, L/R chapter navigation, X bookmarks, long X opens bookmarks, Y opens search, START opens settings. The PocketJS system `TextField` provides keyboard input. Agent actions remain placeholders.
+```
+┌──────────────────────────────────────────────────────────────┐
+│ 📶 192.168.3.57      ‹ ゲーム ›        ADB BT 🔊 🔋           │  12 px status bar
+├──────────────────────────────────────────────────────────────┤
+│    ┌────┐   ┌────┐   ┌────┐   ┌────┐                        │
+│    │ 🎮 │   │ 🎮 │   │ 🎮 │   │ 📁 │   one horizontal row    │
+│    │name│   │name│   │name│   │name│   of icon + name cards  │
+│    └────┘   └────┘   └────┘   └────┘                        │
+│    🎮  Metroid Fusion                                        │
+├──────────────────────────────────────────────────────────────┤
+│  すべて   メディア   ゲーム   お気に入り   設定               │  28 px nav, always on
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Modules
+
+| File | Role |
+|---|---|
+| `main.tsx` | Shell: category state, selection, overlays, input dispatch, view composition |
+| `status-bar.tsx` | 12 px bar: network/IP, `<分類>`, ADB/BT/volume/battery |
+| `bottom-nav.tsx` | Persistent five-category navigation |
+| `content-flow.tsx` | The horizontal card strip and the focused-item title |
+| `overlay.tsx` | X (search) and Y (recent) panels |
+| `settings-page.tsx` | 設定 category: group row + horizontal value tiles |
+| `terminal-workspace.tsx` | The PTY terminal (5 workspaces, input workspace) — unchanged from pre-V2 |
+| `icon.tsx` + `icons/registry.generated.ts` | The only icon renderer and its bitmaps |
+| `model.ts` | Content items, category filtering, live search, recents |
+| `bridge.ts` | `ui.__launcher` / `ui.__pocketshell` access and persisted preferences |
+| `theme.ts`, `strings.ts`, `text-fit.ts` | Tokens, Japanese strings, pixel-grid text fitting |
+| `library.tsx` | Separate Library reader app (own package, unaffected) |
+
+## Icon pipeline
+
+Pixelarticons (MIT) are vendored as SVG under `icons/pixelarticons/svg/`. Run
+
+```sh
+python3 tools/build-icons.py
+```
+
+after changing the icon set. It rasterizes each SVG on the 24×24 grid, derives the
+exact 12×12 half for the status bar, and writes `icons/registry.generated.ts`.
+Nothing outside that registry can be drawn: `Icon` rejects any size other than 12
+or 24, so no icon is ever resampled.
+
+## Fonts
+
+`fonts.json` bakes Tamzen 6x12 as the body face, with Terminus, Fusion Pixel 12px
+JA and GNU Unifont as per-glyph fallbacks. Japanese therefore resolves through
+Fusion Pixel while ASCII uses Tamzen. Nerd Font is *not* used for UI icons
+(issue #93); it stays available for terminal text only.
+
+## Input
+
+| Pad | Home | 設定 |
+|---|---|---|
+| D-pad ←/→ | move selection | adjust the focused value |
+| D-pad ↑/↓ | — | previous / next setting group |
+| A (CIRCLE) | open | apply |
+| B (CROSS) | previous category / close overlay | previous category |
+| L1 / R1 | previous / next category | previous / next category |
+| X (SQUARE) | search | search |
+| Y (TRIANGLE) | recent | recent |
+| START | open the terminal | open the terminal |
+| SELECT | toggle favorite | — |
 
 ## Build
 
-`package.mk` copies the app into the pinned PocketJS scratch build tree, checks/compiles `pocket.json` to `library.pocket`, and compiles `boot-pocket.json` to the immutable boot package. `patch-runtime.py` installs `pocketshell-library.rs` into the guest host and exposes `ui.__library(command)`.
+`package.mk` copies this directory into the pinned PocketJS tree, then runs
+`tools/pocket.ts check` and `compile` against `programs/rocknix-h700`. Pass the
+font faces through `POCKETJS_FONT_REGULAR` / `_BOLD` / `_MONO` (see `package.mk`).
 
-## Data and OTA
+Frame capture for docs and regression:
 
-The native state root defaults to `/storage/pocketshell/library`. Host checks may override it with `POCKETSHELL_LIBRARY_DATA_ROOT`; content roots can be overridden with `POCKETSHELL_LIBRARY_ROOTS` (platform path list). State writes use temp-file rename; invalid JSON uses in-memory defaults without overwriting the corrupt source. The data directory is on persistent `/storage`, outside OS packages, slot trees, and OTA staging. See `docs/heya-core-minimal/POCKETSHELL_LIBRARY.md` for the snapshot contract and local OTA/Remote Dev boundaries.
-
-## Host harness
-
-Use `node tools/pocketshell-dev/library-harness.js` from the repo root after compiling `library.pocket` with the same pinned PocketJS web compiler. It serves the same PocketJS browser host assets and app bundle, synthetic fixture roots, and a temporary in-memory data root. Fixtures are under `fixtures/`; they do not represent real user history.
+```sh
+bun tools/capture-launcher-v2-frames.ts <pocketjs-tree> docs/evidence/launcher-v2
+```

@@ -18,7 +18,9 @@ fn run(program: &str, args: &[&str]) -> Option<String> {
     }
 }
 
+const SETTINGS_DIR: &str = "/storage/pocketshell/launcher";
 const LANGUAGE_PATH: &str = "/storage/pocketshell/launcher/settings.json";
+const PREFERENCES_PATH: &str = "/storage/pocketshell/launcher/preferences.json";
 
 fn language_command(fields: &[&str]) -> String {
     match fields {
@@ -42,6 +44,33 @@ fn language_command(fields: &[&str]) -> String {
             (*language).into()
         }
         _ => "Invalid language".into(),
+    }
+}
+// ── Launcher preferences ────────────────────────────────────────────────────
+// Favorites and the recent-use ring live beside the language under
+// /storage/pocketshell/launcher, outside OS packages and OTA staging. Both
+// commands answer raw JSON so the app owns the schema and the bridge stays a
+// storage primitive. Writes use a temporary file and rename, so a power loss
+// cannot truncate the previous value.
+fn preferences_command(fields: &[&str]) -> String {
+    match fields {
+        ["PREF"] => std::fs::read_to_string(PREFERENCES_PATH)
+            .ok()
+            .filter(|text| text.trim().starts_with('{'))
+            .unwrap_or_else(|| "{\"favorites\":[],\"recent\":[]}".into()),
+        ["PREFSET", json] => {
+            if !json.trim().starts_with('{') { return "Invalid preferences".into() }
+            let directory = std::path::Path::new(SETTINGS_DIR);
+            if std::fs::create_dir_all(directory).is_err() { return "Unable to save preferences".into() }
+            let temporary = directory.join("preferences.json.new");
+            if std::fs::write(&temporary, format!("{}\n", json.trim())).is_err()
+                || std::fs::rename(&temporary, PREFERENCES_PATH).is_err() {
+                let _ = std::fs::remove_file(temporary);
+                return "Unable to save preferences".into();
+            }
+            "ok".into()
+        }
+        _ => "Invalid preferences".into(),
     }
 }
 
@@ -96,6 +125,7 @@ pub fn command(value: &str) -> String {
     let fields: Vec<&str> = value.split('\t').collect();
     match fields.as_slice() {
         ["LANGUAGE"] | ["LANGUAGE", _] => language_command(&fields),
+        ["PREF"] | ["PREFSET", _] => preferences_command(&fields),
         ["ROMS"] => games_library(),
         ["ROMSCAN"] => games_scan(),
         ["ROMLAUNCH", path] => games_launch(path),
@@ -179,6 +209,19 @@ pub fn command(value: &str) -> String {
                 }
             }
             "unknown".into()
+        }
+        // "1" while the fuel gauge reports mains power online, else "0".
+        ["LEVEL", "charging"] => {
+            let supplies = || std::fs::read_dir("/sys/class/power_supply").ok().into_iter().flatten().flatten();
+            let online = supplies().find_map(|entry| {
+                let raw = std::fs::read_to_string(entry.path().join("online")).ok()?;
+                match raw.trim() {
+                    "1" => Some(true),
+                    "0" => Some(false),
+                    _ => None,
+                }
+            });
+            if online == Some(true) { "1".into() } else { "0".into() }
         }
         // First IPv4 address of an interface that is up and not loopback: "iface|addr" or "--".
         ["LEVEL", "ip"] => {

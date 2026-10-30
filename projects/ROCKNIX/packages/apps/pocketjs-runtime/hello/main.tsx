@@ -1,593 +1,356 @@
-import { isLauncherLocale, LAUNCHER_LOCALES, launcherLocaleIndex, type LauncherLocale } from "./launcher-localization";
-import { LauncherHome } from "./launcher-home";
-import { SettingsWorkspace } from "./settings-workspace";
-import { LibraryWorkspace, type LibraryRow } from "./library-workspace";
-import { WorkspaceBar } from "./workspace-bar";
-import { createSignal, Index, onMount } from "solid-js";
-import { LAUNCHER_APPS } from "./launcher-catalog";
+// PocketShell Launcher V2 — the handheld home screen.
+//
+// Nintendo Switch information architecture on a 360x240 logical grid presented
+// at an exact 2x (720x480): a 12 px status bar, one horizontal content flow, a
+// persistent bottom navigation, and X/Y overlays for search and history.
+//
+// Input is complete on the pad alone (issue #92 item 5):
+//   D-pad       move / adjust          A (CIRCLE)  open / apply
+//   B (CROSS)   back / close overlay   L1/R1        previous / next category
+//   START       open the terminal       SELECT       favorites toggle
+//   X (SQUARE)  search                 Y (TRIANGLE) recent
+//
+// The app owns no OS knowledge: every read and mutation goes through the
+// `ui.__launcher` bridge, and the PTY terminal stays on `ui.__pocketshell` in
+// terminal-workspace.tsx.
+
+import { createSignal, onMount, Show } from "solid-js";
 import { mount } from "@pocketjs/framework/solid";
 import { Text, View } from "@pocketjs/framework/solid/components";
 import { BTN, onTextEvent, type TextEvent } from "@pocketjs/framework/input";
 import { onFrame } from "@pocketjs/framework/lifecycle";
+import { BottomNav } from "./bottom-nav";
+import { ContentFlow } from "./content-flow";
+import { Overlay } from "./overlay";
+import { SettingsPage, buildSettingGroups, type SettingsValues } from "./settings-page";
+import { StatusBar } from "./status-bar";
+import { createTerminalWorkspace } from "./terminal-workspace";
+import { CATEGORY_ORDER, itemsForCategory, itemsFromApps, itemsFromLibrary, recentItems, searchItems, toolItems, type CategoryId, type ContentItem, type LibraryPayload } from "./model";
+import { COLORS, CONTENT_H, CONTENT_TOP, SCREEN } from "./theme";
+import { JA, TIMEOUT_KEYS, SERVICE_KEYS, type TimeoutKey } from "./strings";
+import * as bridge from "./bridge";
 
-const WORKSPACES = [
-  { id: "apps", glyph: ["00111100", "01111110", "01011010", "11111111", "11111111", "11100111", "01111110", "00111100"] },
-  { id: "files", glyph: ["00000000", "00110000", "01111000", "11111110", "11111111", "11111111", "11111111", "00000000"] },
-  { id: "vim", glyph: ["00000010", "00000110", "00001110", "00011110", "00111010", "01110010", "11100010", "11111110"] },
-  { id: "top", glyph: ["00000000", "01100110", "01100110", "01100110", "01100110", "01100110", "01111110", "00000000"] },
-  { id: "log", glyph: ["11111110", "10000010", "10111010", "10101010", "10111010", "10000010", "11111110", "00000000"] },
-] as const;
-const NAMES = ["APPS", "FILES", "VIM", "TOP", "LOG"];
-const LOG_WORKSPACE = 4;
-
-type HostUI = { __launcher?: (command: string) => string; __pocketshell?: (command: string) => string };
-type Run = { text: string; fg: number; bg: number; flags: number };
-
-// 360×240 logical pixels scale 2× to the LCD; 12px text appears at 24px.
-const ROWS = 12;
-
-const abgr = (rgb: number) => {
-  const r = rgb & 0xff;
-  const g = (rgb >> 8) & 0xff;
-  const b = (rgb >> 16) & 0xff;
-  return (((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0);
+/** PTY apps are started by typing their command into the shell workspace. */
+const TERMINAL_COMMANDS: Readonly<Record<string, string>> = {
+  gamepad: "/usr/bin/evtest /dev/input/event3",
+  "clean-mac-files": "/usr/bin/heya-tool clean-mac-files --inside",
+  "cloud-backup": "/usr/bin/heya-tool cloud-backup --inside",
+  "cloud-restore": "/usr/bin/heya-tool cloud-restore --inside",
+  "audio-mixer": "/usr/bin/heya-tool audio-mixer --inside",
+  "file-manager-text": "/usr/bin/heya-tool file-manager-text --inside",
+  notes: "/usr/bin/heya-tool notes --inside",
+  monitor: "/usr/bin/heya-tool monitor --inside",
+  "system-info": "/usr/bin/heya-tool system-info --inside",
+  processes: "/usr/bin/heya-tool processes --inside",
+  "storage-info": "/usr/bin/heya-tool storage-info --inside",
+  "network-info": "/usr/bin/heya-tool network-info --inside",
+  "usb-info": "/usr/bin/heya-tool usb-info --inside",
+  "input-info": "/usr/bin/heya-tool input-info --inside",
+  "kernel-log": "/usr/bin/heya-tool kernel-log --inside",
+  "system-log": "/usr/bin/heya-tool system-log --inside",
 };
 
-const emptyRow = (): Run[] => [];
+const CATEGORY_TITLES: Readonly<Record<CategoryId, string>> = {
+  all: JA.categories.all,
+  media: JA.categories.media,
+  games: JA.categories.games,
+  favorites: JA.categories.favorites,
+  settings: JA.categories.settings,
+};
+
+const SETTING_GROUP_COUNT = 5;
 
 mount(() => {
-  const global = globalThis as typeof globalThis & { ui?: HostUI; __pocketshellOutput?: string };
-  const host = global.ui;
-  const [active, setActive] = createSignal(0);
-  const [selectedWorkspace, setSelectedWorkspace] = createSignal(0);
-  const [launcherOpen, setLauncherOpen] = createSignal(true);
-  const [launcherPage, setLauncherPage] = createSignal("apps");
-  const [launcherSelection, setLauncherSelection] = createSignal(0);
-  const [launcherNotice, setLauncherNotice] = createSignal("");
-  const [locale, setLocale] = createSignal<LauncherLocale>("ja");
-  const [overview, setOverview] = createSignal(true);
-  const [launcherCategory, setLauncherCategory] = createSignal(0);
-  const [pendingDirection, setPendingDirection] = createSignal(1);
-  const [levelPending, setLevelPending] = createSignal(false);
-  const [timeoutSelection, setTimeoutSelection] = createSignal(5);
-  const [timeoutPending, setTimeoutPending] = createSignal(false);
-  const [settingsValues, setSettingsValues] = createSignal<Record<string, string>>({});
-  const [library, setLibrary] = createSignal<LibraryRow[]>([]);
-  const [librarySelected, setLibrarySelected] = createSignal(0);
-  const [libraryScanning, setLibraryScanning] = createSignal(false);
-  const [libraryNotice, setLibraryNotice] = createSignal("");
-  const [libraryTotal, setLibraryTotal] = createSignal(0);
-  const libraryLabel = () => locale() === "ja" ? "ライブラリ" : locale() === "zh" ? "资料库" : "Library";
-  const [volume, setVolume] = createSignal(50);
-  const LOCALES = LAUNCHER_LOCALES;
-  const localeIndex = () => launcherLocaleIndex(locale());
-  const labels = () => LOCALES[localeIndex()].labels;
-  const serviceKeys = ["adbusb", "ssh", "avahi", "ftp", "http", "rsyncd", "samba", "syncthing", "telnet", "pocket" + "shell-dev"];
-  const timeouts = ["never", "10s", "30s", "1m", "5m", "15m", "30m", "1h"];
-  type SettingItem = { id: string; label: string; kind: string };
-  const settingGroups: SettingItem[][] = [
-    [{ id: "brightness", label: "Brightness", kind: "level" }],
-    [{ id: "volume", label: "Volume", kind: "level" }],
-    [{ id: "wifi", label: "Wi-Fi", kind: "radio" }, { id: "bluetooth", label: "Bluetooth", kind: "radio" }],
-    serviceKeys.map((id) => ({ id, label: id, kind: "service" })),
-    [
-      { id: "apps", label: "Tools / Applications", kind: "tools" },
-      { id: "network-usb", label: "Network / USB settings", kind: "open" },
-      { id: "timeout", label: "Screen timeout", kind: "timeout" },
-      { id: "language", label: "Display language", kind: "language" },
-    ],
-  ];
-  const categoryNames = () => locale() === "ja"
-    ? ["表示", "音声", "ネットワーク", "サービス", "システム"]
-    : locale() === "zh" ? ["显示", "音频", "网络", "服务", "系统"] : ["DISPLAY", "AUDIO", "NETWORK", "SERVICES", "SYSTEM"];
-  const translatedApps = () => locale() === "ja" ? ["XMPlayer", "オーディオ", "Mac メタデータ削除", "クラウドバックアップ", "クラウド復元", "ファイルマネージャー", "Midnight Commander", "ゲームパッドテスト", "入力デバイス", "カーネルログ", "システムモニター", "ネットワーク情報", "テキストエディター", "プロセス管理", "ストレージ情報", "システム情報", "システムログ", "ターミナル", "USB デバイス"] : locale() === "zh" ? ["XMPlayer", "音频混音器", "清理 macOS 文件", "云备份", "云恢复", "文件管理器", "Midnight Commander", "手柄测试", "输入设备", "内核日志", "系统监视器", "网络信息", "文本编辑器", "进程管理", "存储信息", "系统信息", "系统日志", "终端", "USB 设备"] : LAUNCHER_APPS.map((app) => app.name);
-  const settingLabel = (id: string): string => {
-    const map: Record<string, readonly [string, string, string]> = {
-      brightness: ["明るさ", "亮度", "Brightness"],
-      volume: ["音量", "音量", "Volume"],
-      wifi: ["Wi-Fi", "Wi-Fi", "Wi-Fi"],
-      bluetooth: ["Bluetooth", "Bluetooth", "Bluetooth"],
-      apps: ["ツール / アプリ", "工具与应用", "Tools / Applications"],
-      "network-usb": ["ネットワーク / USB 設定", "网络 / USB 设置", "Network / USB settings"],
-      timeout: ["画面オフ", "屏幕超时", "Screen timeout"],
-      language: ["表示言語", "界面语言", "Display language"],
-    };
-    const entry = map[id];
-    return entry ? entry[localeIndex()] : id;
-  };
-  const settingRows = (): SettingItem[] => settingGroups[launcherCategory()].map((item) => ({ ...item, label: settingLabel(item.id) }));
-  const appRows = () => [...translatedApps(), libraryLabel(), labels().settings];
-  const toolRows = () => systemTools.map((tool) => tool.label);
+  const terminal = createTerminalWorkspace();
+  const [category, setCategory] = createSignal(0);
+  const [selected, setSelected] = createSignal(0);
+  const [overlay, setOverlay] = createSignal<"search" | "recent" | null>(null);
+  const [query, setQuery] = createSignal("");
+  const [notice, setNotice] = createSignal("");
+  const [favorites, setFavorites] = createSignal<readonly string[]>([]);
+  const [recent, setRecent] = createSignal<readonly string[]>([]);
+  const [library, setLibrary] = createSignal<readonly ContentItem[]>([]);
+  const [scanning, setScanning] = createSignal(false);
+  const [status, setStatus] = createSignal(bridge.readStatus());
+  const [settings, setSettings] = createSignal<SettingsValues>({ wifi: "unknown", bluetooth: "unknown", services: {}, timeout: "30m" });
+  const [settingGroup, setSettingGroup] = createSignal(0);
+  const [settingRow, setSettingRow] = createSignal(0);
+  const [adbOn, setAdbOn] = createSignal(false);
+
+  const apps = itemsFromApps();
+  const tools = toolItems();
+  const activeCategory = (): CategoryId => CATEGORY_ORDER[category()];
+
   const refreshLibrary = () => {
-    setLibraryScanning(true);
-    const raw = host?.__launcher?.("ROMS") ?? "";
+    setScanning(true);
     try {
-      const payload = JSON.parse(raw) as {
-        total?: number;
-        sections?: Record<string, { name: string; count: number; items: { title: string; path: string }[] }[]>;
-      };
-      const rows: LibraryRow[] = [];
-      let total = 0;
-      for (const section of ["games", "music", "videos", "books"]) {
-        const groups = payload.sections?.[section] ?? [];
-        if (groups.length === 0) continue;
-        const count = groups.reduce((sum, group) => sum + group.count, 0);
-        total += count;
-        rows.push({ kind: "header", section, count });
-        for (const group of groups) {
-          for (const item of group.items) {
-            rows.push({ kind: "item", section, group: group.name, title: item.title, path: item.path });
-          }
-        }
-      }
-      setLibrary(rows);
-      setLibraryTotal(total);
-      setLibrarySelected((current) => Math.min(current, rows.length));
-      setLibraryNotice(total > 0 ? `${total} item / ${Object.keys(payload.sections ?? {}).length} section` : "Empty — copy files into /storage/content");
+      setLibrary(itemsFromLibrary(JSON.parse(bridge.readLibrary()) as LibraryPayload));
     } catch {
       setLibrary([]);
-      setLibraryTotal(0);
-      setLibraryNotice("Library scan failed");
     }
-    setLibraryScanning(false);
+    setScanning(false);
   };
-  const launcherRows = () => launcherPage() === "tools" ? toolRows() : launcherPage() === "settings" ? settingRows().map((item) => item.label) : appRows();
-  const moveLauncher = (step: number) => setLauncherSelection((launcherSelection() + step + launcherRows().length) % launcherRows().length);
-  const launcherCommand = (value: string) => setLauncherNotice(host?.__launcher?.(value) ?? "Launcher bridge unavailable");
-  const setLanguage = (id: LauncherLocale) => {
-    const result = host?.__launcher?.(`LANGUAGE\t${id}`) ?? "ja";
-    if (["ja", "zh", "en"].includes(result)) setLocale(result as LauncherLocale);
+
+  const refreshStatus = () => {
+    setStatus(bridge.readStatus());
+    setAdbOn(bridge.readService("adbusb") === "on");
   };
-  const refreshSettingValues = () => {
-    const next: Record<string, string> = {};
-    for (const key of ["brightness", "volume", "wifi", "bluetooth", "timeout", ...serviceKeys]) {
-      const value = host?.__launcher?.(`STATE\t${key}`) ?? "unknown";
-      next[key] = value === "unknown" || !value ? "?" : value;
-    }
-    setSettingsValues(next);
-    const timeout = next.timeout;
-    const timeoutIndex = timeouts.indexOf(timeout);
-    if (timeoutIndex >= 0) setTimeoutSelection(timeoutIndex);
+
+  const refreshSettings = () => {
+    const services: Record<string, "on" | "off" | "unknown"> = {};
+    for (const key of SERVICE_KEYS) services[key] = bridge.readService(key);
+    setSettings({
+      brightness: bridge.readLevel("brightness"),
+      volume: bridge.readLevel("volume"),
+      wifi: status().wifi,
+      bluetooth: status().bluetooth,
+      services,
+      timeout: bridge.readTimeout(),
+    });
   };
-  const changeCategory = (step: number) => {
-    setLauncherCategory((launcherCategory() + step + settingGroups.length) % settingGroups.length);
-    setLauncherSelection(0);
-    setLevelPending(false);
-    setTimeoutPending(false);
-    setLauncherNotice("");
-    refreshSettingValues();
+
+  const persist = () => bridge.writePreferences({ favorites: [...favorites()], recent: [...recent()] });
+
+  const remember = (key: string) => {
+    setRecent((current) => [key, ...current.filter((entry) => entry !== key)].slice(0, 24));
+    persist();
   };
-  const valueLabel = (item: { id: string; kind: string }) => {
-    const value = settingsValues()[item.id] ?? "?";
-    if (item.kind === "level") {
-      const current = Number(value);
-      if (!Number.isFinite(current)) return "??????????  ?%";
-      const staged = levelPending() ? Math.max(item.id === "brightness" ? 5 : 0, Math.min(100, current + pendingDirection() * 5)) : current;
-      return `${"●".repeat(Math.round(staged / 10))}${"·".repeat(10 - Math.round(staged / 10))} ${staged}%${levelPending() ? " *" : ""}`;
-    }
-    if (item.kind === "timeout") return timeoutPending() ? `${value} → ${timeouts[timeoutSelection()]}` : value;
-    if (item.kind === "language") return locale() === "ja" ? "日本語" : locale() === "zh" ? "中文" : "English";
-    if (item.kind === "tools") return "A OPEN";
-    if (item.kind === "radio" || item.kind === "service") return value === "1" || value === "on" ? "● ON" : value === "0" || value === "off" ? "○ OFF" : "? UNKNOWN";
-    return "A OPEN";
+
+  const currentItems = (): ContentItem[] => {
+    const active = activeCategory();
+    if (active === "settings") return tools;
+    return itemsForCategory(active, apps, library(), favorites(), recent());
   };
-  const activeItem = (): SettingItem => settingRows()[launcherSelection()] ?? { id: "", label: "", kind: "" };
-  const systemTools = [
-    { label: "Terminal", run: () => { setLauncherOpen(false); switchTo(1); } },
-    ...LAUNCHER_APPS.map((app, index) => ({ label: translatedApps()[index] ?? app.name, run: () => {
-      if (app.kind === "native") launcherCommand(`LAUNCH\t${app.id}`);
-      else { setLauncherOpen(false); send("RESET\t0"); send(`0\tTEXT ${app.id === "gamepad" ? "/usr/bin/evtest /dev/input/event3" : `/usr/bin/heya-tool ${app.id} --inside`}`); send("0\tKEY ENTER"); }
-    } })),
-  ];
-  const openLauncherEntry = () => {
-    const selected = launcherSelection();
-    if (launcherPage() === "tools") { systemTools[launcherSelection()]?.run(); return; }
-    if (launcherPage() === "settings") {
-      const item = activeItem();
-      if (item.kind === "language") { setLanguage(LAUNCHER_LOCALES[(localeIndex() + 1) % LAUNCHER_LOCALES.length].id); refreshSettingValues(); return; }
-      if (item.kind === "level") {
-        if (!levelPending()) { setLauncherNotice("Choose a 5% step with left or right"); return; }
-        const current = Number(host?.__launcher?.(`STATE\t${item.id}`) ?? "NaN");
-        if (!Number.isFinite(current)) { setLauncherNotice("Current level unavailable"); return; }
-        const value = Math.max(item.id === "brightness" ? 5 : 0, Math.min(100, current + pendingDirection() * 5));
-        launcherCommand(`CONTROL\t${item.id}\t${value}`); setLevelPending(false);
-      } else if (item.kind === "radio") {
-        const current = settingsValues()[item.id];
-        if (!["0", "1", "on", "off"].includes(current)) { setLauncherNotice("Current state unavailable"); return; }
-        const result = host?.__launcher?.(`CONTROL\t${item.id}\t${current === "1" || current === "on" ? "off" : "on"}`) ?? "Setting failed";
-        setLauncherNotice(result); refreshSettingValues();
-      } else if (item.kind === "service") {
-        setLauncherNotice(launcherCommand(`SERVICE\t${item.id}.enabled`));
-        refreshSettingValues();
-      } else if (item.kind === "timeout") {
-        setLauncherNotice(launcherCommand(`SLEEP\t${timeouts[timeoutSelection()]}`)); setTimeoutPending(false); refreshSettingValues();
-      } else if (item.kind === "tools") {
-        setLauncherPage("tools"); setLauncherSelection(0); setLauncherNotice("");
-      } else if (item.kind === "open") { setLauncherOpen(false); send("RESET\t0"); send("0\tTEXT /usr/libexec/pocketjs-legacy-settings"); send("0\tKEY ENTER"); }
-      refreshSettingValues();
+
+  const overlayItems = (): ContentItem[] => overlay() === "search"
+    ? searchItems(query(), apps, library(), recent())
+    : recentItems(recent(), apps, library());
+
+  const itemCount = () => overlay() ? overlayItems().length : currentItems().length;
+
+  const setCategoryBy = (step: number) => {
+    setCategory((category() + step + CATEGORY_ORDER.length) % CATEGORY_ORDER.length);
+    setSelected(0);
+    setNotice("");
+    if (activeCategory() === "settings") refreshSettings();
+  };
+
+  const move = (step: number) => {
+    const count = itemCount();
+    if (count > 0) setSelected((selected() + step + count) % count);
+  };
+
+  const openItem = (item: ContentItem | undefined) => {
+    if (!item) return;
+    remember(item.key);
+    if (item.kind === "rom" && item.path) {
+      setNotice(bridge.launchRom(item.path) || JA.notice.launchFailed);
       return;
     }
-    if (selected === LAUNCHER_APPS.length) {
-      setLauncherPage("library");
-      setLauncherSelection(0);
-      setLibraryNotice("");
-      refreshLibrary();
-      return;
-    }
-    if (selected > LAUNCHER_APPS.length) {
-      setLauncherPage("settings");
-      setLauncherCategory(0);
-      setLauncherSelection(0);
-      refreshSettingValues();
-      return;
-    }
-    const app = LAUNCHER_APPS[selected];
+    const app = item.app;
     if (!app) return;
-    if (app.kind === "native") { launcherCommand(`LAUNCH\t${app.id}`); return; }
-    setLauncherOpen(false); send("RESET\t0");
-    if (app.id !== "terminal") { send(`0\tTEXT ${app.id === "gamepad" ? "/usr/bin/evtest /dev/input/event3" : `/usr/bin/heya-tool ${app.id} --inside`}`); send("0\tKEY ENTER"); }
-  };
-  // selected 0 is the Scan row; selected n>=1 is library()[n-1]. moveLibrary and
-  // LibraryWorkspace use the same mapping, so the highlighted row, the detail
-  // line and the launched item always agree.
-  const activateLibraryRow = () => {
-    const selected = librarySelected();
-    if (selected === 0) {
-      const result = host?.__launcher?.("ROMSCAN") ?? "Scan failed";
-      setLibraryNotice(result);
-      refreshLibrary();
+    if (app.kind === "native") {
+      setNotice(bridge.launchNative(app.id) || JA.notice.starting);
       return;
     }
-    const row = library()[selected - 1];
-    if (!row) { refreshLibrary(); return; }
-    if (row.kind === "scan") {
-      const result = host?.__launcher?.("ROMSCAN") ?? "Scan failed";
-      setLibraryNotice(result);
-      refreshLibrary();
-      return;
-    }
-    if (row.kind === "header") return;
-    const result = host?.__launcher?.(`ROMLAUNCH\t${row.path}`) ?? "No player configured";
-    setLibraryNotice(row.section === "games" ? result : `Open: ${row.title} (${result})`);
+    terminal.show(0);
+    const command = TERMINAL_COMMANDS[app.id];
+    if (command) bridge.sendTerminal(`0\tTEXT ${command}\n`);
   };
-  const moveLibrary = (step: number) => {
-    const count = library().length + 1;
-    setLibrarySelected((current) => (current + step + count) % count);
-  };
-  const moveSettingValue = (direction: number) => {
-    const item = activeItem();
-    if (item.kind === "timeout") { setTimeoutSelection((timeoutSelection() + direction + timeouts.length) % timeouts.length); setTimeoutPending(true); }
-    else if (item.kind === "level") { setPendingDirection(direction); setLevelPending(true); }
-  };
-  const launcherKey = (key: string) => {
-    if (overview()) {
-      if (key === "ArrowLeft") changeWorkspace(selectedWorkspace() - 1);
-      else if (key === "ArrowRight") changeWorkspace(selectedWorkspace() + 1);
-      else if (key === "ArrowUp" || key === "ArrowDown") { setOverview(false); setLauncherSelection(0); }
-      else if (key === "Enter") { if (selectedWorkspace() === 0) { setOverview(false); setLauncherSelection(0); } else { switchTo(selectedWorkspace()); setLauncherOpen(false); } }
-      return;
-    }
-    if (launcherPage() === "library") {
-      if (key === "ArrowUp") moveLibrary(-1);
-      else if (key === "ArrowDown") moveLibrary(1);
-      else if (key === "Enter") activateLibraryRow();
-      else if (key === "Escape") { setLauncherPage("apps"); setLauncherSelection(LAUNCHER_APPS.length); }
-      return;
-    }
-    if (key === "ArrowUp") moveLauncher(-1);
-    else if (key === "ArrowDown") moveLauncher(1);
-    else if ((key === "ArrowLeft" || key === "ArrowRight") && launcherPage() === "settings") moveSettingValue(key === "ArrowLeft" ? -1 : 1);
-    else if (key === "Enter") openLauncherEntry();
-    else if (key === "Escape") { setOverview(true); setLauncherPage("apps"); setLauncherSelection(0); }
-  };
-  const [lines, setLines] = createSignal<Run[][]>(Array.from({ length: ROWS }, emptyRow));
-  const [cursor, setCursor] = createSignal({ row: 0, col: 0, visible: false });
-  const [input, setInput] = createSignal("");
-  const [commandOpen, setCommandOpen] = createSignal(false);
-  const [inputOpen, setInputOpen] = createSignal(false);
-  const [inputLayout, setInputLayout] = createSignal(0);
-  const [inputFunction, setInputFunction] = createSignal(0);
-  const [inputHistory, setInputHistory] = createSignal<string[]>([]);
-  const [inputSelection, setInputSelection] = createSignal(0);
-  const INPUT_TABS = ["Keyboard", "History", "Commands", "Phrases", "Sessions", "Agent"];
-  const INPUT_LAYOUTS = [
-    ["A B C D E F G", "H I J K L M N", "O P Q R S T U", "V W X Y Z"],
-    ["1 2 3 4 5", "6 7 8 9 0", ". , : ;", "/ - _ @"],
-    ["! ? # $ %", "& * + =", "( ) [ ]", "{ } < >", "| \\ ~ ^"],
-    ["/ ~ . .. - _ : @", "root home storage roms", "mnt tmp config logs", "usr bin"],
-  ];
-  const INPUT_ENTRIES: string[][][] = [[], [],
-    [["Open Shell", ""], ["Connect NAS", "ssh nas"], ["Restart WiFi", "sudo systemctl restart NetworkManager"], ["Mount USB", "udisksctl mount -b"], ["Check Logs", "journalctl -f"], ["Update ROMs", "/usr/bin/rocknix-roms-update"], ["Shutdown", "sudo poweroff"], ["Reboot", "sudo reboot"], ["System Info", "uname -a"]],
-    [["SSH", "ssh user@host"], ["Git Clone", "git clone"], ["Git Pull", "git pull"], ["Rsync", "rsync -av"], ["Journal", "journalctl -f"], ["tmux", "tmux attach"]],
-    [["PVE", "ssh pve"], ["DEVBOX", "ssh devbox"], ["NAS", "ssh nas"], ["CLAUDE", "tmux attach -t claude"], ["AIDER", "tmux attach -t aider"], ["CODEX", "tmux attach -t codex"], ["Remote Agent", "ssh agent"]],
-    ["查看日志", "查看异常", "分析系统状态", "检查存储空间", "检查网络连接", "更新 ROM 库", "生成 SSH 配置", "管理 Workspace", "生成脚本", "生成命令"].map((label) => [label, `请${label}，检查当前系统并给出结论。`]),
-  ];
-  const inputEntries = () => inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-  const moveInputSelection = (direction: number) => {
-    const count = inputFunction() === 0 ? INPUT_LAYOUTS[inputLayout()].flatMap((row) => row.split(" ")).length + 3 : inputEntries().length;
-    setInputSelection((index) => count ? (index + direction + count) % count : 0);
-  };
-  const inputListStart = () => Math.max(0, inputSelection() - 7);
-  let armed = false;
-  let previousButtons = 0;
-  const send = (command: string) => host?.__pocketshell?.(command) ?? "";
-  const log = (entry: string) => send(`LOG\t${entry.replace(/[\t\r\n]/g, " ").slice(0, 120)}`);
 
-  const applyRows = (payload: string) => {
-    if (!payload) return;
-    const changed = new Map<number, Run[]>();
-    let nextCursor: { row: number; col: number; visible: boolean } | null = null;
-    for (const record of payload.split("\n")) {
-      if (!record) continue;
-      const fields = record.split("\t");
-      if (fields[0] === "C") {
-        nextCursor = { row: Number(fields[1]) || 0, col: Number(fields[2]) || 0, visible: fields[3] === "1" };
-        continue;
+  const toggleFavorite = () => {
+    const item = currentItems()[selected()];
+    if (!item) return;
+    setFavorites((current) => current.includes(item.key)
+      ? current.filter((key) => key !== item.key)
+      : [item.key, ...current]);
+    persist();
+  };
+
+  const adjustSetting = (direction: number) => {
+    const row = buildSettingGroups(settings())[settingGroup()]?.rows[settingRow()];
+    if (!row) return;
+    switch (row.kind) {
+      case "level": {
+        const current = row.id === "brightness" ? settings().brightness : settings().volume;
+        const floor = row.id === "brightness" ? 5 : 0;
+        bridge.setLevel(row.id, Math.min(100, Math.max(floor, (current ?? 50) + direction * 5)));
+        break;
       }
-      if (fields[0] !== "L") continue;
-      const row = Number(fields[1]);
-      if (!Number.isInteger(row) || row < 0 || row >= ROWS) continue;
-      const runs: Run[] = [];
-      for (const field of fields.slice(2)) {
-        const parts = field.split(":");
-        if (parts.length < 4) continue;
-        const fg = parseInt(parts[0], 16);
-        const bg = parseInt(parts[1], 16);
-        const flags = Number(parts[2]) || 0;
-        const text = parts.slice(3).join(":").replace(/\\t/g, "    ").replace(/\\n/g, "").replace(/\\\\/g, "\\");
-        if (!text) continue;
-        runs.push({ text, fg, bg, flags });
+      case "timeout": {
+        const index = TIMEOUT_KEYS.indexOf(row.value as TimeoutKey);
+        bridge.setTimeout_(TIMEOUT_KEYS[(index + direction + TIMEOUT_KEYS.length) % TIMEOUT_KEYS.length]);
+        break;
       }
-      changed.set(row, runs);
+      case "radio":
+        bridge.setRadio(row.id, row.value !== "on");
+        break;
+      case "service":
+        bridge.toggleService(row.id);
+        break;
+      case "open":
+        terminal.show(1);
+        bridge.sendTerminal("1\tTEXT /usr/libexec/pocketjs-legacy-settings\n");
+        break;
     }
-    if (changed.size > 0) {
-      setLines((old) => old.map((runs, index) => changed.get(index) ?? runs));
-    }
-    if (nextCursor) setCursor(nextCursor);
+    refreshSettings();
+    refreshStatus();
   };
 
-  const changeWorkspace = (id: number) => {
-    const next = (id + WORKSPACES.length) % WORKSPACES.length;
-    setSelectedWorkspace(next); setOverview(true); setLauncherPage("apps"); setLauncherSelection(0);
-  };
-  const switchTo = (id: number) => {
-    const next = (id + NAMES.length) % NAMES.length;
-    if (next === active()) return;
-    setActive(next);
-    setLines(Array.from({ length: ROWS }, emptyRow));
-    setCursor({ row: 0, col: 0, visible: false });
-    send(`ACTIVATE\t${next}`);
-    applyRows(send(`SNAP\t${next}`));
-    log(`Workspace Activated WS${next + 1}`);
+  const openOverlay = (mode: "search" | "recent") => {
+    setQuery("");
+    setSelected(0);
+    setOverlay(mode);
   };
 
-  const sendKey = (key: string) => send(`${active()}\tKEY ${key}`);
-  const submitInput = () => {
-    const value = input().trim();
-    if (value) setInputHistory((items) => [value, ...items.filter((item) => item !== value)]);
-    if (value) { send(`${active()}\tTEXT ${value}`); send(`${active()}\tKEY ENTER`); }
-    setInput(""); setInputOpen(false);
-  };
-  const selectInputEntry = (index: number) => {
-    if (inputFunction() === 0) {
-      const chars = [...INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")), "SPACE", "BACKSPACE", "ENTER"];
-      const value = chars[index];
-      if (value === "SPACE") setInput((text) => text + " ");
-      else if (value === "BACKSPACE") setInput((text) => text.slice(0, -1));
-      else if (value === "ENTER") submitInput();
-      else if (value) setInput((text) => text + value);
+  /** Keyboard support mirrors the pad, so a dev root or SSH session also works. */
+  const handleKey = (key: string) => {
+    if (overlay()) {
+      if (key === "Escape") { setOverlay(null); setSelected(0); setQuery(""); return; }
+      if (key === "Enter") { openItem(overlayItems()[selected()]); return; }
+      if (key === "ArrowLeft") { move(-1); return; }
+      if (key === "ArrowRight") { move(1); return; }
+      if (key === "Backspace") { setQuery((value) => value.slice(0, -1)); setSelected(0); return; }
+      if (key.length === 1) { setQuery((value) => value + key); setSelected(0); }
       return;
     }
-    const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-    if (inputFunction() === 2 && index >= 6) return;
-    if (entries[index]) setInput(entries[index][1]);
-  };
-  const deleteInput = (index: number) => {
-    if (inputFunction() === 1) setInputHistory((items) => items.filter((_, i) => i !== index));
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      const direction = key === "ArrowLeft" ? -1 : 1;
+      if (activeCategory() === "settings") {
+        const rows = buildSettingGroups(settings())[settingGroup()]?.rows.length ?? 1;
+        setSettingRow((settingRow() + direction + rows) % rows);
+      } else {
+        move(direction);
+      }
+      return;
+    }
+    if (key === "ArrowUp" || key === "ArrowDown") {
+      if (activeCategory() === "settings") {
+        setSettingGroup((settingGroup() + (key === "ArrowUp" ? SETTING_GROUP_COUNT - 1 : 1)) % SETTING_GROUP_COUNT);
+        setSettingRow(0);
+      }
+      return;
+    }
+    if (key === "Enter") {
+      if (activeCategory() === "settings") adjustSetting(1);
+      else openItem(currentItems()[selected()]);
+    }
   };
 
   onMount(() => {
-    const savedLocale = host?.__launcher?.("LANGUAGE") ?? "ja";
-    if (isLauncherLocale(savedLocale)) setLocale(savedLocale);
-    send("RESIZE\t12x46");
-    for (let id = 0; id < NAMES.length; id++) send(`${id}\tSTART`);
-    log("Workspace Created WS1..WS5");
+    const preferences = bridge.readPreferences();
+    setFavorites(preferences.favorites);
+    setRecent(preferences.recent);
+    refreshLibrary();
+    refreshStatus();
+    refreshSettings();
+
     onTextEvent((event: TextEvent) => {
-      if (launcherOpen() && !inputOpen() && !commandOpen()) { if (event.kind === "key" && event.pressed) launcherKey(event.key); return true; }
-      if (event.kind === "commit") {
-        if (inputOpen()) setInput((value) => value + event.text);
-        else if (commandOpen()) setInput((value) => value + event.text);
-        else if (active() < LOG_WORKSPACE) send(`${active()}\tTEXT ${event.text}`);
+      if (terminal.active()) return false;
+      if (event.kind === "key" && event.pressed) { handleKey(event.key); return true; }
+      if (overlay() === "search" && event.kind === "commit") {
+        setQuery((value) => value + event.text);
+        setSelected(0);
         return true;
       }
-      if (event.kind !== "key" || !event.pressed) return false;
-      if (inputOpen()) {
-        if (event.key === "Escape") setInputOpen(false);
-        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
-        else if (event.key === "Enter") submitInput();
-        return true;
-      }
-      if (commandOpen()) {
-        if (event.key === "Escape") { setCommandOpen(false); setInput(""); }
-        else if (event.key === "Backspace") setInput((value) => value.slice(0, -1));
-        else if (event.key === "Enter") {
-          const value = input(); setInput(""); setCommandOpen(false); switchTo(0);
-          if (value) send(`0\tTEXT ${value}`); send("0\tKEY ENTER"); log("Process Input WS1");
-        }
-        return true;
-      }
-      const key = event.key.replace(/^Control\+/, "CTRL_").toUpperCase();
-      if (["ENTER", "BACKSPACE", "ARROWUP", "ARROWDOWN", "ARROWLEFT", "ARROWRIGHT", "TAB", "ESC", "CTRL_C", "CTRL_D", "CTRL_L", "HOME", "END"].includes(key)) sendKey(key.replace("ARROW", ""));
-      return true;
+      return false;
     });
   });
 
+  let armed = false;
+  let previous = 0;
+  let framesSinceRefresh = 0;
   onFrame((buttons: number) => {
+    // The status bar is live (issue #92): re-read it about once a second
+    // without ever blocking the frame on a bridge call per tick.
+    if (++framesSinceRefresh >= 60) {
+      framesSinceRefresh = 0;
+      refreshStatus();
+    }
     if (buttons === 0) armed = true;
-    const payload = global.__pocketshellOutput ?? "";
-    if (payload) { delete global.__pocketshellOutput; applyRows(payload); }
-    if (active() === LOG_WORKSPACE && armed && !inputOpen()) applyRows(send(`SNAP\t${LOG_WORKSPACE}`));
-    if (!armed) { previousButtons = buttons; return; }
-    const pressed = buttons & ~previousButtons;
-    previousButtons = buttons;
-    if (launcherOpen() && !inputOpen() && !commandOpen()) {
-      if (pressed & BTN.SELECT) { setInput(""); setInputOpen(true); setInputFunction(0); return; }
-      if (pressed & BTN.START) { setInput(""); setCommandOpen(true); return; }
-      if (overview()) {
-        if (pressed & BTN.LEFT) changeWorkspace(selectedWorkspace() - 1);
-        if (pressed & BTN.RIGHT) changeWorkspace(selectedWorkspace() + 1);
-        if (pressed & BTN.UP || pressed & BTN.DOWN) { setOverview(false); setLauncherSelection(0); }
-        if (pressed & BTN.CIRCLE) { if (selectedWorkspace() === 0) { setOverview(false); setLauncherSelection(0); } else { switchTo(selectedWorkspace()); setLauncherOpen(false); } }
-        if (pressed & BTN.CROSS) setSelectedWorkspace(active());
-      } else if (launcherPage() === "library") {
-        if (pressed & BTN.UP) moveLibrary(-1);
-        if (pressed & BTN.DOWN) moveLibrary(1);
-        if (pressed & BTN.CIRCLE) activateLibraryRow();
-        if (pressed & BTN.CROSS) { setLauncherPage("apps"); setLauncherSelection(LAUNCHER_APPS.length); }
-      } else {
-        if (pressed & BTN.LEFT && launcherPage() === "settings") moveSettingValue(-1);
-        else if (pressed & BTN.LEFT) changeWorkspace(selectedWorkspace() - 1);
-        if (pressed & BTN.RIGHT && launcherPage() === "settings") moveSettingValue(1);
-        else if (pressed & BTN.RIGHT) changeWorkspace(selectedWorkspace() + 1);
-        if (launcherPage() === "settings") {
-          if (pressed & BTN.LTRIGGER) changeCategory(-1);
-          if (pressed & BTN.RTRIGGER) changeCategory(1);
-        }
-        if (pressed & BTN.UP) moveLauncher(-1);
-        if (pressed & BTN.DOWN) moveLauncher(1);
-        if (pressed & BTN.CIRCLE) openLauncherEntry();
-        if (pressed & BTN.CROSS) { setOverview(true); setLauncherPage("apps"); setLauncherSelection(0); }
-      }
+    if (!armed) { previous = buttons; return; }
+    if (terminal.active()) return;
+    const pressed = buttons & ~previous;
+    previous = buttons;
+
+    if (overlay()) {
+      if (pressed & BTN.CROSS) { setOverlay(null); setSelected(0); setQuery(""); }
+      if (pressed & BTN.LEFT) move(-1);
+      if (pressed & BTN.RIGHT) move(1);
+      if (pressed & BTN.CIRCLE) openItem(overlayItems()[selected()]);
+      if (pressed & BTN.SQUARE) openOverlay(overlay() === "search" ? "recent" : "search");
       return;
     }
-    if (inputOpen()) {
-      const entries = inputFunction() === 1 ? inputHistory().map((value) => [value, value]) : INPUT_ENTRIES[inputFunction()];
-      const selectionCount = inputFunction() === 0
-        ? INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + 3
-        : entries.length;
-      if (pressed & BTN.LEFT) setInputLayout((inputLayout() + 3) % 4);
-      if (pressed & BTN.RIGHT) setInputLayout((inputLayout() + 1) % 4);
-      if (pressed & BTN.LTRIGGER) setInputFunction((inputFunction() + 5) % 6);
-      if (pressed & BTN.RTRIGGER) setInputFunction((inputFunction() + 1) % 6);
-      if (pressed & BTN.UP) setInputSelection((inputSelection() + Math.max(1, selectionCount) - 1) % Math.max(1, selectionCount));
-      if (pressed & BTN.DOWN) setInputSelection((inputSelection() + 1) % Math.max(1, selectionCount));
-      if (pressed & BTN.CIRCLE) selectInputEntry(inputSelection());
-      if (pressed & BTN.CROSS) setInputOpen(false);
-      if (pressed & BTN.START) setInputFunction((inputFunction() + 1) % 6);
-      if (pressed & BTN.SELECT) submitInput();
+
+    if (pressed & BTN.LTRIGGER) setCategoryBy(-1);
+    if (pressed & BTN.RTRIGGER) setCategoryBy(1);
+    if (pressed & BTN.SQUARE) { openOverlay("search"); return; }
+    if (pressed & BTN.TRIANGLE) { openOverlay("recent"); return; }
+
+    if (activeCategory() === "settings") {
+      if (pressed & BTN.LEFT) adjustSetting(-1);
+      if (pressed & BTN.RIGHT) adjustSetting(1);
+      if (pressed & BTN.UP) { setSettingGroup((settingGroup() + SETTING_GROUP_COUNT - 1) % SETTING_GROUP_COUNT); setSettingRow(0); }
+      if (pressed & BTN.DOWN) { setSettingGroup((settingGroup() + 1) % SETTING_GROUP_COUNT); setSettingRow(0); }
+      if (pressed & BTN.CIRCLE) adjustSetting(1);
+      if (pressed & BTN.CROSS) setCategoryBy(-1);
       return;
     }
-    if (pressed & BTN.LEFT) switchTo(active() - 1);
-    if (pressed & BTN.RIGHT) switchTo(active() + 1);
-    if (pressed & BTN.LTRIGGER) sendKey("PGUP");
-    if (pressed & BTN.RTRIGGER) sendKey("PGDN");
-    if (pressed & BTN.UP) sendKey("UP");
-    if (pressed & BTN.DOWN) sendKey("DOWN");
-    if (pressed & BTN.CIRCLE) { sendKey("ENTER"); log(`Process Input WS${active() + 1}`); }
-    if (pressed & BTN.CROSS) { sendKey("ESC"); switchTo(0); setLauncherOpen(true); }
-    if (pressed & BTN.START) switchTo(active() + 1);
-    if (pressed & BTN.SELECT) { setInput(""); setInputOpen(true); setInputFunction(0); }
+
+    if (pressed & BTN.LEFT) move(-1);
+    if (pressed & BTN.RIGHT) move(1);
+    if (pressed & BTN.CIRCLE) openItem(currentItems()[selected()]);
+    if (pressed & BTN.CROSS) setCategoryBy(-1);
+    if (pressed & BTN.SELECT) toggleFavorite();
+    if (pressed & BTN.START) terminal.show(0);
   });
 
-  const runColor = (run: Run) =>
-    (run.flags & 2) !== 0
-      ? { textColor: abgr(run.bg), bgColor: abgr(run.fg) }
-      : { textColor: abgr(run.fg), bgColor: abgr(run.bg) };
-
-  // The panel has no block cursor primitive, so the cursor is drawn as an
-  // inverted cell inside the row's runs.
-  const withCursor = (runs: Run[], row: number): Run[] => {
-    const c = cursor();
-    if (!c.visible || c.row !== row) return runs;
-    const out: Run[] = [];
-    let col = 0;
-    for (const run of runs) {
-      const chars = [...run.text];
-      const start = col;
-      const end = col + chars.length;
-      col = end;
-      if (c.col < start || c.col >= end) { out.push(run); continue; }
-      const offset = c.col - start;
-      if (offset > 0) out.push({ ...run, text: chars.slice(0, offset).join("") });
-      out.push({ ...run, text: chars[offset], flags: run.flags ^ 2 });
-      if (offset + 1 < chars.length) out.push({ ...run, text: chars.slice(offset + 1).join("") });
-    }
-    if (c.col >= col) out.push({ text: " ", fg: 0xe5e5e5, bg: 0xe5e5e5, flags: 0 });
-    return out;
-  };
-
   return (
-    <View class="w-[360px] h-[240px] bg-slate-950">
-      <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center">
-        <Text class="text-xs font-mono text-emerald-300">{LOCALES[localeIndex()].id.toUpperCase()}</Text>
-      </View>
-      {launcherOpen() ? (
+    <View class="absolute left-0 top-0" style={{ width: SCREEN.w, height: SCREEN.h, bgColor: COLORS.bg }}>
+      <Show when={terminal.active()} fallback={
         <>
-          <View class="absolute left-[10px] top-[1px] w-[340px] h-[12px] flex-row items-center">
-            <WorkspaceBar workspaces={WORKSPACES} activeId={WORKSPACES[selectedWorkspace()].id} />
-          </View>
-          {overview() ? (
-            <LauncherHome locale={locale()} workspace={selectedWorkspace()} overview={true} page="apps" selection={launcherSelection()} rows={launcherRows()} notice={launcherNotice()} onNavigate={(direction) => changeWorkspace(selectedWorkspace() + direction)} onEnterList={() => setOverview(false)} onOpen={openLauncherEntry} onBack={() => setOverview(true)} onLanguage={() => setLanguage(LAUNCHER_LOCALES[(localeIndex() + 1) % LAUNCHER_LOCALES.length].id)} />
-          ) : launcherPage() === "library" ? (
-            <LibraryWorkspace
-              rows={library()}
-              selected={librarySelected()}
-              scanning={libraryScanning()}
-              notice={libraryNotice()}
-              total={libraryTotal()}
-              labels={{
-                title: libraryLabel(),
-                scan: locale() === "ja" ? "スキャン" : locale() === "zh" ? "重新扫描" : "Scan now",
-                empty: locale() === "ja" ? "コンテンツなし" : locale() === "zh" ? "没有内容" : "No content",
-                hint: "A OPEN  B BACK",
-              }}
+          <StatusBar
+            status={status()}
+            wifi={status().wifi}
+            bluetooth={status().bluetooth}
+            adb={adbOn()}
+            category={CATEGORY_TITLES[activeCategory()]}
+          />
+
+          <Show when={overlay()}>
+            <Overlay
+              mode={overlay() ?? "search"}
+              query={query()}
+              items={overlayItems()}
+              selected={selected()}
+              favorites={favorites()}
             />
-          ) : launcherPage() === "settings" ? (
-            <SettingsWorkspace category={launcherCategory()} categories={categoryNames()} rows={settingRows()} selected={launcherSelection()} value={valueLabel} detail={(item) => item.kind === "level" ? "Adjust output level in 5% steps." : item.kind === "service" ? "Toggle the existing system service." : item.kind === "timeout" ? "Select and save display timeout." : item.kind === "radio" ? "Toggle the saved wireless state." : "Open the existing system utility."} notice={launcherNotice()} />
-          ) : (
-            <LauncherHome locale={locale()} workspace={selectedWorkspace()} overview={false} page={launcherPage() === "tools" ? "apps" : "apps"} selection={launcherSelection()} rows={launcherPage() === "tools" ? systemTools.map((item) => item.label) : launcherRows()} notice={launcherNotice()} onNavigate={(direction) => changeWorkspace(selectedWorkspace() + direction)} onEnterList={() => setOverview(false)} onOpen={openLauncherEntry} onBack={() => { setOverview(true); setLauncherPage("apps"); setLauncherSelection(0); }} onLanguage={() => setLanguage(LAUNCHER_LOCALES[(localeIndex() + 1) % LAUNCHER_LOCALES.length].id)} />
-          )}
+          </Show>
+
+          <Show when={!overlay()}>
+            <Show when={activeCategory() === "settings"} fallback={
+              <ContentFlow
+                items={currentItems()}
+                selected={selected()}
+                favorites={favorites()}
+                emptyLabel={scanning() ? JA.scanning : JA.empty}
+              />
+            }>
+              <SettingsPage groups={buildSettingGroups(settings())} group={settingGroup()} row={settingRow()} />
+            </Show>
+          </Show>
+
+          <Show when={notice().length > 0}>
+            <View class="absolute" style={{ insetL: 4, insetT: CONTENT_TOP + CONTENT_H - 12, width: 352, height: 12 }}>
+              <Text class="text-2xs" style={{ textColor: COLORS.warning }}>{notice()}</Text>
+            </View>
+          </Show>
+
+          <BottomNav active={activeCategory()} />
         </>
-      ) : (
-        <View class="absolute left-[10px] top-[28px] w-[340px] h-[192px] flex-col">
-          <Index each={lines()}>
-            {(runs, rowIndex) => (
-              <View class="w-[340px] h-[16px] flex-row">
-                <Index each={withCursor(runs(), rowIndex)}>
-                  {(run) => { const c = runColor(run()); return <Text class="text-xs font-mono" style={{ textColor: c.textColor, bgColor: c.bgColor }}>{run().text}</Text>; }}
-                </Index>
-              </View>
-            )}
-          </Index>
-          {commandOpen() ? <View class="absolute left-0 top-[176px] w-[340px] h-[16px] bg-slate-800"><Text class="text-xs font-mono text-white">: {input()}█</Text></View> : null}
-        </View>
-      )}
-      {inputOpen() ? (
-        <View class="absolute left-0 top-0 w-[360px] h-[240px] bg-slate-950 flex-col">
-          <View class="absolute left-[10px] top-[1px] w-[340px] h-[24px] items-center"><Text class="text-2xl font-bold text-emerald-300">INPUT</Text></View>
-          <View class="absolute left-[10px] top-[28px] w-[340px] h-[16px] bg-slate-800"><Text class="text-xs font-mono text-white">{">"} {input()}█</Text></View>
-          <View class="absolute left-[10px] top-[48px] w-[340px] h-[152px] flex-col">
-            {inputFunction() === 0 ? (
-              <>
-                <View class="w-[340px] h-[16px] flex-row"><Index each={["ABC", "123", "SYM", "PATH"]}>{(label, i) => <Text class={inputLayout() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{label()}</Text>}</Index></View>
-                <Index each={INPUT_LAYOUTS[inputLayout()]}>{(line, row) => <View class="w-[340px] h-[22px] flex-row"><Index each={line().split(" ")}>{(key, col) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].slice(0, row).reduce((count, line) => count + line.split(" ").length, 0) + col ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{key()}</Text>}</Index></View>}</Index>
-                <View class="w-[340px] h-[20px] flex-row"><Index each={["SPACE", "BACKSPACE", "ENTER"]}>{(label, i) => <Text class={inputSelection() === INPUT_LAYOUTS[inputLayout()].flatMap((line) => line.split(" ")).length + i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-100 bg-slate-800"}>{label()}　</Text>}</Index></View>
-              </>
-            ) : (
-              <Index each={inputEntries().slice(inputListStart(), inputListStart() + 8)}>
-                {(entry, i) => <View class={inputSelection() === i + inputListStart() ? "w-[340px] h-[18px] bg-emerald-300" : "w-[340px] h-[18px] bg-slate-800"}><Text class="text-xs font-mono text-white">{entry()[0]}</Text></View>}
-              </Index>
-            )}
-          </View>
-          <View class="absolute left-[5px] top-[202px] w-[350px] h-[16px] flex-row"><Index each={INPUT_TABS}>{(tab, i) => <Text class={inputFunction() === i ? "text-xs font-mono text-slate-950 bg-emerald-300" : "text-xs font-mono text-slate-300 bg-slate-800"}>{tab()}</Text>}</Index></View>
-          <View class="absolute left-[10px] top-[220px] w-[340px] h-[16px]"><Text class="text-xs text-slate-500">L/R布局 · L1/R1功能 · A选择 · B退出</Text></View>
-        </View>
-      ) : <View class="w-[0px] h-[0px]" />}
-
-      {!inputOpen() && !launcherOpen() ? <View class="absolute left-[10px] top-[222px] w-[340px] h-[16px] items-center">
-        <Text class="text-xs text-slate-500">START WS  SELECT INPUT</Text>
-      </View> : null}
-
+      }>
+        {terminal.view()}
+      </Show>
     </View>
   );
 });

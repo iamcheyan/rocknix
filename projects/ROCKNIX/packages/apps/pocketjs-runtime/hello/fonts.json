@@ -3,8 +3,9 @@
     "launcher-characters.txt"
   ],
   "fallback": [
-    "fonts/FusionPixel-12px-monospaced-zh_hans.ttf",
+    "fonts/Tamzen6x12r.ttf",
+    "fonts/TerminusTTF-4.49.1.ttf",
     "fonts/fusion-pixel-12px-monospaced-ja.ttf",
-    "fonts/SymbolsNerdFontMono-Regular.ttf"
+    "fonts/GNUUnifont.otf"
   ]
 }
