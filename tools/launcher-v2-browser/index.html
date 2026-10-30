@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>PocketShell Launcher V2 — 360x240 logical @2x</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  /* The canvas is set to exactly 360x240 CSS px and scaled with an integer
+     2x transform, so the browser never resamples: one logical pixel is
+     exactly 2x2 device pixels. */
+  #screen {
+    display: block;
+    width: 360px; height: 240px;
+    transform: scale(2); transform-origin: top left;
+    image-rendering: pixelated;
+    position: absolute; left: 0; top: 0;
+  }
+  #stage { position: absolute; left: 0; top: 0; width: 720px; height: 480px; background: #000; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="screen" width="360" height="240"></canvas></div>
+<script type="module" src="./host.js"></script>
+</body>
+</html>

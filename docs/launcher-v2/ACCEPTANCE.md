@@ -9,8 +9,8 @@
 |---|---|
 | 逻辑坐标 | 360×240 |
 | 输出 | 720×480（精确 2x，`integer-fit`） |
-| 截图目录 | `docs/evidence/launcher-v2/`（11 张，全部 720×480） |
-| 截图工具 | `tools/capture-launcher-v2-frames.ts` |
+| 截图目录 | `docs/evidence/launcher-v2/`（11 张 WASM 帧）+ `docs/evidence/launcher-v2/browser/`（10 张 headless Chromium 实拍），全部 720×480 |
+| 截图工具 | `tools/capture-launcher-v2-frames.ts`（WASM）、`tools/launcher-v2-browser/drive.mjs`（Chromium） |
 | PocketJS 版本 | `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`（= `package.mk` 的 `PKG_VERSION`） |
 
 ## 1. 逐条需求验收
@@ -65,6 +65,25 @@ search:   nodes=217 fractional=0 out-of-bounds=0
 - 说明：对 720×480 帧做"2×2 块完全相同"的逐像素检查会报少量差异，这来自
   **字体图集本身在 2x 下烘焙**（`rasterDensity: 2`）——字形边缘可以落在物理像素级。
   这是 PocketJS 的既定行为（所有 2x 文案都如此），不是布局非整数化。
+
+## 2b. Headless Chromium 实测（浏览器路径）
+
+WASM 帧只能证明**核心**的绘制结果；浏览器会额外引入自己的一层光栅化与合成。
+`tools/launcher-v2-browser/` 用真实 Chromium（headless）跑同一份编译产物：
+
+```
+01-all … 10-battery-critical   shot=720x480  logical=360x240  css=720x480  backing=360x240
+console messages: 0 (errors: 0)
+PASS: every screenshot 720x480, no console/page errors
+```
+
+- canvas 的 **backing store 是 360×240**，CSS 盒是 720×480（`transform: scale(2)` +
+  `image-rendering: pixelated`），即整数 2x，浏览器不参与重采样。
+- `console`(error) / `pageerror` / `requestfailed` 三类事件全部收集，**0 条**。
+- 10 张截图的 SHA-256 互不相同（若某两屏相同说明渲染没更新）。
+- 该 harness 暴露并修复了一个真实缺陷：桥接必须在**启动器求值之前**安装
+  （`globalThis.ui` + `__launcher`），否则 `onMount` 读到空数据，所有变体渲染一致。
+  Rust 宿主本来就是这个顺序，是 harness 此前写错了。
 
 ## 3. 手柄按键逐项实测
 
@@ -140,6 +159,6 @@ bun tools/pocket.ts compile ... → ✓ Package: boot.pocket
 | RG34XX 实机渲染、按键手感、字体在真实 LCD 上的可读性 | **待实机验证** | 本次只做 host 渲染与 WASM 帧；未刷机、未部署 `/storage` 覆盖。 |
 | 动画（80/120/180/150ms） | 未实现 | 视图切换是即时重绘。常量已定义，尚未接 `animate()`；PocketJS 在 360×240 上每次重绘需保证不丢帧，需实机测量后再接。 |
 | 应用自带 artwork 优先级 | 未实现 | 目前全部走 registry 语义图标。PocketJS 的 `Image` + pak 图片管线可用，但没有应用提供 artwork 清单。 |
-| 搜索面板的文字输入 | 部分 | 手柄下可浏览/打开结果，但键盘输入依赖 `onTextEvent` 的 `commit`（需要文本输入设备）；面板内未接 PocketJS `TextField` OSK，因为 92px 的 OSK 面板会盖住 150px 的搜索面板。待实机确认按键方案后再接。 |
+| 搜索面板的文字输入 | 部分 | 手柄下可浏览/打开结果，但键盘输入依赖 `onTextEvent` 的 `commit`（需要文本输入设备）；面板内未接 PocketJS `TextField` OSK，因为 92px 的 OSK 面板会盖住 150px 的搜索面板。待实机确认按键方案后再接。浏览器路径已验证：Chromium 里以 `__step(SQUARE)` 打开面板、方向键移动、B 关闭均正常。 |
 | 收藏（SELECT）在实机上的可达性 | 待实机验证 | SELECT 在终端视图里保留"输入工作区"含义，首页里是收藏切换。 |
 | `LEVEL charging` | 待实机验证 | 读 `/sys/class/power_supply/*/online`；HX90 无电池，实机才能给出真实值。 |
