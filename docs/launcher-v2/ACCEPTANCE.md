@@ -148,11 +148,12 @@ Iosevka 的 16px 行高放不进 12px 状态栏，且 #93 禁止把 Nerd Font �
 ## 5. 构建与检查
 
 ```
-bun tools/pocket.ts check   ... → ✓ pocket.json v2 / ✓ capabilities / ✓ TypeScript (72 modules)
+bun tools/pocket.ts check   ... → ✓ pocket.json v2 / ✓ capabilities / ✓ TypeScript (73 modules)
 bun tools/pocket.ts compile ... → ✓ Package: boot.pocket
-  tailwind: 27 style records
-  fonts: 4 fallback faces, 162 declared characters
-  pak: 8 entries, 1 016 816 bytes
+  tailwind: 25 style records
+  fonts: 4 fallback face(s), 458 declared characters (source literals + kana/fullwidth ranges)
+  font: slot 0 (12px) 539 glyphs, cell 12x12, coverage 24x24 @2x
+  pak: 8 entries, 2 398 544 bytes
 ```
 
 `scripts/pocketshell-launcher.rs` 用 `cargo build --release`（pocket-guest-rquickjs）编译通过。
