@@ -37,7 +37,7 @@ cp "$POCKETJS"/platforms/web/*.js "$POCKETJS"/platforms/web/*.wasm "$HARNESS"/pl
 cp "$POCKETJS"/engine/guest-web/src/{generated-ui.js,ui-descriptors.js} "$HARNESS"/engine/guest-web/src/
 cp "$POCKETJS"/apps/rocknix-h700/dist/rocknix-pocketjs-boot.{js,pak} "$HARNESS"/dist/
 
-# 2. serve it
+# 2. serve it (serves the directory server.ts lives in; PORT overrides 8199)
 (cd "$HARNESS" && bun server.ts) &      # http://127.0.0.1:8199
 
 # 3. drive Chromium
@@ -59,3 +59,6 @@ no path is baked into the repo.
   `eval`), not after `ui.boot()`; the latter raises `Pocket Runtime: InvalidState`.
 - A missing `favicon.ico` is the browser's own request and is filtered by
   message location, not by text.
+- `server.ts` serves its own directory and refuses `..` escapes, so the harness
+  is relocatable. A stale listener on the port fails the start with
+  `EADDRINUSE`; free it or pass `PORT=`.
