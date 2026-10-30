@@ -515,3 +515,16 @@
   - E5：`pocketjs-kms`、`pocketshell-dev`、`pocketjs-sleep`、`sshd` 均 active；`MainPID=1366`；`systemctl --failed` 仅既有失败（report-stats/usbgadget 等），无新增。
   - 截图：![](./Eimg-01-image-device-healthy.png)（设备健康，720×480，frame 1,036,800 B）
 - 结论：E 的“从镜像部署后”验证**达成（PASS）**，由运行镜像（`3ddb751f…`）满足；E2 的孤儿接管逻辑（ExecStartPre free-port + adbd-repair 判定）为镜像内代码，逻辑与先前手工部署验证一致；当前 usbgadget=adb 模式下 listener(1160)≠MainPID(1366) 属该模式固有，修复按设计跳过（E3）。
+
+## 设备阻塞记录（2026-10-30 20:25 JST，supervisor 诊断）
+
+- 现象：设备 LAN 地址从本机与构建机均 `No route to host`，`ping` 100% 丢包；两侧全 /24 端口 22 扫描也找不到该设备。
+- 诊断路径：构建机 `adb devices` 仍能看到掌机（USB 直连、唯一 adb 设备），`uptime` ≈ 11h → **设备已开机且存活**，不是关机。
+- 关键发现：设备当前运行的不是 ROCKNIX：
+  - `/etc/os-release` = `Base OS 1.4.0 (h700)`；`/proc/cmdline` 为原厂分区方案（`special/boot-resource/env/boot/rootfs/UDISK/primary`）；`/flash`、`/etc/rocknix`、`/usr/bin/pocketshell-dev` 均不存在。
+  - 网络：只有 `lo`；`wlan0` = `NO-CARRIER/DOWN`（rfkill 未拦、`8821cs` 已加载），`baseos.conf` 无 Wi-Fi 凭据 → 设备无任何 IP，故 LAN 不可达。
+  - 存储：设备仅一个块设备 `mmcblk0`；`/storage` = `mmcblk0p7 LABEL=BASEOS`（vfat 27.5G），内容是 BaseOS 的 PocketJS 前端载荷（`System/pocketjs`、`System/launch_frontend.sh`、`README-POCKETSHELL.txt`、`fb-*.raw` 抓帧，时间 2026-10-29 22:00–10-30 00:02）。
+- 结论：掌机当前承载 BaseOS 前端工作流（构建机上 BaseOS 镜像同时以 loop 方式挂载用于注入），**ROCKNIX 介质不在设备内**；ROCKNIX 实机验收无法继续。重启 OMP goal 只会撞同一堵墙，故本轮不续跑（避免与 BaseOS 写入者抢设备）。
+- 恢复条件（需人工一步）：把 ROCKNIX 卡插回设备（或明确批准重刷 ROCKNIX 镜像到该卡）；设备以 ROCKNIX 启动并拿到 LAN 地址后即可续跑本 goal。
+- 本轮边界：按项目硬规则**未**做任何 U-Boot / KERNEL / 整卡 dd 操作，未改动设备与构建树；工作树既有未提交改动（3 文件）与未跟踪 `origin/`、`.playwright-mcp/` 保持原样未提交。
+- 仍未完成项：D5（BLOCKED，需人眼逐项确认）、DEC-001…DEC-004（WAITING，见 `DECISIONS_PENDING.md`）。
