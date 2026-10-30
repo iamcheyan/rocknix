@@ -530,3 +530,4 @@
 - 仍未完成项：D5（BLOCKED，需人眼逐项确认）、DEC-001…DEC-004（WAITING，见 `DECISIONS_PENDING.md`）。
 - 介质追查（2026-10-30 20:35 JST）：本机与构建机 `by-label`/`lsblk` 均无 ROCKNIX 分区，唯一可插卡槽位为空；构建机上设备当前系统来自 `/tmp/baseos-rg34xx.img`（loop0 挂载，用于注入 PocketJS 前端载荷），即**同一张卡已被 BaseOS 取代**。
 - 因此恢复不是「插回卡」这么简单：构建机 `target/` 无任何 `*.img.gz`/`*.tar` 产物（早前全量重建被并发构建 SIGTERM 终止），要回到 ROCKNIX 需先完成一次完整镜像构建（1–2h，且需先修 staging）再刷卡——属破坏性写卡，须用户明确批准，本轮未执行。
+- 验证陷阱（重要）：工作树根有未跟踪的 `origin/` 目录（一份 177M 的旧 clone，HEAD 停在 `df288ceecb`）。git 在解析 `origin/main` 时会优先命中该路径（`fatal: ambiguous argument 'origin/main': both revision and filename`），导致 `git show origin/main:...` 读到的是旧 clone 的文件、看起来像「推送没生效」。核实远端内容请用 `git ls-remote origin refs/heads/main` 与 `git show FETCH_HEAD:<path>`。建议后续删除该目录。
