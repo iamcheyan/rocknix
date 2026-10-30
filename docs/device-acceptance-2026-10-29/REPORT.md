@@ -531,3 +531,4 @@
 - 介质追查（2026-10-30 20:35 JST）：本机与构建机 `by-label`/`lsblk` 均无 ROCKNIX 分区，唯一可插卡槽位为空；构建机上设备当前系统来自 `/tmp/baseos-rg34xx.img`（loop0 挂载，用于注入 PocketJS 前端载荷），即**同一张卡已被 BaseOS 取代**。
 - 因此恢复不是「插回卡」这么简单：构建机 `target/` 无任何 `*.img.gz`/`*.tar` 产物（早前全量重建被并发构建 SIGTERM 终止），要回到 ROCKNIX 需先完成一次完整镜像构建（1–2h，且需先修 staging）再刷卡——属破坏性写卡，须用户明确批准，本轮未执行。
 - 验证陷阱（重要）：工作树根有未跟踪的 `origin/` 目录（一份 177M 的旧 clone，HEAD 停在 `df288ceecb`）。git 在解析 `origin/main` 时会优先命中该路径（`fatal: ambiguous argument 'origin/main': both revision and filename`），导致 `git show origin/main:...` 读到的是旧 clone 的文件、看起来像「推送没生效」。核实远端内容请用 `git ls-remote origin refs/heads/main` 与 `git show FETCH_HEAD:<path>`。建议后续删除该目录。
+- 重建就绪度复核（2026-10-30 20:45 JST，只读）：构建机 staging 已不再是破损状态——`build.ROCKNIX-H700.aarch64/.stamps` 有 217 项、`image/system/usr/bin` 有 519 个文件、`/home` 余 165G；即增量构建可行，无需先修 staging。但构建机源码树停在 `e484b261d2`，落后本机 `df0e8b5d`（缺 PocketJS 库索引/启动提交），直接构建会产出缺功能的镜像。下一步应先 `git merge --ff-only` 对齐到 `df0e8b5d` 再 `make docker-image`；对齐源码树属写入动作，本轮未执行。
