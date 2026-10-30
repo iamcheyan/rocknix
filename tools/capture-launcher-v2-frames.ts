@@ -89,6 +89,17 @@ hashes["07-recent"] = await capture("07-recent", [TRIANGLE]);
 hashes["08-empty-library"] = await capture("08-empty-library", [], { library: { total: 0, sections: {} } });
 hashes["09-battery-low"] = await capture("09-battery-low", [], { battery: "15" });
 hashes["10-battery-critical"] = await capture("10-battery-critical", [], { battery: "3" });
+// Long titles must be fitted, not clipped: a card label truncates to the card
+// width and the title band truncates to the screen, so nothing overflows.
+hashes["11-long-title-truncation"] = await capture("11-long-title-truncation", [], {
+  library: {
+    total: 2,
+    sections: { games: [{ name: "gba", count: 2, items: [
+      { title: "The Legend of Zelda Minish Cap Ultra Edition", path: "/storage/content/games/gba/zelda.gba" },
+      { title: "ゴールデンサン 完全版 スペシャル", path: "/storage/content/games/gba/gs.gba" },
+    ] }] },
+  },
+});
 
 // The four battery bands must differ: >60 full/white, 21..60 medium/white,
 // 6..20 low/orange, <=5 critical/red. Two levels inside one band are

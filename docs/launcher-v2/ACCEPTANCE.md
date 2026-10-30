@@ -125,11 +125,16 @@ regular/bold/mono 三面都指向 Tamzen。实测（`bakeAtlases` + opentype.js 
 `bakeAtlases` 的 per-glyph fallback 设计。烘焙结果：所有 UI 字符串在 12px 槽位
 **0 个 gid 0（豆腐块）**，唯一 gid 0 是刻意画的 U+FFFD 替换方块。
 
+**假名覆盖**：`fonts.json` 声明 `U+3000-30FF`（平假名/片假名/假名标点）、`U+FF01-FF60`、
+`U+FFE0-FFE6`（全角 ASCII），因此**任意**日文游戏标题都能渲染，不只源码里出现的字。
+实测：加范围前 243 字形、`ゴールデンサン` 的 `ゴ` 是豆腐块（截图 11 暴露）；
+加范围后 539 字形，同一截图正确显示 `ゴールデンサ...`。代价是 pak 从 1.0 MB 涨到 2.4 MB。
+
 字体实测单元尺寸（决定行高，不能用非整数）：
 
 | 字体 | 12px 下 cell |
 |---|---|
-| Tamzen 6x12 | 11×12 |
+| Tamzen 6x12 | 12×12（未声明的假名回落到 Fusion Pixel 时；纯 ASCII 子集 11×12） |
 | Terminus TTF | 12×13 |
 | Fusion Pixel JA | 11×12 |
 | Iosevka NF | 11×16 |

@@ -16,9 +16,12 @@ make_host() {
   export XDG_CACHE_HOME="${PKG_BUILD}/.cache"
   mkdir -p "${XDG_CACHE_HOME}/pocket-nexus/transforms"
   cd "${PKG_BUILD}"
-  export POCKETJS_FONT_REGULAR="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
-  export POCKETJS_FONT_BOLD="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
-  export POCKETJS_FONT_MONO="${PKG_DIR}/hello/fonts/FusionPixel-12px-monospaced-zh_hans.ttf"
+  # Launcher V2 font stack (issue #92): Tamzen 6x12 is the body face; Terminus,
+  # Fusion Pixel JA and GNU Unifont reach the atlas through hello/fonts.json as
+  # per-glyph fallbacks, so kana/kanji resolve without a second body face.
+  export POCKETJS_FONT_REGULAR="${PKG_DIR}/hello/fonts/Tamzen6x12r.ttf"
+  export POCKETJS_FONT_BOLD="${PKG_DIR}/hello/fonts/Tamzen6x12b.ttf"
+  export POCKETJS_FONT_MONO="${PKG_DIR}/hello/fonts/Tamzen6x12r.ttf"
   python3 "${PKG_DIR}/scripts/patch-build-fonts.py" "${PKG_BUILD}"
   mkdir -p "${PKG_BUILD}/programs/rocknix-h700" "${PKG_BUILD}/apps/rocknix-h700"
   cp -a "${PKG_DIR}/config/." "${PKG_BUILD}/programs/rocknix-h700/"

@@ -2,6 +2,11 @@
   "characterFiles": [
     "launcher-characters.txt"
   ],
+  "ranges": [
+    "U+3000-30FF",
+    "U+FF01-FF60",
+    "U+FFE0-FFE6"
+  ],
   "fallback": [
     "fonts/Tamzen6x12r.ttf",
     "fonts/TerminusTTF-4.49.1.ttf",
