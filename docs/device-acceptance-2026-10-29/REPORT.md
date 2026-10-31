@@ -540,3 +540,5 @@
 - 设备 `/storage`（LABEL=BASEOS）当前是 BaseOS 的 PocketJS 前端载荷 + 大量 `fb-*.raw` 抓帧与 `baseos.conf`，说明**另一条 BaseOS/PJOS 工作流正在实时使用这台设备**（构建机同时有 `dpkg-deb`/`qemu`/`make` 在跑，负载 ≈8.9）。
 - 结论：ROCKNIX 介质依然不在设备内，D5 之外无法续跑；且此时抢 adb 会打断别人的在跑的验证，故本轮继续不重启 goal、不碰设备。
 - 顺带记录：构建机 `~/Downloads/ROCKNIX-H700.aarch64-20261001-DDR4.img.gz` 是 10-01 的旧全量镜像，**不含** 10-28 的 PocketJS/PocketShell 改动，不能用来做本次验收的刷卡介质。
+- 看护收尾（2026-10-31 10:20 JST，supervisor 自主决定）：复核结果与 03:40 完全一致——掌机在构建机 adb 中仍可见但继续运行 `Base OS 1.5.2`（`root=/dev/mmcblk0p5`，无 `/flash`、无 `/etc/rocknix`，仅 `lo`），本机 ping/ssh 仍 No route to host；ROCKNIX 介质仍不在机内，且同一台设备正被 BaseOS/PJOS 工作流占用。既然无任何可推进项，为避免每 30 分钟空转、也不与设备使用者抢 adb，**已主动暂停看护 cron `rocknix-devqa-supervisor`（cd2136da12ee）**（原会话 `01a18322` 与 watchdog 行仍为已归档状态，未重启 goal、未触碰源码/设备）。
+- 续跑条件（届时一条命令）：掌机以 ROCKNIX 卡启动并拿到 LAN（或构建机 adb 可见 ROCKNIX 根）后，`hermes cron resume cd2136da12ee`；若需先重建镜像再写卡，须用户明确批准（破坏性写卡）。
